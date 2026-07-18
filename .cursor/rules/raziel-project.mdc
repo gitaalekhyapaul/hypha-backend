@@ -1,0 +1,15 @@
+---
+description: Canonical Raziel project rules and active engineering baton
+globs:
+alwaysApply: true
+---
+
+Read and follow these repository files before planning or editing:
+
+@AGENTS.md
+@docs/agent/CURRENT-BATON.md
+@ARCHITECTURE.md
+@docs/spec/POC-TECHNICAL-SPEC.md
+
+`AGENTS.md` is canonical. Do not create separate Cursor-only architecture or security
+rules. Acquire and close the active baton for every implementation session.

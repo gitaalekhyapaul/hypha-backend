@@ -141,3 +141,41 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Turborepo
+.turbo/
+
+# Rust
+target/
+**/*.rs.bk
+
+# Go
+bin/
+*.test
+
+# SP1 and proof artifacts
+.sp1/
+artifacts/proofs/
+artifacts/witnesses/
+**/*.proof
+**/*.witness
+
+# Generated protocol code
+gen/
+packages/proto-ts/src/gen/
+
+# Local transaction data and import output
+data/raw/
+data/private/
+data/imported/
+data/manifests/
+!data/README.md
+
+# Local credentials and keys
+secrets/
+*.pem
+*.key
+*.p12
+
+# macOS
+.DS_Store
