@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+// PublicErrorCode contains the coarse failures safe to return across public service
+// boundaries. Services keep private diagnostic detail outside these messages.
+enum PublicErrorCode {
+  PUBLIC_ERROR_CODE_UNSPECIFIED = 0;
+  PUBLIC_ERROR_CODE_INVALID_REQUEST = 1;
+  PUBLIC_ERROR_CODE_NOT_AUTHORIZED = 2;
+  PUBLIC_ERROR_CODE_CAPABILITY_EXPIRED = 3;
+  PUBLIC_ERROR_CODE_CAPABILITY_INVALID = 4;
+  PUBLIC_ERROR_CODE_REQUEST_REPLAYED = 5;
+  PUBLIC_ERROR_CODE_SERVICE_UNAVAILABLE = 6;
+}
+
+// ProofSystem identifies the proof implementation carried by a capability. Proof
+// encoding and verification rules are defined outside Protobuf.
+enum ProofSystem {
+  PROOF_SYSTEM_UNSPECIFIED = 0;
+  PROOF_SYSTEM_SP1 = 1;
+}

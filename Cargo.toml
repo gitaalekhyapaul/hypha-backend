@@ -1,0 +1,23 @@
+[workspace]
+members = [
+  "crates/canonical",
+  "crates/policy-ir",
+  "crates/prover",
+  "crates/snapshot",
+  "crates/verifier",
+  "crates/witness",
+  "programs/authorization-guest",
+  "services/razield",
+  "services/verifierd",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/gitaalekhyapaul/hypha-backend"
+
+[workspace.dependencies]
+sp1-zkvm = { version = "=6.3.1", default-features = false }

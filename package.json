@@ -1,0 +1,31 @@
+{
+  "name": "@raziel/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Raziel proof-carrying authorization proof of concept",
+  "license": "MIT",
+  "packageManager": "pnpm@11.14.0",
+  "engines": {
+    "node": "24.18.0",
+    "pnpm": "11.14.0"
+  },
+  "scripts": {
+    "bootstrap:check": "node ./scripts/bootstrap-check.mjs",
+    "generate": "node ./scripts/workspace.mjs generate",
+    "generate:check": "node ./scripts/workspace.mjs generate:check",
+    "format": "node ./scripts/workspace.mjs format",
+    "format:check": "node ./scripts/workspace.mjs format:check",
+    "lint": "node ./scripts/workspace.mjs lint",
+    "typecheck": "node ./scripts/workspace.mjs typecheck",
+    "build": "node ./scripts/workspace.mjs build",
+    "test": "node ./scripts/workspace.mjs test",
+    "test:e2e": "node ./scripts/workspace.mjs test:e2e",
+    "stack:up": "./scripts/compose --profile apps --profile services up --build",
+    "stack:down": "./scripts/compose --profile apps --profile services down",
+    "dev:console": "pnpm --filter @raziel/demo-console dev",
+    "dev:gateway": "pnpm --filter @raziel/demo-gateway dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4"
+  }
+}

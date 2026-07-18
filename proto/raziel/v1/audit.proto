@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "google/protobuf/timestamp.proto";
+import "raziel/v1/common.proto";
+
+enum AuditReceiptType {
+  AUDIT_RECEIPT_TYPE_UNSPECIFIED = 0;
+  AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION = 1;
+  AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST = 2;
+}
+
+enum AuditOutcome {
+  AUDIT_OUTCOME_UNSPECIFIED = 0;
+  AUDIT_OUTCOME_ACCEPTED = 1;
+  AUDIT_OUTCOME_REJECTED = 2;
+  AUDIT_OUTCOME_ERROR = 3;
+}
+
+// AuditReceipt contains public identifiers and digests only. JSONL storage is a
+// projection of this versioned shape and must not add private witness fields.
+message AuditReceipt {
+  uint32 format_version = 1;
+  string receipt_id = 2;
+  AuditReceiptType receipt_type = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  string request_id = 5;
+  string task_id = 6;
+  string capability_id = 7;
+  string proof_job_id = 8;
+  string policy_record_id = 9;
+  bytes policy_hash = 10;
+  string snapshot_id = 11;
+  bytes relationship_snapshot_root = 12;
+  bytes public_claims_digest = 13;
+  bytes proof_digest = 14;
+  string action = 15;
+  string resource_type = 16;
+  string resource_scope = 17;
+  AuditOutcome outcome = 18;
+  PublicErrorCode reason_code = 19;
+}

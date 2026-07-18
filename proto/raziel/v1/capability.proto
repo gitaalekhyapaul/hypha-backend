@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "raziel/v1/common.proto";
+import "raziel/v1/snapshot.proto";
+
+// AuthorizationDecision reserves zero for missing input. The baseline guest emits
+// only ALLOW.
+enum AuthorizationDecision {
+  AUTHORIZATION_DECISION_UNSPECIFIED = 0;
+  AUTHORIZATION_DECISION_ALLOW = 1;
+}
+
+enum ProofJobState {
+  PROOF_JOB_STATE_UNSPECIFIED = 0;
+  PROOF_JOB_STATE_QUEUED = 1;
+  PROOF_JOB_STATE_EXECUTING = 2;
+  PROOF_JOB_STATE_PROVING = 3;
+  PROOF_JOB_STATE_SUCCEEDED = 4;
+  PROOF_JOB_STATE_FAILED = 5;
+  PROOF_JOB_STATE_CANCELED = 6;
+}
+
+// ProofCapability contains public claims, proof bytes, and the public snapshot
+// attestation. It never contains PolicyIR or private witness material.
+message ProofCapability {
+  uint32 format_version = 1;
+  string capability_id = 2;
+  bytes agent_key_thumbprint = 3;
+  string task_id = 4;
+  string purpose = 5;
+  string action = 6;
+  string resource_type = 7;
+  string resource_scope = 8;
+  bytes policy_hash = 9;
+  bytes relationship_snapshot_root = 10;
+  string snapshot_id = 11;
+  bytes capability_request_commitment = 12;
+  bytes issuance_nullifier = 13;
+  google.protobuf.Timestamp issued_at = 14;
+  google.protobuf.Timestamp expires_at = 15;
+  ProofSystem proof_system = 16;
+  string verification_key_id = 17;
+  bytes zk_proof = 18;
+  RelationshipSnapshotDescriptor snapshot_attestation = 19;
+}
+
+// AuthorizationPublicValues models the public guest output. Canonical encodings and
+// commitment calculations are defined by proof-critical Rust code, not this schema.
+message AuthorizationPublicValues {
+  uint32 format_version = 1;
+  bytes policy_hash = 2;
+  bytes relationship_snapshot_root = 3;
+  bytes capability_request_commitment = 4;
+  AuthorizationDecision decision = 5;
+  bytes capability_scope_hash = 6;
+  google.protobuf.Timestamp issued_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  bytes issuance_nullifier = 9;
+}
+
+message CreateCapabilityRequest {
+  uint32 format_version = 1;
+  string agent_id = 2;
+  bytes agent_public_key = 3;
+  string task_id = 4;
+  string purpose = 5;
+  string action = 6;
+  string resource_type = 7;
+  string resource_scope = 8;
+  google.protobuf.Timestamp requested_expires_at = 9;
+  bytes issuance_nonce = 10;
+  string snapshot_id = 11;
+  bytes request_signature = 12;
+}
+
+message GetCapabilityRequest {
+  string job_id = 1;
+}
+
+message CancelCapabilityRequest {
+  string job_id = 1;
+}
+
+message ProofMetrics {
+  google.protobuf.Duration execution_duration = 1;
+  google.protobuf.Duration proving_duration = 2;
+  uint64 execution_cycle_count = 3;
+  uint64 proof_size_bytes = 4;
+}
+
+message ProofJob {
+  string job_id = 1;
+  ProofJobState state = 2;
+  google.protobuf.Timestamp submitted_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  ProofCapability capability = 5;
+  PublicErrorCode public_error_code = 6;
+  optional string internal_error_ref = 7;
+  ProofMetrics metrics = 8;
+}

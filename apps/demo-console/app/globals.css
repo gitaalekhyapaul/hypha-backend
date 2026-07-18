@@ -1,0 +1,270 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f4f5f3;
+  color: #171917;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f4f5f3;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+
+.topbar {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #d8dbd5;
+}
+
+.product-name,
+.environment,
+.section-label,
+.summary-copy,
+.artifact-band p {
+  margin: 0;
+}
+
+.product-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.environment,
+.summary-copy,
+.artifact-band p {
+  color: #61665f;
+}
+
+.environment {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.phase-badge {
+  padding: 5px 9px;
+  border: 1px solid #c6cbc2;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #3f443e;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.summary {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 48px 0 34px;
+}
+
+.section-label {
+  margin-bottom: 8px;
+  color: #6a7068;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.08;
+}
+
+h2 {
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.summary-copy {
+  max-width: 650px;
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.readiness {
+  flex: 0 0 120px;
+  padding-left: 20px;
+  border-left: 3px solid #d1a63b;
+}
+
+.readiness strong,
+.readiness span {
+  display: block;
+}
+
+.readiness strong {
+  font-size: 25px;
+}
+
+.readiness span {
+  margin-top: 4px;
+  color: #6a7068;
+  font-size: 12px;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid #d8dbd5;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.panel-heading {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e4df;
+}
+
+.panel-heading .section-label {
+  margin-bottom: 4px;
+}
+
+.muted-count {
+  color: #7a8078;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.status-list {
+  margin: 0;
+}
+
+.status-row {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #eceeea;
+}
+
+.status-row:last-child {
+  border-bottom: 0;
+}
+
+.status-row dt,
+.status-row dd {
+  margin: 0;
+}
+
+.status-row dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.status-row dd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #656a63;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #b3b8b0;
+}
+
+.status-dot[data-state="ready"] {
+  background: #21824d;
+}
+
+.status-dot[data-state="pending"] {
+  background: #d1a63b;
+}
+
+.artifact-band {
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 16px;
+  padding: 18px 20px;
+  border: 1px solid #d8dbd5;
+  border-radius: 6px;
+  background: #eceee9;
+}
+
+.artifact-band .section-label {
+  margin-bottom: 4px;
+}
+
+.artifact-band p {
+  max-width: 460px;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    padding: 0 16px 28px;
+  }
+
+  .summary {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 34px;
+  }
+
+  .content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .artifact-band {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .artifact-band p {
+    text-align: left;
+  }
+}

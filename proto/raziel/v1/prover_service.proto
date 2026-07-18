@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "raziel/v1/capability.proto";
+import "raziel/v1/snapshot.proto";
+
+// SnapshotService exposes administrative snapshot lifecycle operations on razield.
+service SnapshotService {
+  rpc BuildSnapshot(BuildSnapshotRequest) returns (BuildSnapshotResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  rpc RevokeSnapshot(RevokeSnapshotRequest) returns (RevokeSnapshotResponse);
+}
+
+// CapabilityService exposes the asynchronous capability proof-job lifecycle.
+service CapabilityService {
+  rpc CreateCapability(CreateCapabilityRequest) returns (CreateCapabilityResponse);
+  rpc GetCapability(GetCapabilityRequest) returns (GetCapabilityResponse);
+  rpc CancelCapability(CancelCapabilityRequest) returns (CancelCapabilityResponse);
+}
+
+message CreateCapabilityResponse {
+  ProofJob job = 1;
+}
+
+message GetCapabilityResponse {
+  ProofJob job = 1;
+}
+
+message CancelCapabilityResponse {
+  ProofJob job = 1;
+}

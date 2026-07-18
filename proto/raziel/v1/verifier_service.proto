@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "google/protobuf/timestamp.proto";
+import "raziel/v1/capability.proto";
+import "raziel/v1/common.proto";
+
+enum VerificationOutcome {
+  VERIFICATION_OUTCOME_UNSPECIFIED = 0;
+  VERIFICATION_OUTCOME_VERIFIED = 1;
+  VERIFICATION_OUTCOME_REJECTED = 2;
+}
+
+// VerifyCapabilityRequest binds capability verification to one signed protected
+// request. Target normalization and signature rules are defined outside Protobuf.
+message VerifyCapabilityRequest {
+  ProofCapability proof_capability = 1;
+  bytes agent_public_key = 2;
+  string request_method = 3;
+  string canonical_request_target = 4;
+  bytes request_body_hash = 5;
+  bytes request_nonce = 6;
+  google.protobuf.Timestamp request_timestamp = 7;
+  bytes agent_request_signature = 8;
+}
+
+message VerifiedClaims {
+  uint32 format_version = 1;
+  string capability_id = 2;
+  bytes agent_key_thumbprint = 3;
+  string task_id = 4;
+  string purpose = 5;
+  string action = 6;
+  string resource_type = 7;
+  string resource_scope = 8;
+  bytes policy_hash = 9;
+  bytes relationship_snapshot_root = 10;
+  string snapshot_id = 11;
+  bytes capability_request_commitment = 12;
+  bytes issuance_nullifier = 13;
+  google.protobuf.Timestamp issued_at = 14;
+  google.protobuf.Timestamp expires_at = 15;
+}
+
+message VerifyCapabilityResponse {
+  VerificationOutcome outcome = 1;
+  VerifiedClaims verified_claims = 2;
+  PublicErrorCode failure_code = 3;
+  string policy_record_id = 4;
+  string snapshot_id = 5;
+  bytes proof_digest = 6;
+}
+
+// VerificationService remains independent and has no razield RPC dependency.
+service VerificationService {
+  rpc VerifyCapability(VerifyCapabilityRequest) returns (VerifyCapabilityResponse);
+}

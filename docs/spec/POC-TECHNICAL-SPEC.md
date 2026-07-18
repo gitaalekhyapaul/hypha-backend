@@ -73,6 +73,7 @@ fixtures remain required for tests.
 | D-014 | Bind reusable capabilities to an agent key, task, purpose, action, resource, and expiry |
 | D-015 | Use local proving and never send private witnesses to an external prover |
 | D-016 | A data-owner policy authority approves PolicyIR; `razield` cannot approve its own policy |
+| D-017 | Use the container-first pinned toolchain in ADR-0003 for M0 and CI |
 
 ## Open decisions
 
@@ -81,7 +82,6 @@ The following decisions must be closed before their milestone begins:
 | ID | Decision | Deadline |
 | --- | --- | --- |
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
-| O-002 | Pin Node, pnpm, Next.js, Rust, Go, Buf, SpiceDB, and SP1 versions | During repository scaffold |
 | O-003 | Select the SP1 proof mode used for the final demo | After the first proving benchmark |
 | O-004 | Select the snapshot authority signing algorithm and key storage for the PoC | Before snapshot implementation |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
@@ -347,15 +347,15 @@ service VerificationService {
 Required fields:
 
 - `spicedb_endpoint_ref`
-- `zed_token`
+- `zed_token_secret_ref`
 - `policy_record_id`
 - `policy_hash`
 - `expires_at`
 - `snapshot_epoch`
 - `authority_key_id`
 
-The request must reference credentials by runtime secret name. It must never carry a
-SpiceDB token in a persisted job record.
+The request must reference the ZedToken by runtime secret name. It must never carry a
+SpiceDB token value or persist one in a job record.
 
 ### `CreateCapabilityRequest`
 

@@ -1,0 +1,14 @@
+.git
+.github
+.next
+.pnpm-store
+.sp1
+.turbo
+artifacts
+coverage
+data
+dist
+node_modules
+target
+**/*.log
+**/.DS_Store

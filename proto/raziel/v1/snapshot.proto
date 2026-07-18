@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SnapshotStatus is registry state. It is not part of the immutable signed
+// descriptor.
+enum SnapshotStatus {
+  SNAPSHOT_STATUS_UNSPECIFIED = 0;
+  SNAPSHOT_STATUS_ACCEPTED = 1;
+  SNAPSHOT_STATUS_REVOKED = 2;
+  SNAPSHOT_STATUS_EXPIRED = 3;
+}
+
+// RelationshipSnapshotDescriptor contains public snapshot claims and an authority
+// attestation. It contains no relationship tuples or Merkle openings.
+message RelationshipSnapshotDescriptor {
+  uint32 format_version = 1;
+  string snapshot_id = 2;
+  bytes relationship_snapshot_root = 3;
+  bytes policy_hash = 4;
+  string spicedb_revision = 5;
+  uint64 epoch = 6;
+  google.protobuf.Timestamp issued_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  uint32 canonicalization_version = 9;
+  string signing_key_id = 10;
+  bytes authority_signature = 11;
+}
+
+// BuildSnapshotRequest references runtime configuration and an explicit SpiceDB
+// revision. It never carries a SpiceDB credential value.
+message BuildSnapshotRequest {
+  string spicedb_endpoint_ref = 1;
+  string zed_token_secret_ref = 2;
+  string policy_record_id = 3;
+  bytes policy_hash = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  uint64 snapshot_epoch = 6;
+  string authority_key_id = 7;
+}
+
+message BuildSnapshotResponse {
+  RelationshipSnapshotDescriptor snapshot = 1;
+}
+
+message GetSnapshotRequest {
+  string snapshot_id = 1;
+}
+
+message GetSnapshotResponse {
+  RelationshipSnapshotDescriptor snapshot = 1;
+  SnapshotStatus status = 2;
+}
+
+message RevokeSnapshotRequest {
+  string snapshot_id = 1;
+  string reason = 2;
+}
+
+message RevokeSnapshotResponse {
+  string snapshot_id = 1;
+  SnapshotStatus status = 2;
+  google.protobuf.Timestamp revoked_at = 3;
+}

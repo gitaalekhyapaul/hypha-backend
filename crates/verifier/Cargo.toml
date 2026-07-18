@@ -1,0 +1,9 @@
+[package]
+name = "raziel-verifier"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]

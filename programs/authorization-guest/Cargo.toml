@@ -1,0 +1,10 @@
+[package]
+name = "raziel-authorization-guest"
+version.workspace = true
+edition = "2024"
+rust-version = "1.91.1"
+license.workspace = true
+publish = false
+
+[dependencies]
+sp1-zkvm.workspace = true

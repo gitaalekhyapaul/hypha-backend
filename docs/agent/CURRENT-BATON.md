@@ -1,120 +1,107 @@
 # Current Engineering Baton
 
-- Baton ID: B-0003
+- Baton ID: B-0004
 - State: READY
-- Milestone: M0, repository and contract scaffold
+- Milestone: M1, PolicyIR and SpiceDB compiler adapter
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-07-18T12:24:33Z
+- Last updated UTC: 2026-07-18T17:53:27Z
 - Branch: `main`
-- Worktree: Clean after documentation baseline commit, branch is one commit ahead of `origin/main`
+- Worktree: Expected clean after the scoped M0 commit. Verify before claiming.
 
 ## Objective
 
-Create the polyglot workspace shells, pin the toolchain, and define reproducible local
-build commands without implementing authorization behavior.
+Implement the versioned PolicyIR wire model and matching bounded Rust validator and
+pure evaluator. Defer SpiceDB translation and equivalence to a later M1 baton.
 
 ## Acceptance criteria
 
-- [ ] pnpm and Cargo workspaces exist.
-- [ ] Next.js console and gateway shells build.
-- [ ] Rust crate, service, and SP1 program shells build.
-- [ ] Go compiler-adapter shell builds.
-- [ ] Buf validates the initial service contract.
-- [ ] Docker Compose validates on Apple Silicon.
-- [ ] Workspace format, lint, typecheck, build, and test commands exist.
-- [ ] Generated code can be reproduced from one documented command.
+- [ ] Protobuf models every approved permission and caveat node from the technical
+      specification.
+- [ ] Rust conversion rejects unknown versions, enum values, node variants, and
+      unresolved references.
+- [ ] Validation rejects cycles, malformed child counts, excess arrow depth, type
+      mismatches, and each configured limit plus one.
+- [ ] The pure evaluator covers relation references, subject relations, unions,
+      intersections, one-hop arrows, caveated relations, typed comparisons, and
+      Boolean caveat operators.
+- [ ] Supported and rejected hand-authored fixtures have deterministic tests.
+- [ ] Buf generation, Rust tests, lint, typecheck, and affected workspace tests pass.
 
 ## Architecture constraints
 
-- Use Next.js with TypeScript for the console and gateway.
-- Keep cryptographic semantics in Rust.
-- Keep the SpiceDB compiler adapter small and build-time only.
-- Keep `verifierd` independent from `razield`.
-- Do not add real authorization logic during shell scaffolding.
-- Do not install a missing dependency without user approval.
-- Select native `linux/arm64` or multi-architecture container images.
+- Follow the source order: Protobuf, then Rust semantics, then tests.
+- Preserve the exact PolicyIR baseline in the technical specification.
+- Keep PolicyIR out of capabilities and agent responses.
+- Keep private relationship and caveat values outside logs and public errors.
+- Reject unsupported constructs and unknown fields.
+- Use bounded collections and explicit proof-boundary limits.
+- Do not define canonical commitment bytes in Protobuf.
+- Record any semantic conflict in this baton and stop the conflicting edit.
 
 ## File scope
 
-- root workspace manifests and version files
-- `apps/`
-- `packages/`
-- `services/`
-- `crates/`
-- `programs/`
-- `tools/`
-- `proto/`
-- `docker-compose.yml`
-- CI configuration
-- setup sections in `README.md`
-- baton and decision records needed by M0
+- `proto/raziel/v1/`
+- `crates/policy-ir/`
+- focused PolicyIR fixtures under `tests/`
+- generated protocol output through `pnpm generate`
+- `docs/agent/CURRENT-BATON.md`
+- a decision record only for a durable semantic choice not settled by the spec
 
 ## Out of scope
 
-- PolicyIR evaluation
-- SpiceDB schema translation
-- Merkle snapshot implementation
-- SP1 proving logic
-- capability issuance
-- payment ingestion
-- real transaction data selection
+- Go SpiceDB translation
+- SpiceDB equivalence harness
+- canonical hashes and encodings
+- relationship snapshots and Merkle trees
+- SP1 guest behavior
+- service, gateway, SDK, or console integration
+- final payment-reconciliation data
 
 ## Decisions
 
-- Inherited: D-001 through D-016 in `docs/spec/POC-TECHNICAL-SPEC.md`
-- Inherited: ADR-0001 and proposed ADR-0002 in `docs/decisions/`
-- Must close during this baton: O-002, tool and framework version pins
-- Made: None
+- Inherited: D-001 through D-017 in `docs/spec/POC-TECHNICAL-SPEC.md`.
+- Inherited: ADR-0001 through ADR-0003.
+- Made: None.
 
 ## Open questions and blockers
 
-- Node `26.0.0` and pnpm `10.7.0` are installed but do not match the researched pins.
-- Rust, Cargo, rustup, Go, Buf, and SP1 are not installed.
-- Dependency installation needs user approval after the final pins and commands are
-  recorded.
-- ADR-0002 needs maintainer approval before gateway integration. It does not block M0.
-- The real transaction source remains O-001. It does not block M0.
+- The initial numeric PolicyIR ceilings need a measured and documented selection.
+- ADR-0002 still needs maintainer approval before gateway integration. It does not
+  block this objective.
+- O-001 remains open. It does not block this objective.
 
 ## Work completed
 
-- Documentation baseline committed as `2e4b61b`.
-- Host architecture confirmed as Apple Silicon `arm64` on macOS 26.5.
-- Docker `28.4.0` and Compose `2.39.2` confirmed available.
-- Current official version candidates researched without installing software.
+- M0 passed and is archived as `docs/agent/history/B-0003-m0-scaffold.md`.
+- The M0 toolchain, lockfiles, generated-code path, and root gates are ready.
 
 ## Validation plan
 
-- Select compatible pinned versions and record O-002.
-- Record exact approved installation or container bootstrap commands.
-- Build each empty workspace shell.
-- Run Buf lint and deterministic generation twice.
-- Run Docker Compose config validation.
-- Run workspace format, lint, typecheck, test, and build commands.
+- `./scripts/dev buf lint`
+- `./scripts/dev pnpm generate:check`
+- `./scripts/dev cargo test -p raziel-policy-ir`
+- `./scripts/dev cargo clippy -p raziel-policy-ir --all-targets -- -D warnings`
+- `./scripts/dev pnpm typecheck`
+- affected workspace tests
+- `git diff --check`
+- privacy and private-artifact scan
 
 ## Validation evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| `node --version` | PASS, `v26.0.0` observed | Host | 2026-07-18T12:03:44Z |
-| `pnpm --version` | PASS, `10.7.0` observed | Host | 2026-07-18T12:03:44Z |
-| `docker --version` | PASS, `28.4.0` observed | Host | 2026-07-18T12:03:44Z |
-| `docker compose version` | PASS, `2.39.2` observed | Host | 2026-07-18T12:03:44Z |
-| Rust, Cargo, rustup | NOT AVAILABLE | Host | 2026-07-18T12:03:44Z |
-| Go | NOT AVAILABLE | Host | 2026-07-18T12:03:44Z |
-| Buf | NOT AVAILABLE | Host | 2026-07-18T12:03:44Z |
-| SP1 | NOT AVAILABLE | Host | 2026-07-18T12:03:44Z |
+| Not run | NOT AVAILABLE | B-0004 | 2026-07-18T17:53:27Z |
 
 ## Risks and private-data notes
 
-- Do not commit real transaction files, private keys, witnesses, or proof debug dumps.
-- Do not expose PolicyIR through a temporary scaffold API.
-- Cross-language hashes cannot use raw Protobuf serialization.
-- Scaffold package boundaries must match `ARCHITECTURE.md`.
-- SP1 `6.2.2` needs a host and Linux ARM64 compatibility spike with the selected Rust
-  toolchain.
+- PolicyIR semantics are proof-critical and need deterministic positive and negative
+  fixtures.
+- Evaluator traces must not expose a satisfying path or stored caveat values.
+- Protobuf bytes are never commitment inputs.
+- Keep new fixtures synthetic and free of real transaction data.
 
 ## Exact next action
 
-Claim B-0003, record the proposed O-002 pins and reproducible bootstrap commands, then
-request approval for every missing or mismatched host tool.
+Check Git and current baton state, claim B-0004, then map the PolicyIR specification to
+the first Protobuf schema edit before changing Rust code.

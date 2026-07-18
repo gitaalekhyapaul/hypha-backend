@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+for lockfile in pnpm-lock.yaml Cargo.lock; do
+  if [ ! -f "$lockfile" ]; then
+    echo "missing lockfile: $lockfile" >&2
+    echo "run ./scripts/update-locks after maintainer approval" >&2
+    exit 1
+  fi
+done
+
+pnpm install --frozen-lockfile
+cargo fetch --locked
+(
+  cd tools/spicedb-ir-compiler
+  go mod download
+)
+pnpm generate
+pnpm bootstrap:check
