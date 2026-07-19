@@ -128,6 +128,7 @@ verification separate from issuer trust.
 | `services/razield` | Rust | Snapshot orchestration, witness construction, SP1 proving, capability issuance | Act as the independent verifier |
 | `services/verifierd` | Rust | Policy-registry lookup, proof verification, snapshot checks, claim validation | Call `razield` or read private graph data |
 | `programs/authorization-guest` | Rust and SP1 | Check commitments, Merkle membership, PolicyIR evaluation, caveats, capability claims | Perform network or filesystem I/O |
+| `crates/proto` | Rust | Compile generated Protobuf message contracts for Rust components | Define canonical commitment bytes |
 | `crates/policy-ir` | Rust | PolicyIR types, validation, bounded evaluator | Parse arbitrary SpiceDB text |
 | `crates/canonical` | Rust | Domain-separated canonical encodings and commitments | Hash raw Protobuf serialization |
 | `crates/snapshot` | Rust | Tuple leaves, blinded Merkle tree, descriptor signing | Decide authorization |

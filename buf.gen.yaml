@@ -15,10 +15,8 @@ plugins:
   - remote: buf.build/community/neoeinstein-prost:v0.5.0
     revision: 1
     out: gen/rust
-    opt:
-      - compile_well_known_types
   - remote: buf.build/community/neoeinstein-tonic:v0.5.0
     revision: 1
-    out: gen/rust
+    out: gen/rust-services
     opt:
-      - compile_well_known_types
+      - no_include

@@ -3,6 +3,7 @@ syntax = "proto3";
 package raziel.v1;
 
 import "google/protobuf/timestamp.proto";
+import "raziel/v1/policy_ir.proto";
 
 // PolicyStatus records the policy registry state used by an independent verifier.
 enum PolicyStatus {
@@ -12,14 +13,14 @@ enum PolicyStatus {
   POLICY_STATUS_EXPIRED = 3;
 }
 
-// PolicyRecord is the verifier-visible approval envelope. The M1 PolicyIR schema and
-// all commitment and signature encodings remain outside this M0 wire shell.
+// PolicyRecord is the verifier-visible approval envelope. Commitment and signature
+// encodings remain outside Protobuf.
 message PolicyRecord {
   uint32 format_version = 1;
   string record_id = 2;
   string policy_name = 3;
   string policy_version = 4;
-  bytes policy_ir = 5;
+  PolicyProgram canonical_policy_ir = 5;
   bytes policy_hash = 6;
   PolicyStatus status = 7;
   google.protobuf.Timestamp valid_from = 8;

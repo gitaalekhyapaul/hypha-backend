@@ -2,6 +2,7 @@
 members = [
   "crates/canonical",
   "crates/policy-ir",
+  "crates/proto",
   "crates/prover",
   "crates/snapshot",
   "crates/verifier",
@@ -20,4 +21,7 @@ license = "MIT"
 repository = "https://github.com/gitaalekhyapaul/hypha-backend"
 
 [workspace.dependencies]
+prost = "=0.14.4"
+prost-types = "=0.14.4"
+raziel-proto = { path = "crates/proto" }
 sp1-zkvm = { version = "=6.3.1", default-features = false }

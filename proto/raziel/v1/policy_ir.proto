@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+// PolicyProgram is the versioned, verifier-visible authorization program.
+// Protobuf serialization is not a commitment encoding.
+message PolicyProgram {
+  uint32 ir_version = 1;
+  string compiler_name = 2;
+  string compiler_version = 3;
+  bytes source_schema_digest = 4;
+  repeated ObjectDefinition definitions = 5;
+  repeated PermissionDefinition permissions = 6;
+  repeated CaveatDefinition caveats = 7;
+  PolicyLimits limits = 8;
+}
+
+message ObjectDefinition {
+  string name = 1;
+  repeated RelationDefinition relations = 2;
+}
+
+message RelationDefinition {
+  string name = 1;
+  repeated AllowedSubjectType allowed_subject_types = 2;
+}
+
+// AllowedSubjectType describes one subject form accepted by a relation.
+message AllowedSubjectType {
+  string object_type = 1;
+  optional string subject_relation = 2;
+  optional string caveat_name = 3;
+}
+
+message PermissionDefinition {
+  string object_type = 1;
+  string name = 2;
+  PermissionExpr expression = 3;
+}
+
+message PermissionExpr {
+  oneof node {
+    PermissionRelationRef relation_ref = 1;
+    PermissionSubjectRelationRef subject_relation_ref = 2;
+    PermissionChildren any_of = 3;
+    PermissionChildren all_of = 4;
+    PermissionArrow arrow = 5;
+    PermissionCaveatedRelation caveated_relation = 6;
+  }
+}
+
+message PermissionRelationRef {
+  string name = 1;
+}
+
+message PermissionSubjectRelationRef {
+  string relation = 1;
+  string subject_relation = 2;
+}
+
+message PermissionChildren {
+  repeated PermissionExpr children = 1;
+}
+
+message PermissionArrow {
+  string source_relation = 1;
+  string target_permission = 2;
+}
+
+message PermissionCaveatedRelation {
+  string relation = 1;
+  string caveat_name = 2;
+}
+
+message CaveatDefinition {
+  string name = 1;
+  repeated CaveatParameter parameters = 2;
+  CaveatExpr expression = 3;
+}
+
+message CaveatParameter {
+  CaveatInputSource source = 1;
+  string name = 2;
+  CaveatValueType value_type = 3;
+}
+
+enum CaveatInputSource {
+  CAVEAT_INPUT_SOURCE_UNSPECIFIED = 0;
+  CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT = 1;
+  CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT = 2;
+  CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM = 3;
+}
+
+enum CaveatValueType {
+  CAVEAT_VALUE_TYPE_UNSPECIFIED = 0;
+  CAVEAT_VALUE_TYPE_BOOL = 1;
+  CAVEAT_VALUE_TYPE_INT = 2;
+  CAVEAT_VALUE_TYPE_STRING = 3;
+}
+
+message CaveatExpr {
+  oneof node {
+    bool const_bool = 1;
+    sint64 const_int = 2;
+    string const_string = 3;
+    CaveatInputRef input_ref = 4;
+    CaveatBinaryExpr equal = 5;
+    CaveatBinaryExpr not_equal = 6;
+    CaveatBinaryExpr less_than = 7;
+    CaveatBinaryExpr less_than_or_equal = 8;
+    CaveatBinaryExpr greater_than = 9;
+    CaveatBinaryExpr greater_than_or_equal = 10;
+    CaveatChildren and = 11;
+    CaveatChildren or = 12;
+    CaveatUnaryExpr not = 13;
+  }
+}
+
+message CaveatInputRef {
+  CaveatInputSource source = 1;
+  string name = 2;
+  CaveatValueType value_type = 3;
+}
+
+message CaveatBinaryExpr {
+  CaveatExpr left = 1;
+  CaveatExpr right = 2;
+}
+
+message CaveatChildren {
+  repeated CaveatExpr children = 1;
+}
+
+message CaveatUnaryExpr {
+  CaveatExpr child = 1;
+}
+
+message PolicyLimits {
+  uint32 max_expression_nodes = 1;
+  uint32 max_caveat_nodes = 2;
+  uint32 max_path_depth = 3;
+  uint32 max_relationship_witnesses = 4;
+  uint32 max_merkle_depth = 5;
+  uint32 max_string_bytes = 6;
+  uint32 max_context_entries = 7;
+  uint32 max_total_private_input_bytes = 8;
+}
