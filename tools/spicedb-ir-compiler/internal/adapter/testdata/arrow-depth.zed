@@ -1,0 +1,16 @@
+definition user {}
+
+definition root {
+  relation auditor: user
+  permission audit = auditor
+}
+
+definition organization {
+  relation parent: root
+  permission audit = parent->audit
+}
+
+definition report {
+  relation parent: organization
+  permission audit = parent->audit
+}

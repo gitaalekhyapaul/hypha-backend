@@ -1,100 +1,109 @@
 # Current Engineering Baton
 
-- Baton ID: B-0005
+- Baton ID: B-0006
 - State: READY
 - Milestone: M1, PolicyIR and SpiceDB compiler adapter
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-07-18T18:36:34Z
+- Last updated UTC: 2026-07-19T17:34:36Z
 - Branch: `main`
-- Worktree: Expected clean after the scoped B-0004 commit. Verify before claiming.
+- Expected repository state: B-0005 compiler complete. Verify HEAD and worktree on claim.
 
 ## Objective
 
-Implement the Go adapter from maintained SpiceDB compiler Protobuf output into the
-approved PolicyIR subset. Defer live SpiceDB equivalence to a later M1 baton.
+Implement a live equivalence harness that runs approved authorization cases through
+the pinned SpiceDB `CheckPermission` API and the Rust host PolicyIR evaluator, then
+fails on any decision mismatch.
 
 ## Acceptance Criteria
 
-- [ ] The adapter consumes maintained SpiceDB compiler output, not ad hoc schema text.
-- [ ] Supported relations, subject sets, unions, intersections, one arrow, and named
-      caveats translate into typed PolicyIR.
-- [ ] Exclusion, recursion, wildcards, unbounded traversal, unsupported CEL, and
-      ambiguous target types fail closed.
-- [ ] Output follows ADR-0004 structural ordering and is deterministic.
-- [ ] Supported and rejected compiler fixtures have focused Go tests.
-- [ ] Go tests, Buf generation, and affected workspace gates pass.
+- [ ] The harness loads the approved supported schema into pinned SpiceDB `v1.54.0`.
+- [ ] The harness uses the B-0005 compiler output for the same exact schema bytes.
+- [ ] Shared relationship and caveat fixtures drive SpiceDB and the Rust evaluator.
+- [ ] Allowed and denied cases cover direct relations, one-hop subject sets, unions,
+      intersections, one arrow, named caveats, and every approved scalar operation.
+- [ ] Any SpiceDB conditional result, missing context, fixture drift, or decision
+      mismatch fails with a typed test error.
+- [ ] One documented container command runs the harness reproducibly on Apple Silicon.
+- [ ] Focused equivalence tests and affected workspace gates pass.
 
 ## Architecture Constraints
 
-- Follow maintained SpiceDB compiler semantics and Protobuf output.
-- Do not reimplement the SpiceDB parser.
-- Keep the adapter build-time only.
-- Preserve the PolicyIR node set and evaluator semantics from ADR-0004.
-- Reject unsupported constructs. Never approximate them.
-- Keep policy translation separate from dataset relevance.
-- Add no dependency without user approval.
+- SpiceDB and Rust must evaluate the same policy, relationships, request context, and
+  capability claim values.
+- The harness tests equivalence. It does not add runtime authorization behavior.
+- Keep relationship tuples and caveat values inside test processes and fixtures.
+- Do not expose PolicyIR or relationship paths to an agent-facing surface.
+- Do not expand the approved PolicyIR or CEL subset inside this baton.
+- Keep policy authorization separate from dataset relevance.
+- Add no dependency without maintainer approval.
 
 ## File Scope
 
-- `tools/spicedb-ir-compiler/`
-- `go.mod` and `go.sum` after dependency approval
-- focused M1 compiler fixtures under `tests/`
+- `tests/` for live equivalence orchestration and non-sensitive fixtures
+- `tools/spicedb-ir-compiler/` for compiler test hooks only when needed
+- `crates/policy-ir/` for host-evaluator fixture adapters only when needed
+- `docker-compose.yml` and existing scripts only when the harness needs a reproducible
+  command surface
+- package or lock files only after dependency approval
 - `docs/agent/CURRENT-BATON.md`
-- a decision record only for a durable choice not settled by approved semantics
 
 ## Out of Scope
 
-- SpiceDB-versus-PolicyIR live equivalence harness
-- canonical commitment bytes or hashes
-- snapshots, witnesses, Merkle trees, or SP1 guest changes
+- SP1 guest execution, proof generation, or verifier integration
+- canonical policy commitments, snapshots, Merkle trees, or witnesses
 - service, gateway, SDK, or console integration
-- payment-reconciliation data and scenario work
+- payment-reconciliation source ingestion or real transaction data
+- new PolicyIR nodes, caveat operators, recursion, exclusion, or wildcards
 
 ## Decisions
 
 - Inherited: D-001 through D-017 in `docs/spec/POC-TECHNICAL-SPEC.md`.
-- Inherited: ADR-0001 through ADR-0004.
+- Inherited: ADR-0001 through ADR-0006.
+- Inherited: B-0005 pins SpiceDB `v1.54.0` and exact-byte schema hashing.
 - Made: None.
 
 ## Open Questions and Blockers
 
-- Exact SpiceDB Go compiler module versions need inspection and user approval before
-  they enter `go.mod`.
-- Production PolicyIR ceilings wait for M3 cycle measurement.
+- Determine the smallest existing client and process boundary for driving live
+  `CheckPermission` without duplicating policy semantics.
+- Confirm whether the harness can use only approved, already pinned dependencies.
+- Production PolicyIR ceilings wait for M3 cycle measurements.
 - ADR-0002 still needs maintainer approval before gateway integration.
 - O-001 remains open for the later real-data acceptance run.
 
 ## Work Completed
 
-- B-0004 is archived as
-  `docs/agent/history/B-0004-policy-ir-wire-and-rust-semantics.md`.
-- The typed PolicyIR contract, Rust validator, and pure evaluator are ready.
+- B-0005 is archived as
+  `docs/agent/history/B-0005-spicedb-policy-ir-compiler.md`.
+- The compiler emits deterministic PolicyIR Protobuf and stable JSON diagnostics.
+- Rust decodes and validates the reviewed Go compiler golden.
+- Supported and rejected compiler fixtures are ready for live execution cases.
 
 ## Validation Plan
 
-- focused Go compiler-adapter tests
-- supported and rejected fixture tests
-- deterministic output comparison
-- `./scripts/dev go test ./...`
-- `./scripts/dev pnpm generate:check`
-- affected workspace format, lint, typecheck, and test gates
+- focused live SpiceDB equivalence cases
+- deterministic fixture import and cleanup checks
+- Rust host evaluator tests over the same case table
+- mismatch and missing-context mutation tests
+- `./scripts/dev pnpm format:check`
+- `./scripts/dev pnpm lint`
+- `./scripts/dev pnpm typecheck`
+- `./scripts/dev pnpm test`
 - `git diff --check`
 
 ## Validation Evidence
 
-| Command or check | Result | Scope | Timestamp UTC |
-| --- | --- | --- | --- |
-| Not run | NOT AVAILABLE | B-0005 | 2026-07-18T18:36:34Z |
+None. B-0006 is not claimed.
 
 ## Risks and Private-Data Notes
 
-- Compiler drift can change accepted syntax or compiled graph shapes.
-- Fixtures must contain policy examples only and no transaction data.
-- Diagnostic output must not contain relationship tuples or caveat values.
-- Unknown compiler nodes must produce typed rejection.
+- SpiceDB consistency tokens and conditional permissions need explicit test handling.
+- A duplicated case table can hide drift. Prefer one neutral fixture source.
+- Test diagnostics must not print full relationship paths or caveat values.
+- Fixture-only equivalence does not satisfy the real-data reconciliation gate.
 
 ## Exact Next Action
 
-Read the current Go adapter shell and pinned SpiceDB compiler APIs. Identify exact Go
-modules and versions, then request dependency approval before editing `go.mod`.
+Claim B-0006, inspect the pinned SpiceDB client APIs and existing test command surface,
+then propose any missing dependency with its exact version and fallback.

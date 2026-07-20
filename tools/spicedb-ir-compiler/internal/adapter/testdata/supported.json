@@ -1,0 +1,26 @@
+{
+  "config_version": 1,
+  "limits": {
+    "max_expression_nodes": 64,
+    "max_caveat_nodes": 64,
+    "max_path_depth": 4,
+    "max_relationship_witnesses": 32,
+    "max_merkle_depth": 32,
+    "max_string_bytes": 256,
+    "max_context_entries": 16,
+    "max_total_private_input_bytes": 4096
+  },
+  "caveats": {
+    "all_ops": {
+      "a": "REQUEST_CONTEXT",
+      "b": "RELATIONSHIP_CONTEXT",
+      "label": "CAPABILITY_CLAIM",
+      "flag": "REQUEST_CONTEXT"
+    },
+    "reconcile_scope": {
+      "task_id": "CAPABILITY_CLAIM",
+      "approved_amount": "RELATIONSHIP_CONTEXT",
+      "requested_amount": "REQUEST_CONTEXT"
+    }
+  }
+}

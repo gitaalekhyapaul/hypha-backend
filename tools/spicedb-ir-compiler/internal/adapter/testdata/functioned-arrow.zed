@@ -1,0 +1,11 @@
+definition user {}
+
+definition folder {
+  relation viewer: user
+  permission read = viewer
+}
+
+definition report {
+  relation parent: folder
+  permission read = parent.all(read)
+}

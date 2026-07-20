@@ -720,6 +720,7 @@ version = "0.0.0"
 name = "raziel-policy-ir"
 version = "0.0.0"
 dependencies = [
+ "prost",
  "raziel-proto",
 ]
 

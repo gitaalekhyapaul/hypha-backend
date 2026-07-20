@@ -1,0 +1,10 @@
+caveat tagged(tags list<string>) {
+  "approved" in tags
+}
+
+definition user {}
+
+definition document {
+  relation viewer: user with tagged
+  permission view = viewer
+}

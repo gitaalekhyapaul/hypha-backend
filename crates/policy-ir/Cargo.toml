@@ -8,3 +8,6 @@ publish = false
 
 [dependencies]
 raziel-proto.workspace = true
+
+[dev-dependencies]
+prost.workspace = true

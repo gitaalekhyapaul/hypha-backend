@@ -1,0 +1,499 @@
+{
+  "caveats": [
+    {
+      "expression": {
+        "and": {
+          "children": [
+            {
+              "const_bool": true
+            },
+            {
+              "less_than": {
+                "left": {
+                  "input_ref": {
+                    "name": "a",
+                    "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                    "value_type": "CAVEAT_VALUE_TYPE_INT"
+                  }
+                },
+                "right": {
+                  "const_int": "100"
+                }
+              }
+            },
+            {
+              "or": {
+                "children": [
+                  {
+                    "input_ref": {
+                      "name": "flag",
+                      "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                      "value_type": "CAVEAT_VALUE_TYPE_BOOL"
+                    }
+                  },
+                  {
+                    "not": {
+                      "child": {
+                        "input_ref": {
+                          "name": "flag",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_BOOL"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "or": {
+                "children": [
+                  {
+                    "equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "not_equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "or": {
+                "children": [
+                  {
+                    "equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "label",
+                          "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+                          "value_type": "CAVEAT_VALUE_TYPE_STRING"
+                        }
+                      },
+                      "right": {
+                        "const_string": "approved"
+                      }
+                    }
+                  },
+                  {
+                    "not_equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "label",
+                          "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+                          "value_type": "CAVEAT_VALUE_TYPE_STRING"
+                        }
+                      },
+                      "right": {
+                        "const_string": "blocked"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "or": {
+                "children": [
+                  {
+                    "less_than": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "less_than_or_equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "or": {
+                "children": [
+                  {
+                    "greater_than": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "greater_than_or_equal": {
+                      "left": {
+                        "input_ref": {
+                          "name": "a",
+                          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      },
+                      "right": {
+                        "input_ref": {
+                          "name": "b",
+                          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                          "value_type": "CAVEAT_VALUE_TYPE_INT"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "all_ops",
+      "parameters": [
+        {
+          "name": "a",
+          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "flag",
+          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_BOOL"
+        },
+        {
+          "name": "b",
+          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "label",
+          "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+          "value_type": "CAVEAT_VALUE_TYPE_STRING"
+        }
+      ]
+    },
+    {
+      "expression": {
+        "and": {
+          "children": [
+            {
+              "equal": {
+                "left": {
+                  "input_ref": {
+                    "name": "task_id",
+                    "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+                    "value_type": "CAVEAT_VALUE_TYPE_STRING"
+                  }
+                },
+                "right": {
+                  "const_string": "reconcile-july"
+                }
+              }
+            },
+            {
+              "less_than_or_equal": {
+                "left": {
+                  "input_ref": {
+                    "name": "requested_amount",
+                    "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                    "value_type": "CAVEAT_VALUE_TYPE_INT"
+                  }
+                },
+                "right": {
+                  "input_ref": {
+                    "name": "approved_amount",
+                    "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                    "value_type": "CAVEAT_VALUE_TYPE_INT"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "name": "reconcile_scope",
+      "parameters": [
+        {
+          "name": "requested_amount",
+          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "approved_amount",
+          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "task_id",
+          "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+          "value_type": "CAVEAT_VALUE_TYPE_STRING"
+        }
+      ]
+    }
+  ],
+  "compiler_name": "authzed/spicedb",
+  "compiler_version": "1.54.0",
+  "definitions": [
+    {
+      "name": "organization",
+      "relations": [
+        {
+          "allowed_subject_types": [
+            {
+              "object_type": "user"
+            }
+          ],
+          "name": "auditor"
+        }
+      ]
+    },
+    {
+      "name": "payment_batch",
+      "relations": [
+        {
+          "allowed_subject_types": [
+            {
+              "caveat_name": "reconcile_scope",
+              "object_type": "user"
+            }
+          ],
+          "name": "approver"
+        },
+        {
+          "allowed_subject_types": [
+            {
+              "object_type": "organization"
+            }
+          ],
+          "name": "organization"
+        },
+        {
+          "allowed_subject_types": [
+            {
+              "object_type": "user"
+            }
+          ],
+          "name": "owner"
+        },
+        {
+          "allowed_subject_types": [
+            {
+              "caveat_name": "all_ops",
+              "object_type": "user"
+            }
+          ],
+          "name": "tester"
+        },
+        {
+          "allowed_subject_types": [
+            {
+              "object_type": "team",
+              "subject_relation": "member"
+            },
+            {
+              "object_type": "user"
+            }
+          ],
+          "name": "viewer"
+        }
+      ]
+    },
+    {
+      "name": "team",
+      "relations": [
+        {
+          "allowed_subject_types": [
+            {
+              "object_type": "user"
+            }
+          ],
+          "name": "member"
+        }
+      ]
+    },
+    {
+      "name": "user"
+    }
+  ],
+  "ir_version": 1,
+  "limits": {
+    "max_caveat_nodes": 64,
+    "max_context_entries": 16,
+    "max_expression_nodes": 64,
+    "max_merkle_depth": 32,
+    "max_path_depth": 4,
+    "max_relationship_witnesses": 32,
+    "max_string_bytes": 256,
+    "max_total_private_input_bytes": 4096
+  },
+  "permissions": [
+    {
+      "expression": {
+        "relation_ref": {
+          "name": "auditor"
+        }
+      },
+      "name": "audit",
+      "object_type": "organization"
+    },
+    {
+      "expression": {
+        "arrow": {
+          "source_relation": "organization",
+          "target_permission": "audit"
+        }
+      },
+      "name": "audit",
+      "object_type": "payment_batch"
+    },
+    {
+      "expression": {
+        "all_of": {
+          "children": [
+            {
+              "relation_ref": {
+                "name": "owner"
+              }
+            },
+            {
+              "any_of": {
+                "children": [
+                  {
+                    "any_of": {
+                      "children": [
+                        {
+                          "relation_ref": {
+                            "name": "viewer"
+                          }
+                        },
+                        {
+                          "subject_relation_ref": {
+                            "relation": "viewer",
+                            "subject_relation": "member"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "caveated_relation": {
+                      "caveat_name": "reconcile_scope",
+                      "relation": "approver"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "inspect",
+      "object_type": "payment_batch"
+    },
+    {
+      "expression": {
+        "all_of": {
+          "children": [
+            {
+              "relation_ref": {
+                "name": "owner"
+              }
+            },
+            {
+              "any_of": {
+                "children": [
+                  {
+                    "any_of": {
+                      "children": [
+                        {
+                          "relation_ref": {
+                            "name": "viewer"
+                          }
+                        },
+                        {
+                          "subject_relation_ref": {
+                            "relation": "viewer",
+                            "subject_relation": "member"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "caveated_relation": {
+                      "caveat_name": "reconcile_scope",
+                      "relation": "approver"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "view",
+      "object_type": "payment_batch"
+    }
+  ],
+  "source_schema_digest": "noffQLIwzd8sqTU2Vzc23hHY19YoFib0G69DXVDOrFg="
+}

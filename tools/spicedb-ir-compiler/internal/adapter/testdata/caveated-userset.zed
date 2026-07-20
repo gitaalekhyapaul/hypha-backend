@@ -1,0 +1,14 @@
+caveat active(enabled bool) {
+  enabled
+}
+
+definition user {}
+
+definition team {
+  relation member: user
+}
+
+definition document {
+  relation viewer: team#member with active
+  permission view = viewer
+}

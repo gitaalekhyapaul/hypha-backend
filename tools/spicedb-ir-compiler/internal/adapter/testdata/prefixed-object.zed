@@ -1,0 +1,6 @@
+definition acme/user {}
+
+definition acme/document {
+  relation viewer: acme/user
+  permission view = viewer
+}

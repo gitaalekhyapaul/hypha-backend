@@ -1,0 +1,36 @@
+caveat reconcile_scope(task_id string, approved_amount int, requested_amount int) {
+  task_id == "reconcile-july" && requested_amount <= approved_amount
+}
+
+caveat all_ops(a int, b int, label string, flag bool) {
+  (a == b || a != b) &&
+  (a < b || a <= b) &&
+  (a > b || a >= b) &&
+  (label == "approved" || label != "blocked") &&
+  (flag || !flag) &&
+  a < 100 &&
+  true
+}
+
+definition user {}
+
+definition team {
+  relation member: user
+}
+
+definition organization {
+  relation auditor: user
+  permission audit = auditor
+}
+
+definition payment_batch {
+  relation viewer: user | team#member
+  relation approver: user with reconcile_scope
+  relation tester: user with all_ops
+  relation owner: user
+  relation organization: organization
+
+  permission view = (viewer + approver) & owner
+  permission inspect = view
+  permission audit = organization->audit
+}

@@ -1,0 +1,16 @@
+definition user {}
+
+definition alpha {
+  relation viewer: user
+  permission read = viewer
+}
+
+definition beta {
+  relation viewer: user
+  permission read = viewer
+}
+
+definition report {
+  relation parent: alpha | beta
+  permission read = parent->read
+}

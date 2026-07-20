@@ -5,6 +5,12 @@ clean: true
 inputs:
   - directory: proto
 
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/gitaalekhyapaul/hypha-backend/tools/spicedb-ir-compiler/gen
+
 plugins:
   - remote: buf.build/bufbuild/es:v2.12.1
     revision: 1
@@ -20,3 +26,8 @@ plugins:
     out: gen/rust-services
     opt:
       - no_include
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    revision: 1
+    out: tools/spicedb-ir-compiler/gen
+    opt:
+      - paths=source_relative
