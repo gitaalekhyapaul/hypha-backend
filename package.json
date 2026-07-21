@@ -19,6 +19,7 @@
     "typecheck": "node ./scripts/workspace.mjs typecheck",
     "build": "node ./scripts/workspace.mjs build",
     "test": "node ./scripts/workspace.mjs test",
+    "test:equivalence": "./scripts/test-equivalence",
     "test:e2e": "node ./scripts/workspace.mjs test:e2e",
     "stack:up": "./scripts/compose --profile apps --profile services up --build",
     "stack:down": "./scripts/compose --profile apps --profile services down",

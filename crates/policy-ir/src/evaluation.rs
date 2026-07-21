@@ -380,28 +380,10 @@ fn evaluate_caveat_expr(
             |left, right| left >= right,
         ),
         CaveatExpr::And(children) => {
-            let mut value = true;
-            for child in children {
-                value &= as_bool(evaluate_caveat_expr(
-                    child,
-                    request,
-                    relationship_context,
-                    budget,
-                )?)?;
-            }
-            Ok(CaveatValue::Bool(value))
+            evaluate_boolean_children(children, request, relationship_context, budget, false)
         }
         CaveatExpr::Or(children) => {
-            let mut value = false;
-            for child in children {
-                value |= as_bool(evaluate_caveat_expr(
-                    child,
-                    request,
-                    relationship_context,
-                    budget,
-                )?)?;
-            }
-            Ok(CaveatValue::Bool(value))
+            evaluate_boolean_children(children, request, relationship_context, budget, true)
         }
         CaveatExpr::Not(child) => Ok(CaveatValue::Bool(!as_bool(evaluate_caveat_expr(
             child,
@@ -409,6 +391,37 @@ fn evaluate_caveat_expr(
             relationship_context,
             budget,
         )?)?)),
+    }
+}
+
+fn evaluate_boolean_children(
+    children: &[CaveatExpr],
+    request: &EvaluationRequest,
+    relationship_context: &[ContextEntry],
+    budget: &mut EvaluationBudget,
+    decisive_value: bool,
+) -> Result<CaveatValue, EvaluationError> {
+    let mut found_decisive_value = false;
+    let mut found_missing_input = false;
+    let mut first_non_missing_error = None;
+    for child in children {
+        match evaluate_caveat_expr(child, request, relationship_context, budget).and_then(as_bool) {
+            Ok(value) => found_decisive_value |= value == decisive_value,
+            Err(EvaluationError::MissingCaveatInput) => found_missing_input = true,
+            Err(error) => {
+                first_non_missing_error.get_or_insert(error);
+            }
+        }
+    }
+
+    if let Some(error) = first_non_missing_error {
+        Err(error)
+    } else if found_decisive_value {
+        Ok(CaveatValue::Bool(decisive_value))
+    } else if found_missing_input {
+        Err(EvaluationError::MissingCaveatInput)
+    } else {
+        Ok(CaveatValue::Bool(!decisive_value))
     }
 }
 
@@ -584,4 +597,57 @@ fn consume(
     }
     *current = next;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_LIMITS: PolicyLimits = PolicyLimits {
+        max_expression_nodes: 8,
+        max_caveat_nodes: 8,
+        max_path_depth: 2,
+        max_relationship_witnesses: 2,
+        max_merkle_depth: 2,
+        max_string_bytes: 32,
+        max_context_entries: 4,
+        max_total_private_input_bytes: 128,
+    };
+
+    #[test]
+    fn boolean_composites_visit_later_children_after_non_missing_error() {
+        let children = [
+            CaveatExpr::InputRef {
+                source: CaveatInputSource::CapabilityClaim,
+                name: "flag".into(),
+                value_type: crate::CaveatValueType::Bool,
+            },
+            CaveatExpr::ConstBool(false),
+        ];
+        let request = EvaluationRequest {
+            resource: ObjectRef {
+                object_type: "document".into(),
+                object_id: "one".into(),
+            },
+            subject: ObjectRef {
+                object_type: "user".into(),
+                object_id: "alice".into(),
+            },
+            permission: "read".into(),
+            request_context: vec![],
+            capability_claims: vec![ContextEntry {
+                name: "flag".into(),
+                value: CaveatValue::String("wrong-type".into()),
+            }],
+        };
+
+        for decisive_value in [false, true] {
+            let mut budget = EvaluationBudget::new(TEST_LIMITS);
+            assert_eq!(
+                evaluate_boolean_children(&children, &request, &[], &mut budget, decisive_value),
+                Err(EvaluationError::CaveatInputTypeMismatch)
+            );
+            assert_eq!(budget.caveat_nodes, 2);
+        }
+    }
 }

@@ -63,7 +63,7 @@ func TestTranslateSupportedSchema(t *testing.T) {
 		}
 	}
 
-	if got, want := len(program.GetCaveats()), 2; got != want {
+	if got, want := len(program.GetCaveats()), 3; got != want {
 		t.Fatalf("caveat count = %d, want %d", got, want)
 	}
 	caveat := findCaveat(t, program, "reconcile_scope")
@@ -85,6 +85,10 @@ func TestTranslateSupportedSchema(t *testing.T) {
 	}
 	if caveat.GetExpression().GetAnd() == nil {
 		t.Errorf("caveat expression = %T, want and", caveat.GetExpression().GetNode())
+	}
+	override := findCaveat(t, program, "reconcile_override")
+	if override.GetExpression().GetOr() == nil {
+		t.Errorf("override caveat expression = %T, want or", override.GetExpression().GetNode())
 	}
 
 	seenRanks := map[int]bool{}

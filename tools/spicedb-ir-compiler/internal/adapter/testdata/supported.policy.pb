@@ -1,12 +1,14 @@
-authzed/spicedb1.54.0" ‡ß@²0Íß,©56W76ŞØ×Ö(&ô¯C]PÎ¬X*!
+authzed/spicedb1.54.0" e…şÀê”‹@ú£‘	TßCGå¨MNÄ&nr¢*!
 organization
 auditor
-user*¢
+user*Ñ
 payment_batch#
 approver
 userreconcile_scope
 organization
-organization
+organization-
+override_tester
+userreconcile_override
 owner
 user
 tester
@@ -22,7 +24,11 @@
 	
 auditor2/
 payment_batchaudit*
-organizationaudit2n
+organizationaudit26
+payment_batchexercise_all_ops2
+testerall_ops2P
+payment_batchexercise_or_absorption'2%
+override_testerreconcile_override2n
 payment_batchinspectT"R
 	
 
@@ -82,7 +88,11 @@ EC
 J
 	"a	"b
 R
-	"a	"b:±
+	"a	"b:¦
+reconcile_overriderequested_amountapproved_amountis_overrideNbL
+"is_override
+5B3
+"requested_amount"approved_amount:±
 reconcile_scoperequested_amountapproved_amounttask_id`Z^
 %*#
 "task_idreconcile-july

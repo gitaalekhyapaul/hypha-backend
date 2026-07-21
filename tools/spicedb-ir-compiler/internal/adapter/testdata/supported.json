@@ -17,6 +17,11 @@
       "label": "CAPABILITY_CLAIM",
       "flag": "REQUEST_CONTEXT"
     },
+    "reconcile_override": {
+      "approved_amount": "RELATIONSHIP_CONTEXT",
+      "is_override": "CAPABILITY_CLAIM",
+      "requested_amount": "REQUEST_CONTEXT"
+    },
     "reconcile_scope": {
       "task_id": "CAPABILITY_CLAIM",
       "approved_amount": "RELATIONSHIP_CONTEXT",

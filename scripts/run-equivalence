@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+fixture=tests/equivalence/fixtures/v1.json
+spicedb_output=$(mktemp)
+rust_output=$(mktemp)
+
+cleanup_outputs() {
+  rm -f "$spicedb_output" "$rust_output"
+}
+
+cleanup_and_exit() {
+  trap - EXIT HUP INT TERM
+  cleanup_outputs
+  exit 1
+}
+
+trap cleanup_outputs EXIT
+trap cleanup_and_exit HUP INT TERM
+
+go run ./tools/spicedb-ir-compiler/cmd/spicedb-equivalence \
+  --fixture "$fixture" \
+  --output "$spicedb_output"
+
+cargo run --quiet -p raziel-policy-ir --example equivalence_host -- \
+  --fixture "$fixture" \
+  --output "$rust_output"
+
+diff -u "$spicedb_output" "$rust_output"
+printf 'SpiceDB and Rust matched for every equivalence case.\n'

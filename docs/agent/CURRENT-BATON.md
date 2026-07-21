@@ -1,109 +1,98 @@
 # Current Engineering Baton
 
-- Baton ID: B-0006
+- Baton ID: B-0007
 - State: READY
-- Milestone: M1, PolicyIR and SpiceDB compiler adapter
+- Milestone: M2, Canonical commitments and snapshots
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-07-19T17:34:36Z
+- Last updated UTC: 2026-07-20T19:44:03Z
 - Branch: `main`
-- Expected repository state: B-0005 compiler complete. Verify HEAD and worktree on claim.
+- Worktree: B-0006 is complete and included in the closing worktree for this baton
+  reset.
 
 ## Objective
 
-Implement a live equivalence harness that runs approved authorization cases through
-the pinned SpiceDB `CheckPermission` API and the Rust host PolicyIR evaluator, then
-fails on any decision mismatch.
+Define and implement canonical PolicyIR encoding and `policy_hash` in Rust with
+versioned deterministic vectors and a TypeScript vector parser. Domain-specific
+relationship and snapshot commitments remain separate batons.
 
 ## Acceptance Criteria
 
-- [ ] The harness loads the approved supported schema into pinned SpiceDB `v1.54.0`.
-- [ ] The harness uses the B-0005 compiler output for the same exact schema bytes.
-- [ ] Shared relationship and caveat fixtures drive SpiceDB and the Rust evaluator.
-- [ ] Allowed and denied cases cover direct relations, one-hop subject sets, unions,
-      intersections, one arrow, named caveats, and every approved scalar operation.
-- [ ] Any SpiceDB conditional result, missing context, fixture drift, or decision
-      mismatch fails with a typed test error.
-- [ ] One documented container command runs the harness reproducibly on Apple Silicon.
-- [ ] Focused equivalence tests and affected workspace gates pass.
+- [ ] One accepted decision record fixes the hash algorithm, signed integer encoding,
+      UTF-8 normalization, optional presence bytes, length widths, and structural
+      ordering.
+- [ ] The Rust canonical crate encodes every approved PolicyIR field without hashing
+      Protobuf bytes.
+- [ ] `policy_hash` uses the exact ASCII domain `raziel/policy/v1` and rejects unknown
+      or unsupported PolicyIR inputs.
+- [ ] Checked-in vectors include human input, canonical bytes hex, domain separator,
+      expected digest, Rust result, TypeScript parser result, and negative mutations.
+- [ ] Focused and affected workspace gates pass.
 
 ## Architecture Constraints
 
-- SpiceDB and Rust must evaluate the same policy, relationships, request context, and
-  capability claim values.
-- The harness tests equivalence. It does not add runtime authorization behavior.
-- Keep relationship tuples and caveat values inside test processes and fixtures.
-- Do not expose PolicyIR or relationship paths to an agent-facing surface.
-- Do not expand the approved PolicyIR or CEL subset inside this baton.
-- Keep policy authorization separate from dataset relevance.
-- Add no dependency without maintainer approval.
+- Rust remains the only commitment authority.
+- TypeScript parses and displays vectors. It does not perform proof-critical hashing.
+- The agent sees `policy_hash`, not PolicyIR. The verifier resolves the approved
+  PolicyIR through its trusted local registry.
+- Every commitment is versioned and domain-separated.
+- Raw Protobuf bytes are never commitment inputs.
+- Unknown fields, enum values, and unsupported PolicyIR nodes fail closed.
+- Test vectors contain no private relationship tuples or caveat values.
+- Policy authorization remains separate from dataset relevance.
 
 ## File Scope
 
-- `tests/` for live equivalence orchestration and non-sensitive fixtures
-- `tools/spicedb-ir-compiler/` for compiler test hooks only when needed
-- `crates/policy-ir/` for host-evaluator fixture adapters only when needed
-- `docker-compose.yml` and existing scripts only when the harness needs a reproducible
-  command surface
-- package or lock files only after dependency approval
+- `docs/decisions/` for the canonical encoding decision
+- `crates/canonical/` for Rust canonical encoding and hashing
+- `crates/policy-ir/` only for integration with validated PolicyIR access
+- `tests/vectors/` or `tests/canonical/` for deterministic vectors
+- `packages/proto-ts/` for vector parsing and tests only
+- Cargo metadata only after dependency approval
 - `docs/agent/CURRENT-BATON.md`
 
 ## Out of Scope
 
-- SP1 guest execution, proof generation, or verifier integration
-- canonical policy commitments, snapshots, Merkle trees, or witnesses
-- service, gateway, SDK, or console integration
-- payment-reconciliation source ingestion or real transaction data
-- new PolicyIR nodes, caveat operators, recursion, exclusion, or wildcards
+- Relationship leaf encoding, trees, salts, openings, and witness construction
+- Snapshot descriptors, signatures, registries, and revocation
+- Capability commitments
+- Services, gateway, SDK, console, SP1 execution, and proof generation
+- Real transaction data
+- Production proof ceilings
 
 ## Decisions
 
 - Inherited: D-001 through D-017 in `docs/spec/POC-TECHNICAL-SPEC.md`.
-- Inherited: ADR-0001 through ADR-0006.
-- Inherited: B-0005 pins SpiceDB `v1.54.0` and exact-byte schema hashing.
-- Made: None.
+- Inherited: ADR-0001 through ADR-0007.
+- Pending: canonical hash algorithm, signed integer encoding, UTF-8 normalization,
+  optional presence encoding, length widths, and structural ordering.
 
 ## Open Questions and Blockers
 
-- Determine the smallest existing client and process boundary for driving live
-  `CheckPermission` without duplicating policy semantics.
-- Confirm whether the harness can use only approved, already pinned dependencies.
-- Production PolicyIR ceilings wait for M3 cycle measurements.
-- ADR-0002 still needs maintainer approval before gateway integration.
-- O-001 remains open for the later real-data acceptance run.
+- The hash algorithm is not approved yet.
+- Signed integer encoding is not approved yet.
+- UTF-8 normalization behavior is not approved yet.
+- The normal development `spicedb` service has a pre-existing command and key
+  incompatibility. It belongs to a separate service-integration baton.
 
 ## Work Completed
 
-- B-0005 is archived as
-  `docs/agent/history/B-0005-spicedb-policy-ir-compiler.md`.
-- The compiler emits deterministic PolicyIR Protobuf and stable JSON diagnostics.
-- Rust decodes and validates the reviewed Go compiler golden.
-- Supported and rejected compiler fixtures are ready for live execution cases.
+- B-0006 completed the M1 exit gate and is archived as
+  `docs/agent/history/B-0006-spicedb-policy-ir-equivalence.md`.
+- `crates/canonical/` exists as the M2 placeholder from the initial repository
+  scaffold.
 
 ## Validation Plan
 
-- focused live SpiceDB equivalence cases
-- deterministic fixture import and cleanup checks
-- Rust host evaluator tests over the same case table
-- mismatch and missing-context mutation tests
-- `./scripts/dev pnpm format:check`
-- `./scripts/dev pnpm lint`
-- `./scripts/dev pnpm typecheck`
-- `./scripts/dev pnpm test`
+- Deterministic positive and negative canonical vectors
+- Mutated-field and malformed-input tests
+- Rust canonical crate tests and workspace tests
+- TypeScript parser tests over the same vectors
+- Affected format, lint, typecheck, build, and generation gates
 - `git diff --check`
-
-## Validation Evidence
-
-None. B-0006 is not claimed.
-
-## Risks and Private-Data Notes
-
-- SpiceDB consistency tokens and conditional permissions need explicit test handling.
-- A duplicated case table can hide drift. Prefer one neutral fixture source.
-- Test diagnostics must not print full relationship paths or caveat values.
-- Fixture-only equivalence does not satisfy the real-data reconciliation gate.
 
 ## Exact Next Action
 
-Claim B-0006, inspect the pinned SpiceDB client APIs and existing test command surface,
-then propose any missing dependency with its exact version and fallback.
+Claim B-0007, reconcile it with clean `HEAD`, and draft the canonical encoding
+decision. Request maintainer approval for semantic choices and any dependency before
+implementation.

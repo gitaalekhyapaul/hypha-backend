@@ -234,6 +234,57 @@
     },
     {
       "expression": {
+        "or": {
+          "children": [
+            {
+              "input_ref": {
+                "name": "is_override",
+                "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+                "value_type": "CAVEAT_VALUE_TYPE_BOOL"
+              }
+            },
+            {
+              "less_than_or_equal": {
+                "left": {
+                  "input_ref": {
+                    "name": "requested_amount",
+                    "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+                    "value_type": "CAVEAT_VALUE_TYPE_INT"
+                  }
+                },
+                "right": {
+                  "input_ref": {
+                    "name": "approved_amount",
+                    "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+                    "value_type": "CAVEAT_VALUE_TYPE_INT"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "name": "reconcile_override",
+      "parameters": [
+        {
+          "name": "requested_amount",
+          "source": "CAVEAT_INPUT_SOURCE_REQUEST_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "approved_amount",
+          "source": "CAVEAT_INPUT_SOURCE_RELATIONSHIP_CONTEXT",
+          "value_type": "CAVEAT_VALUE_TYPE_INT"
+        },
+        {
+          "name": "is_override",
+          "source": "CAVEAT_INPUT_SOURCE_CAPABILITY_CLAIM",
+          "value_type": "CAVEAT_VALUE_TYPE_BOOL"
+        }
+      ]
+    },
+    {
+      "expression": {
         "and": {
           "children": [
             {
@@ -330,6 +381,15 @@
         {
           "allowed_subject_types": [
             {
+              "caveat_name": "reconcile_override",
+              "object_type": "user"
+            }
+          ],
+          "name": "override_tester"
+        },
+        {
+          "allowed_subject_types": [
+            {
               "object_type": "user"
             }
           ],
@@ -404,6 +464,26 @@
         }
       },
       "name": "audit",
+      "object_type": "payment_batch"
+    },
+    {
+      "expression": {
+        "caveated_relation": {
+          "caveat_name": "all_ops",
+          "relation": "tester"
+        }
+      },
+      "name": "exercise_all_ops",
+      "object_type": "payment_batch"
+    },
+    {
+      "expression": {
+        "caveated_relation": {
+          "caveat_name": "reconcile_override",
+          "relation": "override_tester"
+        }
+      },
+      "name": "exercise_or_absorption",
       "object_type": "payment_batch"
     },
     {
@@ -495,5 +575,5 @@
       "object_type": "payment_batch"
     }
   ],
-  "source_schema_digest": "noffQLIwzd8sqTU2Vzc23hHY19YoFib0G69DXVDOrFg="
+  "source_schema_digest": "ZYX+A8AB6pSLQPqjBQEBkQlU30NH5ahNnU7EJm5yAaI="
 }

@@ -532,6 +532,19 @@ CaveatExpr =
 
 No implicit type coercion is permitted.
 
+Boolean caveat composites evaluate every child and combine missing-input results with
+CEL-compatible, order-independent absorption:
+
+| Expression | Result |
+| --- | --- |
+| `false && missing` | `false` |
+| `true && missing` | missing-input error |
+| `true || missing` | `true` |
+| `false || missing` | missing-input error |
+
+Type, witness, resolver, and budget errors always propagate. ADR-0007 records the
+security rationale and supersedes ADR-0004's conflicting clause.
+
 ### Limits
 
 Initial safe ceilings shall be low and benchmarked:

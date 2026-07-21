@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-07-19
 - Milestone: M1
+- Superseded in part: ADR-0007 replaces the Boolean missing-input propagation rule.
 
 ## Context
 
@@ -37,9 +38,9 @@ declared userset hop. `Arrow` requires one uncaveated direct target type and res
 permission on that type. `CaveatedRelation` matches direct tuples carrying the exact
 named caveat. Caveated usersets and caveated arrow sources fail validation.
 
-Relationship caveat context stays attached to its tuple. Missing or mistyped context
-returns a typed evaluation error. Boolean composites evaluate every child and propagate
-any error, so collection order cannot hide a failed input check.
+Relationship caveat context stays attached to its tuple. Mistyped context returns a
+typed evaluation error. Boolean composites evaluate every child. Missing input follows
+the order-independent CEL absorption rules in ADR-0007. Every other error propagates.
 
 Set-like declarations and commutative expression children use strict structural order.
 M2 will document the matching cross-language byte comparator with the canonical

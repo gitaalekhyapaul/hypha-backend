@@ -1,0 +1,300 @@
+{
+  "fixture_version": 1,
+  "schema_path": "tools/spicedb-ir-compiler/internal/adapter/testdata/supported.zed",
+  "compiler_config_path": "tools/spicedb-ir-compiler/internal/adapter/testdata/supported.json",
+  "policy_ir_path": "tools/spicedb-ir-compiler/internal/adapter/testdata/supported.policy.pb",
+  "schema_sha256": "6585fe03c001ea948b40faa3050101910954df4347e5a84d9d4ec4266e7201a2",
+  "relationships": [
+    {
+      "resource": { "object_type": "organization", "object_id": "org-a" },
+      "relation": "auditor",
+      "subject": { "object_type": "user", "object_id": "erin" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "relation": "tester",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "caveat": {
+        "name": "all_ops",
+        "context": [{ "name": "b", "value": { "int": 10 } }]
+      }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops-bound" },
+      "relation": "tester",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "caveat": {
+        "name": "all_ops",
+        "context": [{ "name": "b", "value": { "int": 100 } }]
+      }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-audit" },
+      "relation": "organization",
+      "subject": { "object_type": "organization", "object_id": "org-a" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "relation": "approver",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "caveat": {
+        "name": "reconcile_scope",
+        "context": [{ "name": "approved_amount", "value": { "int": 1000 } }]
+      }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "relation": "owner",
+      "subject": { "object_type": "user", "object_id": "dana" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-direct" },
+      "relation": "owner",
+      "subject": { "object_type": "user", "object_id": "alice" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-direct" },
+      "relation": "viewer",
+      "subject": { "object_type": "user", "object_id": "alice" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-intersection-deny" },
+      "relation": "viewer",
+      "subject": { "object_type": "user", "object_id": "alice" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-or-absorption" },
+      "relation": "override_tester",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "caveat": {
+        "name": "reconcile_override",
+        "context": [{ "name": "approved_amount", "value": { "int": 1000 } }]
+      }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-team" },
+      "relation": "owner",
+      "subject": { "object_type": "user", "object_id": "bob" }
+    },
+    {
+      "resource": { "object_type": "payment_batch", "object_id": "batch-team" },
+      "relation": "viewer",
+      "subject": { "object_type": "team", "object_id": "recon" },
+      "subject_relation": "member"
+    },
+    {
+      "resource": { "object_type": "team", "object_id": "recon" },
+      "relation": "member",
+      "subject": { "object_type": "user", "object_id": "bob" }
+    }
+  ],
+  "cases": [
+    {
+      "id": "all-ops-allow-equal",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 10 } },
+        { "name": "flag", "value": { "bool": true } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "approved" } }],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "all-ops-allow-other-label",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 10 } },
+        { "name": "flag", "value": { "bool": false } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "review" } }],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "all-ops-deny-bound",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops-bound" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 100 } },
+        { "name": "flag", "value": { "bool": true } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "approved" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "all-ops-deny-greater",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 11 } },
+        { "name": "flag", "value": { "bool": true } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "approved" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "all-ops-deny-label",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 10 } },
+        { "name": "flag", "value": { "bool": true } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "blocked" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "all-ops-deny-less",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-all-ops" },
+      "permission": "exercise_all_ops",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [
+        { "name": "a", "value": { "int": 9 } },
+        { "name": "flag", "value": { "bool": true } }
+      ],
+      "capability_claims": [{ "name": "label", "value": { "string": "approved" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "and-absorption-deny",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "request_context": [],
+      "capability_claims": [{ "name": "task_id", "value": { "string": "wrong-task" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "and-absorption-missing",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "request_context": [],
+      "capability_claims": [{ "name": "task_id", "value": { "string": "reconcile-july" } }],
+      "expected": "CONDITIONAL"
+    },
+    {
+      "id": "audit-arrow-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-audit" },
+      "permission": "audit",
+      "subject": { "object_type": "user", "object_id": "erin" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "audit-arrow-deny",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-audit" },
+      "permission": "audit",
+      "subject": { "object_type": "user", "object_id": "mallory" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "DENY"
+    },
+    {
+      "id": "inspect-alias-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-direct" },
+      "permission": "inspect",
+      "subject": { "object_type": "user", "object_id": "alice" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "or-absorption-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-or-absorption" },
+      "permission": "exercise_or_absorption",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [],
+      "capability_claims": [{ "name": "is_override", "value": { "bool": true } }],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "or-absorption-missing",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-or-absorption" },
+      "permission": "exercise_or_absorption",
+      "subject": { "object_type": "user", "object_id": "frank" },
+      "request_context": [],
+      "capability_claims": [{ "name": "is_override", "value": { "bool": false } }],
+      "expected": "CONDITIONAL"
+    },
+    {
+      "id": "view-caveat-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "request_context": [{ "name": "requested_amount", "value": { "int": 900 } }],
+      "capability_claims": [{ "name": "task_id", "value": { "string": "reconcile-july" } }],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "view-caveat-deny-amount",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "request_context": [{ "name": "requested_amount", "value": { "int": 1100 } }],
+      "capability_claims": [{ "name": "task_id", "value": { "string": "reconcile-july" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "view-caveat-deny-task",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-caveat" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "dana" },
+      "request_context": [{ "name": "requested_amount", "value": { "int": 900 } }],
+      "capability_claims": [{ "name": "task_id", "value": { "string": "wrong-task" } }],
+      "expected": "DENY"
+    },
+    {
+      "id": "view-direct-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-direct" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "alice" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "view-direct-deny-subject",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-direct" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "mallory" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "DENY"
+    },
+    {
+      "id": "view-intersection-deny",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-intersection-deny" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "alice" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "DENY"
+    },
+    {
+      "id": "view-subject-set-allow",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-team" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "bob" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "ALLOW"
+    },
+    {
+      "id": "view-subject-set-deny",
+      "resource": { "object_type": "payment_batch", "object_id": "batch-team" },
+      "permission": "view",
+      "subject": { "object_type": "user", "object_id": "mallory" },
+      "request_context": [],
+      "capability_claims": [],
+      "expected": "DENY"
+    }
+  ]
+}

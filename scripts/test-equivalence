@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+cleanup_service() {
+  ./scripts/compose --profile equivalence rm --stop --force spicedb-equivalence >/dev/null 2>&1 || true
+}
+
+cleanup_and_exit() {
+  trap - EXIT HUP INT TERM
+  cleanup_service
+  exit 1
+}
+
+trap cleanup_service EXIT
+trap cleanup_and_exit HUP INT TERM
+
+cleanup_service
+./scripts/compose --profile equivalence up --detach --no-deps spicedb-equivalence
+./scripts/dev ./scripts/run-equivalence

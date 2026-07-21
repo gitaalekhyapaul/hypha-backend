@@ -12,6 +12,10 @@ caveat all_ops(a int, b int, label string, flag bool) {
   true
 }
 
+caveat reconcile_override(approved_amount int, is_override bool, requested_amount int) {
+  is_override || requested_amount <= approved_amount
+}
+
 definition user {}
 
 definition team {
@@ -26,6 +30,7 @@ definition organization {
 definition payment_batch {
   relation viewer: user | team#member
   relation approver: user with reconcile_scope
+  relation override_tester: user with reconcile_override
   relation tester: user with all_ops
   relation owner: user
   relation organization: organization
@@ -33,4 +38,6 @@ definition payment_batch {
   permission view = (viewer + approver) & owner
   permission inspect = view
   permission audit = organization->audit
+  permission exercise_all_ops = tester
+  permission exercise_or_absorption = override_tester
 }

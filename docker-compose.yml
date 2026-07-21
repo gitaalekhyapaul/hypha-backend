@@ -38,6 +38,15 @@ services:
       - "50051:50051"
       - "8443:8443"
 
+  spicedb-equivalence:
+    image: ${SPICEDB_IMAGE}
+    command:
+      - serve
+      - --grpc-preshared-key=raziel-equivalence-only
+      - --skip-release-check
+      - --telemetry-endpoint=
+    profiles: ["equivalence"]
+
   razield:
     <<: *toolchain-service
     command: ["cargo", "run", "-p", "razield"]

@@ -38,5 +38,7 @@ jobs:
         run: docker compose --env-file tools/toolchain-versions.env run --rm toolchain pnpm build
       - name: Run tests
         run: docker compose --env-file tools/toolchain-versions.env run --rm toolchain pnpm test
+      - name: Compare SpiceDB and PolicyIR decisions
+        run: ./scripts/test-equivalence
       - name: Run end-to-end tests
         run: docker compose --env-file tools/toolchain-versions.env run --rm toolchain pnpm test:e2e
