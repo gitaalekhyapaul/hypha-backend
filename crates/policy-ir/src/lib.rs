@@ -7,6 +7,8 @@
 
 mod error;
 mod evaluation;
+#[cfg(feature = "strict-protobuf")]
+mod ingress;
 mod model;
 mod validation;
 mod wire;
@@ -15,6 +17,8 @@ pub use error::{
     CollectionKind, EvaluationError, LimitKind, PolicyError, ReferenceKind, ResolverError,
 };
 pub use evaluation::{RelationshipResolver, evaluate};
+#[cfg(feature = "strict-protobuf")]
+pub use ingress::{PolicyIngressError, decode_policy_program_strict};
 pub use model::{
     AllowedSubjectType, CaveatDefinition, CaveatExpr, CaveatInputSource, CaveatParameter,
     CaveatValue, CaveatValueType, ContextEntry, EvaluationRequest, ObjectDefinition, ObjectRef,

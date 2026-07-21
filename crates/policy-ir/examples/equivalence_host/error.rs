@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::io;
 
-use raziel_policy_ir::{EvaluationError, PolicyError};
+use raziel_policy_ir::{EvaluationError, PolicyIngressError};
 
 #[derive(Debug)]
 pub enum HostError {
@@ -30,8 +30,7 @@ pub enum HostError {
     SchemaDigestEncoding,
     SchemaDigestMismatch(&'static str),
     CompilerConfigMismatch(&'static str),
-    PolicyDecode(prost::DecodeError),
-    PolicyValidation(PolicyError),
+    PolicyIngress(PolicyIngressError),
     InvalidRelationship,
     MissingPermission(String),
     UnknownCaveat(String),
@@ -115,14 +114,8 @@ impl Display for HostError {
             Self::CompilerConfigMismatch(field) => {
                 write!(formatter, "compiler config and PolicyIR {field} differ")
             }
-            Self::PolicyDecode(source) => {
-                write!(formatter, "PolicyIR Protobuf is malformed: {source}")
-            }
-            Self::PolicyValidation(source) => {
-                write!(
-                    formatter,
-                    "PolicyIR exceeds trusted fixture bounds: {source}"
-                )
+            Self::PolicyIngress(source) => {
+                write!(formatter, "PolicyIR ingress failed: {source}")
             }
             Self::InvalidRelationship => {
                 formatter.write_str("fixture relationship is not permitted by PolicyIR")
@@ -186,8 +179,7 @@ impl std::error::Error for HostError {
             Self::Io { source, .. } => Some(source),
             Self::Json(source) => Some(source),
             Self::CompilerConfigJson(source) => Some(source),
-            Self::PolicyDecode(source) => Some(source),
-            Self::PolicyValidation(source) => Some(source),
+            Self::PolicyIngress(source) => Some(source),
             Self::Evaluation { source, .. } => Some(source),
             _ => None,
         }

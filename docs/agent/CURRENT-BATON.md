@@ -1,98 +1,110 @@
 # Current Engineering Baton
 
-- Baton ID: B-0007
+- Baton ID: B-0008
 - State: READY
 - Milestone: M2, Canonical commitments and snapshots
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-07-20T19:44:03Z
+- Last updated UTC: 2026-07-21T18:59:04Z
 - Branch: `main`
-- Worktree: B-0006 is complete and included in the closing worktree for this baton
-  reset.
+- Worktree: B-0007 is complete and archived as
+  `docs/agent/history/B-0007-canonical-policy-encoding-and-hash.md`. The worktree is
+  expected to be clean after its scoped commit.
 
 ## Objective
 
-Define and implement canonical PolicyIR encoding and `policy_hash` in Rust with
-versioned deterministic vectors and a TypeScript vector parser. Domain-specific
-relationship and snapshot commitments remain separate batons.
+Define and implement deterministic blinded relationship-tree construction from fixed
+relationship input and a caller-supplied private snapshot salt.
 
 ## Acceptance Criteria
 
-- [ ] One accepted decision record fixes the hash algorithm, signed integer encoding,
-      UTF-8 normalization, optional presence bytes, length widths, and structural
-      ordering.
-- [ ] The Rust canonical crate encodes every approved PolicyIR field without hashing
-      Protobuf bytes.
-- [ ] `policy_hash` uses the exact ASCII domain `raziel/policy/v1` and rejects unknown
-      or unsupported PolicyIR inputs.
-- [ ] Checked-in vectors include human input, canonical bytes hex, domain separator,
-      expected digest, Rust result, TypeScript parser result, and negative mutations.
+- [ ] One accepted decision record fixes relationship record encoding, leaf and node
+      domains, salt handling, leaf ordering, odd-node behavior, and empty-tree policy.
+- [ ] Rust builds a deterministic relationship root without logging or returning the
+      private salt through a public interface.
+- [ ] Rust produces bounded membership openings that verify against the root and
+      rejects malformed, duplicate, unsorted, and oversized inputs.
+- [ ] Positive and one-field mutation vectors cover relationship records, leaf hashes,
+      internal nodes, roots, and openings.
 - [ ] Focused and affected workspace gates pass.
 
 ## Architecture Constraints
 
-- Rust remains the only commitment authority.
-- TypeScript parses and displays vectors. It does not perform proof-critical hashing.
-- The agent sees `policy_hash`, not PolicyIR. The verifier resolves the approved
-  PolicyIR through its trusted local registry.
-- Every commitment is versioned and domain-separated.
 - Raw Protobuf bytes are never commitment inputs.
-- Unknown fields, enum values, and unsupported PolicyIR nodes fail closed.
-- Test vectors contain no private relationship tuples or caveat values.
+- Relationship tuples, stored caveat values, salts, openings, and satisfying paths are
+  Raziel-private witness material.
+- The public snapshot root binds one exact relationship set at one SpiceDB revision.
+- Leaf ordering uses the canonical unblinded tuple key. The private salt does not alter
+  ordering.
+- Commitment inputs remain versioned, length-framed, and domain-separated.
+- The agent never receives relationship tuples, branch choices, salts, or openings.
 - Policy authorization remains separate from dataset relevance.
 
 ## File Scope
 
-- `docs/decisions/` for the canonical encoding decision
-- `crates/canonical/` for Rust canonical encoding and hashing
-- `crates/policy-ir/` only for integration with validated PolicyIR access
-- `tests/vectors/` or `tests/canonical/` for deterministic vectors
-- `packages/proto-ts/` for vector parsing and tests only
-- Cargo metadata only after dependency approval
+- `docs/decisions/` for the relationship commitment decision
+- `crates/canonical/` for shared canonical relationship encoding only
+- `crates/snapshot/` for blinded leaves, tree construction, roots, and openings
+- `tests/vectors/` for deterministic public and private-test vectors
 - `docs/agent/CURRENT-BATON.md`
 
 ## Out of Scope
 
-- Relationship leaf encoding, trees, salts, openings, and witness construction
-- Snapshot descriptors, signatures, registries, and revocation
-- Capability commitments
+- Snapshot descriptor signatures and authority key storage
+- Policy and accepted-root registries
+- SpiceDB relationship loading and ZedToken retrieval
+- Witness path search and PolicyIR evaluation
 - Services, gateway, SDK, console, SP1 execution, and proof generation
 - Real transaction data
-- Production proof ceilings
 
 ## Decisions
 
 - Inherited: D-001 through D-017 in `docs/spec/POC-TECHNICAL-SPEC.md`.
-- Inherited: ADR-0001 through ADR-0007.
-- Pending: canonical hash algorithm, signed integer encoding, UTF-8 normalization,
-  optional presence encoding, length widths, and structural ordering.
+- Inherited: ADR-0001 through ADR-0008.
+- Inherited: ADR-0008 makes Rust the only commitment authority and fixes shared hash
+  primitives. B-0008 must use separate relationship and tree domains.
+- Deferred: O-004 snapshot signing algorithm and key storage remains open. It does not
+  block the tree-only objective.
 
 ## Open Questions and Blockers
 
-- The hash algorithm is not approved yet.
-- Signed integer encoding is not approved yet.
-- UTF-8 normalization behavior is not approved yet.
+- The relationship leaf and tree protocol is not yet approved. B-0008 must draft the
+  decision and obtain explicit maintainer approval before proof-critical code changes.
 - The normal development `spicedb` service has a pre-existing command and key
-  incompatibility. It belongs to a separate service-integration baton.
+  incompatibility. It does not block deterministic tree work.
+- Deferred follow-up: carry this item through each baton reset. After the M7 exit gate
+  passes, remind the maintainer to revisit the separate Hypha relevance-attestation
+  scope and the Obsidian `Current Implementation Discussion Post`.
 
 ## Work Completed
 
-- B-0006 completed the M1 exit gate and is archived as
-  `docs/agent/history/B-0006-spicedb-policy-ir-equivalence.md`.
-- `crates/canonical/` exists as the M2 placeholder from the initial repository
-  scaffold.
+- B-0007 implemented canonical PolicyIR encoding, `policy_hash`, strict Protobuf
+  ingress, shared vectors, and the test-only TypeScript parser.
+- B-0007 passed focused, workspace, live SpiceDB equivalence, build, generation,
+  privacy, and final diff checks.
 
 ## Validation Plan
 
-- Deterministic positive and negative canonical vectors
-- Mutated-field and malformed-input tests
-- Rust canonical crate tests and workspace tests
-- TypeScript parser tests over the same vectors
-- Affected format, lint, typecheck, build, and generation gates
-- `git diff --check`
+- Deterministic relationship, leaf, tree, root, and opening vectors
+- Positive, malformed, oversized, ordering, and one-field mutation tests
+- Rust focused tests and affected workspace tests
+- Format, lint, typecheck, build, generation, `git diff --check`, and private-data scan
+
+## Validation Evidence
+
+| Command or check | Result | Scope | Timestamp UTC |
+| --- | --- | --- | --- |
+| Not run | NOT AVAILABLE | B-0008 is ready but unclaimed | 2026-07-21T18:59:04Z |
+
+## Risks and Private-Data Notes
+
+- Salt reuse, ambiguous tuple encoding, unstable ordering, or unspecified odd-node
+  handling can create privacy loss or incompatible roots.
+- Test fixtures must remain synthetic. Private salts and openings may exist only in
+  test-scoped vectors that are explicitly marked non-production.
+- The public root must not expose tuple count through an undocumented tree-shape rule.
 
 ## Exact Next Action
 
-Claim B-0007, reconcile it with clean `HEAD`, and draft the canonical encoding
-decision. Request maintainer approval for semantic choices and any dependency before
-implementation.
+Claim B-0008. Inspect the current relationship model, snapshot Protobuf, and M2 tree
+requirements. Draft the relationship leaf and tree decision before implementation.

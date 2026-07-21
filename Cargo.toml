@@ -22,6 +22,11 @@ repository = "https://github.com/gitaalekhyapaul/hypha-backend"
 
 [workspace.dependencies]
 prost = "=0.14.4"
+prost-reflect = { version = "=0.16.5", default-features = false }
 prost-types = "=0.14.4"
+raziel-policy-ir = { path = "crates/policy-ir" }
 raziel-proto = { path = "crates/proto" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+sha2 = { version = "=0.10.9", default-features = false }
 sp1-zkvm = { version = "=6.3.1", default-features = false }

@@ -2,6 +2,8 @@ mod support;
 
 use prost::Message;
 use raziel_policy_ir::ValidatedPolicyProgram;
+#[cfg(feature = "strict-protobuf")]
+use raziel_policy_ir::decode_policy_program_strict;
 use raziel_proto::raziel::v1 as proto;
 
 use support::ceilings;
@@ -16,7 +18,7 @@ fn go_compiler_golden_decodes_and_validates() {
     let mut trusted_ceilings = ceilings();
     trusted_ceilings.policy_limits.max_string_bytes = 256;
 
-    let validated = ValidatedPolicyProgram::from_proto(wire, &trusted_ceilings).unwrap();
+    let validated = ValidatedPolicyProgram::from_trusted_proto(wire, &trusted_ceilings).unwrap();
     let program = validated.program();
 
     assert_eq!(program.compiler_name, "authzed/spicedb");
@@ -29,4 +31,18 @@ fn go_compiler_golden_decodes_and_validates() {
             0x6e, 0x72, 0x01, 0xa2,
         ]
     );
+}
+
+#[cfg(feature = "strict-protobuf")]
+#[test]
+fn go_compiler_golden_passes_strict_ingress() {
+    let mut trusted_ceilings = ceilings();
+    trusted_ceilings.policy_limits.max_string_bytes = 256;
+
+    decode_policy_program_strict(GO_COMPILER_GOLDEN, golden_length(), &trusted_ceilings).unwrap();
+}
+
+#[cfg(feature = "strict-protobuf")]
+fn golden_length() -> u64 {
+    u64::try_from(GO_COMPILER_GOLDEN.len()).unwrap()
 }

@@ -34,7 +34,6 @@ pub fn ceilings() -> ValidationCeilings {
         max_permissions: 32,
         max_caveats: 16,
         max_parameters_per_caveat: 16,
-        max_source_schema_digest_bytes: 64,
         max_syntax_depth: 16,
     }
 }
@@ -44,7 +43,7 @@ pub fn base_program() -> PolicyProgram {
         ir_version: 1,
         compiler_name: "spicedb_adapter".into(),
         compiler_version: "0.1.0".into(),
-        source_schema_digest: vec![7; 32],
+        source_schema_digest: [7; 32],
         definitions: vec![
             ObjectDefinition {
                 name: "document".into(),
@@ -326,7 +325,7 @@ pub fn to_proto(program: &PolicyProgram) -> proto::PolicyProgram {
         ir_version: program.ir_version,
         compiler_name: program.compiler_name.clone(),
         compiler_version: program.compiler_version.clone(),
-        source_schema_digest: program.source_schema_digest.clone(),
+        source_schema_digest: program.source_schema_digest.to_vec(),
         definitions: program
             .definitions
             .iter()

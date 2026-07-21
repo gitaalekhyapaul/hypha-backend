@@ -3,7 +3,7 @@ pub struct PolicyProgram {
     pub ir_version: u32,
     pub compiler_name: String,
     pub compiler_version: String,
-    pub source_schema_digest: Vec<u8>,
+    pub source_schema_digest: [u8; 32],
     pub definitions: Vec<ObjectDefinition>,
     pub permissions: Vec<PermissionDefinition>,
     pub caveats: Vec<CaveatDefinition>,
@@ -57,6 +57,19 @@ pub enum PermissionExpr {
     },
 }
 
+impl PermissionExpr {
+    pub const fn protocol_tag(&self) -> u8 {
+        match self {
+            Self::RelationRef { .. } => 0x01,
+            Self::SubjectRelationRef { .. } => 0x02,
+            Self::AnyOf(_) => 0x03,
+            Self::AllOf(_) => 0x04,
+            Self::Arrow { .. } => 0x05,
+            Self::CaveatedRelation { .. } => 0x06,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CaveatDefinition {
     pub name: String,
@@ -78,11 +91,31 @@ pub enum CaveatInputSource {
     CapabilityClaim,
 }
 
+impl CaveatInputSource {
+    pub const fn protocol_tag(self) -> u8 {
+        match self {
+            Self::RequestContext => 0x01,
+            Self::RelationshipContext => 0x02,
+            Self::CapabilityClaim => 0x03,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CaveatValueType {
     Bool,
     Int,
     String,
+}
+
+impl CaveatValueType {
+    pub const fn protocol_tag(self) -> u8 {
+        match self {
+            Self::Bool => 0x01,
+            Self::Int => 0x02,
+            Self::String => 0x03,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -106,6 +139,26 @@ pub enum CaveatExpr {
     Not(Box<CaveatExpr>),
 }
 
+impl CaveatExpr {
+    pub const fn protocol_tag(&self) -> u8 {
+        match self {
+            Self::ConstBool(_) => 0x01,
+            Self::ConstInt(_) => 0x02,
+            Self::ConstString(_) => 0x03,
+            Self::InputRef { .. } => 0x04,
+            Self::Equal(_, _) => 0x05,
+            Self::NotEqual(_, _) => 0x06,
+            Self::LessThan(_, _) => 0x07,
+            Self::LessThanOrEqual(_, _) => 0x08,
+            Self::GreaterThan(_, _) => 0x09,
+            Self::GreaterThanOrEqual(_, _) => 0x0a,
+            Self::And(_) => 0x0b,
+            Self::Or(_) => 0x0c,
+            Self::Not(_) => 0x0d,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PolicyLimits {
     pub max_expression_nodes: u32,
@@ -127,7 +180,6 @@ pub struct ValidationCeilings {
     pub max_permissions: u32,
     pub max_caveats: u32,
     pub max_parameters_per_caveat: u32,
-    pub max_source_schema_digest_bytes: u32,
     pub max_syntax_depth: u32,
 }
 

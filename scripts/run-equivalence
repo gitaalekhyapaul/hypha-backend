@@ -25,7 +25,7 @@ go run ./tools/spicedb-ir-compiler/cmd/spicedb-equivalence \
   --fixture "$fixture" \
   --output "$spicedb_output"
 
-cargo run --quiet -p raziel-policy-ir --example equivalence_host -- \
+cargo run --quiet -p raziel-policy-ir --features strict-protobuf --example equivalence_host -- \
   --fixture "$fixture" \
   --output "$rust_output"
 

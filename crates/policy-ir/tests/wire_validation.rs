@@ -13,7 +13,8 @@ type LimitMutation = fn(&mut raziel_policy_ir::PolicyLimits);
 #[test]
 fn wire_converts_every_supported_node() {
     let program = all_caveat_nodes_program();
-    let validated = ValidatedPolicyProgram::from_proto(to_proto(&program), &ceilings()).unwrap();
+    let validated =
+        ValidatedPolicyProgram::from_trusted_proto(to_proto(&program), &ceilings()).unwrap();
     assert_eq!(validated.program(), &program);
 }
 
@@ -22,23 +23,37 @@ fn wire_rejects_unknown_version_enum_and_node() {
     let mut unknown_version = to_proto(&base_program());
     unknown_version.ir_version = 99;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(unknown_version, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(unknown_version, &ceilings()),
         Err(PolicyError::UnsupportedVersion)
     );
 
     let mut unknown_enum = to_proto(&base_program());
     unknown_enum.caveats[0].parameters[0].source = 99;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(unknown_enum, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(unknown_enum, &ceilings()),
         Err(PolicyError::UnknownInputSource)
     );
 
     let mut missing_node = to_proto(&base_program());
     missing_node.permissions[0].expression = Some(proto::PermissionExpr { node: None });
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(missing_node, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(missing_node, &ceilings()),
         Err(PolicyError::MissingNode)
     );
+}
+
+#[test]
+fn wire_requires_a_32_byte_source_schema_digest() {
+    for length in [0, 31, 33, 64] {
+        let mut wire = to_proto(&base_program());
+        wire.source_schema_digest = vec![0; length];
+
+        assert_eq!(
+            ValidatedPolicyProgram::from_trusted_proto(wire, &ceilings()),
+            Err(PolicyError::InvalidSourceSchemaDigest),
+            "digest length {length} must fail"
+        );
+    }
 }
 
 #[test]
@@ -46,7 +61,7 @@ fn wire_rejects_missing_limits_operands_and_excess_syntax_depth() {
     let mut missing_limits = to_proto(&base_program());
     missing_limits.limits = None;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(missing_limits, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(missing_limits, &ceilings()),
         Err(PolicyError::MissingLimits)
     );
 
@@ -66,14 +81,14 @@ fn wire_rejects_missing_limits_operands_and_excess_syntax_depth() {
     };
     equal.left = None;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(missing_operand, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(missing_operand, &ceilings()),
         Err(PolicyError::MissingOperand)
     );
 
     let mut shallow = ceilings();
     shallow.max_syntax_depth = 1;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(to_proto(&base_program()), &shallow),
+        ValidatedPolicyProgram::from_trusted_proto(to_proto(&base_program()), &shallow),
         Err(PolicyError::ProgramLimitExceeded(LimitKind::SyntaxDepth))
     );
 }
@@ -265,7 +280,7 @@ fn validation_rejects_unknown_value_type_and_non_boolean_root() {
     let mut unknown_type = to_proto(&base_program());
     unknown_type.caveats[0].parameters[0].value_type = 99;
     assert_eq!(
-        ValidatedPolicyProgram::from_proto(unknown_type, &ceilings()),
+        ValidatedPolicyProgram::from_trusted_proto(unknown_type, &ceilings()),
         Err(PolicyError::UnknownValueType)
     );
 

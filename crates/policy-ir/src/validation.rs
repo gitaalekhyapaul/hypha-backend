@@ -31,7 +31,7 @@ fn validate_program(
         return Err(PolicyError::UnsupportedVersion);
     }
     validate_limits(program.limits, ceilings.policy_limits)?;
-    validate_metadata(program, ceilings)?;
+    validate_metadata(program)?;
     check_collection(
         program.definitions.len(),
         ceilings.max_definitions,
@@ -115,20 +115,12 @@ fn validate_program(
     Ok(())
 }
 
-fn validate_metadata(
-    program: &PolicyProgram,
-    ceilings: &ValidationCeilings,
-) -> Result<(), PolicyError> {
+fn validate_metadata(program: &PolicyProgram) -> Result<(), PolicyError> {
     if program.compiler_name.is_empty() || program.compiler_version.is_empty() {
         return Err(PolicyError::InvalidMetadata);
     }
     check_string(&program.compiler_name, program.limits)?;
     check_string(&program.compiler_version, program.limits)?;
-    if program.source_schema_digest.is_empty()
-        || program.source_schema_digest.len() > ceilings.max_source_schema_digest_bytes as usize
-    {
-        return Err(PolicyError::InvalidSourceSchemaDigest);
-    }
     Ok(())
 }
 
@@ -170,9 +162,10 @@ fn validate_relation(
             CollectionKind::AllowedSubjectTypes,
         ));
     }
-    require_sorted(
+    require_sorted_by(
         &relation.allowed_subject_types,
         CollectionKind::AllowedSubjectTypes,
+        compare_allowed_subject_type,
     )?;
     for allowed in &relation.allowed_subject_types {
         validate_allowed_subject(allowed, program)?;
@@ -298,7 +291,11 @@ fn validate_permission_children(children: &[PermissionExpr]) -> Result<(), Polic
             CollectionKind::PermissionChildren,
         ));
     }
-    require_sorted(children, CollectionKind::PermissionChildren)
+    require_sorted_by(
+        children,
+        CollectionKind::PermissionChildren,
+        compare_permission_expr,
+    )
 }
 
 fn validate_caveat(
@@ -315,7 +312,12 @@ fn validate_caveat(
     require_sorted_by(
         &caveat.parameters,
         CollectionKind::CaveatParameters,
-        |left, right| (&left.source, &left.name).cmp(&(&right.source, &right.name)),
+        |left, right| {
+            left.source
+                .protocol_tag()
+                .cmp(&right.source.protocol_tag())
+                .then_with(|| left.name.cmp(&right.name))
+        },
     )?;
     for parameter in &caveat.parameters {
         validate_identifier(&parameter.name, limits)?;
@@ -386,7 +388,11 @@ fn validate_caveat_expr(
                     CollectionKind::CaveatChildren,
                 ));
             }
-            require_sorted(children, CollectionKind::CaveatChildren)?;
+            require_sorted_by(
+                children,
+                CollectionKind::CaveatChildren,
+                compare_caveat_expr,
+            )?;
             for child in children {
                 if validate_caveat_expr(child, caveat, limits, ceilings, child_depth)?
                     != CaveatValueType::Bool
@@ -618,10 +624,6 @@ fn check_collection(length: usize, maximum: u32, kind: CollectionKind) -> Result
     Ok(())
 }
 
-fn require_sorted<T: Ord>(values: &[T], kind: CollectionKind) -> Result<(), PolicyError> {
-    require_sorted_by(values, kind, Ord::cmp)
-}
-
 fn require_sorted_by<T>(
     values: &[T],
     kind: CollectionKind,
@@ -634,6 +636,134 @@ fn require_sorted_by<T>(
         return Err(PolicyError::NotStrictlySorted(kind));
     }
     Ok(())
+}
+
+fn compare_allowed_subject_type(left: &AllowedSubjectType, right: &AllowedSubjectType) -> Ordering {
+    left.object_type
+        .cmp(&right.object_type)
+        .then_with(|| compare_optional_str(&left.subject_relation, &right.subject_relation))
+        .then_with(|| compare_optional_str(&left.caveat_name, &right.caveat_name))
+}
+
+fn compare_optional_str(left: &Option<String>, right: &Option<String>) -> Ordering {
+    match (left, right) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+        (Some(left), Some(right)) => left.cmp(right),
+    }
+}
+
+fn compare_permission_expr(left: &PermissionExpr, right: &PermissionExpr) -> Ordering {
+    let tag_order = left.protocol_tag().cmp(&right.protocol_tag());
+    if tag_order != Ordering::Equal {
+        return tag_order;
+    }
+
+    match (left, right) {
+        (
+            PermissionExpr::RelationRef { name: left },
+            PermissionExpr::RelationRef { name: right },
+        ) => left.cmp(right),
+        (
+            PermissionExpr::SubjectRelationRef {
+                relation: left_relation,
+                subject_relation: left_subject_relation,
+            },
+            PermissionExpr::SubjectRelationRef {
+                relation: right_relation,
+                subject_relation: right_subject_relation,
+            },
+        ) => left_relation
+            .cmp(right_relation)
+            .then_with(|| left_subject_relation.cmp(right_subject_relation)),
+        (PermissionExpr::AnyOf(left), PermissionExpr::AnyOf(right))
+        | (PermissionExpr::AllOf(left), PermissionExpr::AllOf(right)) => {
+            compare_slices_by(left, right, compare_permission_expr)
+        }
+        (
+            PermissionExpr::Arrow {
+                source_relation: left_source,
+                target_permission: left_target,
+            },
+            PermissionExpr::Arrow {
+                source_relation: right_source,
+                target_permission: right_target,
+            },
+        ) => left_source
+            .cmp(right_source)
+            .then_with(|| left_target.cmp(right_target)),
+        (
+            PermissionExpr::CaveatedRelation {
+                relation: left_relation,
+                caveat_name: left_caveat,
+            },
+            PermissionExpr::CaveatedRelation {
+                relation: right_relation,
+                caveat_name: right_caveat,
+            },
+        ) => left_relation
+            .cmp(right_relation)
+            .then_with(|| left_caveat.cmp(right_caveat)),
+        _ => Ordering::Equal,
+    }
+}
+
+fn compare_caveat_expr(left: &CaveatExpr, right: &CaveatExpr) -> Ordering {
+    let tag_order = left.protocol_tag().cmp(&right.protocol_tag());
+    if tag_order != Ordering::Equal {
+        return tag_order;
+    }
+
+    match (left, right) {
+        (CaveatExpr::ConstBool(left), CaveatExpr::ConstBool(right)) => left.cmp(right),
+        (CaveatExpr::ConstInt(left), CaveatExpr::ConstInt(right)) => left.cmp(right),
+        (CaveatExpr::ConstString(left), CaveatExpr::ConstString(right)) => left.cmp(right),
+        (
+            CaveatExpr::InputRef {
+                source: left_source,
+                name: left_name,
+                value_type: left_type,
+            },
+            CaveatExpr::InputRef {
+                source: right_source,
+                name: right_name,
+                value_type: right_type,
+            },
+        ) => left_source
+            .protocol_tag()
+            .cmp(&right_source.protocol_tag())
+            .then_with(|| left_name.cmp(right_name))
+            .then_with(|| left_type.protocol_tag().cmp(&right_type.protocol_tag())),
+        (CaveatExpr::Equal(left_a, left_b), CaveatExpr::Equal(right_a, right_b))
+        | (CaveatExpr::NotEqual(left_a, left_b), CaveatExpr::NotEqual(right_a, right_b))
+        | (CaveatExpr::LessThan(left_a, left_b), CaveatExpr::LessThan(right_a, right_b))
+        | (
+            CaveatExpr::LessThanOrEqual(left_a, left_b),
+            CaveatExpr::LessThanOrEqual(right_a, right_b),
+        )
+        | (CaveatExpr::GreaterThan(left_a, left_b), CaveatExpr::GreaterThan(right_a, right_b))
+        | (
+            CaveatExpr::GreaterThanOrEqual(left_a, left_b),
+            CaveatExpr::GreaterThanOrEqual(right_a, right_b),
+        ) => {
+            compare_caveat_expr(left_a, right_a).then_with(|| compare_caveat_expr(left_b, right_b))
+        }
+        (CaveatExpr::And(left), CaveatExpr::And(right))
+        | (CaveatExpr::Or(left), CaveatExpr::Or(right)) => {
+            compare_slices_by(left, right, compare_caveat_expr)
+        }
+        (CaveatExpr::Not(left), CaveatExpr::Not(right)) => compare_caveat_expr(left, right),
+        _ => Ordering::Equal,
+    }
+}
+
+fn compare_slices_by<T>(left: &[T], right: &[T], compare: fn(&T, &T) -> Ordering) -> Ordering {
+    left.iter()
+        .zip(right)
+        .map(|(left, right)| compare(left, right))
+        .find(|ordering| *ordering != Ordering::Equal)
+        .unwrap_or_else(|| left.len().cmp(&right.len()))
 }
 
 fn check_syntax_depth(depth: u32, ceilings: &ValidationCeilings) -> Result<(), PolicyError> {

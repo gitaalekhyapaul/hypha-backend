@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl ValidatedPolicyProgram {
-    pub fn from_proto(
+    pub fn from_trusted_proto(
         value: proto::PolicyProgram,
         ceilings: &ValidationCeilings,
     ) -> Result<Self, PolicyError> {
@@ -28,11 +28,16 @@ impl ValidatedPolicyProgram {
             CollectionKind::Caveats,
         )?;
 
+        let source_schema_digest = value
+            .source_schema_digest
+            .try_into()
+            .map_err(|_| PolicyError::InvalidSourceSchemaDigest)?;
+
         let program = PolicyProgram {
             ir_version: value.ir_version,
             compiler_name: value.compiler_name,
             compiler_version: value.compiler_version,
-            source_schema_digest: value.source_schema_digest,
+            source_schema_digest,
             definitions: value
                 .definitions
                 .into_iter()

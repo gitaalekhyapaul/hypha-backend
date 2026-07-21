@@ -4,14 +4,12 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-use prost::Message;
 use raziel_policy_ir::{
     CaveatDefinition, CaveatInputSource, CaveatValueType, ContextEntry, EvaluationError,
     EvaluationRequest, ObjectRef, PolicyLimits, PolicyProgram, RelationshipCaveat,
     RelationshipResolver, ResolvedRelationship, ResolverError, ValidatedPolicyProgram,
-    ValidationCeilings, evaluate,
+    ValidationCeilings, decode_policy_program_strict, evaluate,
 };
-use raziel_proto::raziel::v1 as proto;
 
 use crate::error::{HostError, HostResult};
 use crate::fixture::{
@@ -38,7 +36,6 @@ const TRUSTED_POLICY_CEILINGS: ValidationCeilings = ValidationCeilings {
     max_permissions: 32,
     max_caveats: 16,
     max_parameters_per_caveat: 16,
-    max_source_schema_digest_bytes: 32,
     max_syntax_depth: 16,
 };
 
@@ -94,10 +91,9 @@ pub fn evaluate_fixture(root: &Path, fixture: &Fixture) -> HostResult<Vec<CaseOu
         return Err(HostError::SchemaDigestMismatch("schema bytes"));
     }
 
-    let wire =
-        proto::PolicyProgram::decode(policy_ir.as_slice()).map_err(HostError::PolicyDecode)?;
-    let program = ValidatedPolicyProgram::from_proto(wire, &TRUSTED_POLICY_CEILINGS)
-        .map_err(HostError::PolicyValidation)?;
+    let program =
+        decode_policy_program_strict(&policy_ir, MAX_POLICY_IR_BYTES, &TRUSTED_POLICY_CEILINGS)
+            .map_err(HostError::PolicyIngress)?;
     if program.program().source_schema_digest.as_slice() != expected_digest {
         return Err(HostError::SchemaDigestMismatch(
             "PolicyIR source_schema_digest",
@@ -453,7 +449,7 @@ mod tests {
 
         let mut value = fixture();
         value.policy_ir_path = value.schema_path.clone();
-        assert!(matches!(evaluate(&value), Err(HostError::PolicyDecode(_))));
+        assert!(matches!(evaluate(&value), Err(HostError::PolicyIngress(_))));
     }
 
     #[test]
@@ -464,8 +460,9 @@ mod tests {
         const POLICY_IR: &[u8] = include_bytes!(
             "../../../../tools/spicedb-ir-compiler/internal/adapter/testdata/supported.policy.pb"
         );
-        let wire = proto::PolicyProgram::decode(POLICY_IR).unwrap();
-        let program = ValidatedPolicyProgram::from_proto(wire, &TRUSTED_POLICY_CEILINGS).unwrap();
+        let program =
+            decode_policy_program_strict(POLICY_IR, MAX_POLICY_IR_BYTES, &TRUSTED_POLICY_CEILINGS)
+                .unwrap();
 
         let mut config = CompilerConfig::parse(CONFIG_JSON).unwrap();
         config.limits.max_path_depth += 1;
