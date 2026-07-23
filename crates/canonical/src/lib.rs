@@ -4,15 +4,19 @@
 
 mod encoding;
 mod policy;
+mod relationship;
 
 use std::fmt::{self, Display, Formatter};
 
 use raziel_policy_ir::ValidatedPolicyProgram;
 use sha2::{Digest, Sha256};
 
-use encoding::Encoder;
-
+pub use encoding::CanonicalEncoder;
 pub use policy::{CANONICAL_POLICY_ENCODING_VERSION, encode_policy};
+pub use relationship::{
+    CANONICAL_RELATIONSHIP_ENCODING_VERSION, RelationshipRecord, StoredCaveat, StoredContextEntry,
+    compare_relationship_identity, encode_relationship,
+};
 
 pub const POLICY_HASH_DOMAIN: &[u8] = b"raziel/policy/v1";
 
@@ -33,13 +37,22 @@ impl std::error::Error for CanonicalError {}
 
 pub fn policy_hash_preimage(program: &ValidatedPolicyProgram) -> Result<Vec<u8>, CanonicalError> {
     let payload = encode_policy(program)?;
-    let mut encoder = Encoder::new();
-    encoder.write_bytes(POLICY_HASH_DOMAIN)?;
-    encoder.write_bytes(&payload)?;
-    Ok(encoder.finish())
+    framed_hash_preimage(POLICY_HASH_DOMAIN, &payload)
 }
 
 pub fn policy_hash(program: &ValidatedPolicyProgram) -> Result<[u8; 32], CanonicalError> {
-    let preimage = policy_hash_preimage(program)?;
+    let payload = encode_policy(program)?;
+    framed_hash(POLICY_HASH_DOMAIN, &payload)
+}
+
+pub fn framed_hash_preimage(domain: &[u8], payload: &[u8]) -> Result<Vec<u8>, CanonicalError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.write_bytes(domain)?;
+    encoder.write_bytes(payload)?;
+    Ok(encoder.finish())
+}
+
+pub fn framed_hash(domain: &[u8], payload: &[u8]) -> Result<[u8; 32], CanonicalError> {
+    let preimage = framed_hash_preimage(domain, payload)?;
     Ok(Sha256::digest(preimage).into())
 }

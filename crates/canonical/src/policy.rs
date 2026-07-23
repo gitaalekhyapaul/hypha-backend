@@ -3,13 +3,13 @@ use raziel_policy_ir::{
     PermissionDefinition, PermissionExpr, PolicyLimits, RelationDefinition, ValidatedPolicyProgram,
 };
 
-use crate::{CanonicalError, encoding::Encoder};
+use crate::{CanonicalEncoder, CanonicalError};
 
 pub const CANONICAL_POLICY_ENCODING_VERSION: u32 = 1;
 
 pub fn encode_policy(program: &ValidatedPolicyProgram) -> Result<Vec<u8>, CanonicalError> {
     let program = program.program();
-    let mut encoder = Encoder::new();
+    let mut encoder = CanonicalEncoder::new();
     encoder.write_u32(CANONICAL_POLICY_ENCODING_VERSION);
     encoder.write_u32(program.ir_version);
     encoder.write_str(&program.compiler_name)?;
@@ -25,7 +25,7 @@ pub fn encode_policy(program: &ValidatedPolicyProgram) -> Result<Vec<u8>, Canoni
 }
 
 fn encode_definition(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     definition: &ObjectDefinition,
 ) -> Result<(), CanonicalError> {
     encoder.write_str(&definition.name)?;
@@ -33,7 +33,7 @@ fn encode_definition(
 }
 
 fn encode_relation(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     relation: &RelationDefinition,
 ) -> Result<(), CanonicalError> {
     encoder.write_str(&relation.name)?;
@@ -41,7 +41,7 @@ fn encode_relation(
 }
 
 fn encode_allowed_subject(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     allowed: &AllowedSubjectType,
 ) -> Result<(), CanonicalError> {
     encoder.write_str(&allowed.object_type)?;
@@ -50,7 +50,7 @@ fn encode_allowed_subject(
 }
 
 fn encode_permission(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     permission: &PermissionDefinition,
 ) -> Result<(), CanonicalError> {
     encoder.write_str(&permission.object_type)?;
@@ -59,7 +59,7 @@ fn encode_permission(
 }
 
 fn encode_permission_expr(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     expression: &PermissionExpr,
 ) -> Result<(), CanonicalError> {
     encoder.write_u8(expression.protocol_tag());
@@ -92,14 +92,17 @@ fn encode_permission_expr(
     }
 }
 
-fn encode_caveat(encoder: &mut Encoder, caveat: &CaveatDefinition) -> Result<(), CanonicalError> {
+fn encode_caveat(
+    encoder: &mut CanonicalEncoder,
+    caveat: &CaveatDefinition,
+) -> Result<(), CanonicalError> {
     encoder.write_str(&caveat.name)?;
     encoder.write_collection(&caveat.parameters, encode_caveat_parameter)?;
     encode_caveat_expr(encoder, &caveat.expression)
 }
 
 fn encode_caveat_parameter(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     parameter: &CaveatParameter,
 ) -> Result<(), CanonicalError> {
     encoder.write_u8(parameter.source.protocol_tag());
@@ -109,7 +112,7 @@ fn encode_caveat_parameter(
 }
 
 fn encode_caveat_expr(
-    encoder: &mut Encoder,
+    encoder: &mut CanonicalEncoder,
     expression: &CaveatExpr,
 ) -> Result<(), CanonicalError> {
     encoder.write_u8(expression.protocol_tag());
@@ -149,7 +152,7 @@ fn encode_caveat_expr(
     }
 }
 
-fn encode_limits(encoder: &mut Encoder, limits: &PolicyLimits) {
+fn encode_limits(encoder: &mut CanonicalEncoder, limits: &PolicyLimits) {
     encoder.write_u32(limits.max_expression_nodes);
     encoder.write_u32(limits.max_caveat_nodes);
     encoder.write_u32(limits.max_path_depth);

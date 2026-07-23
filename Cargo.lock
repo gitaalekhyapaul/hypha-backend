@@ -767,6 +767,12 @@ version = "0.0.0"
 [[package]]
 name = "raziel-snapshot"
 version = "0.0.0"
+dependencies = [
+ "raziel-canonical",
+ "raziel-policy-ir",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "raziel-verifier"

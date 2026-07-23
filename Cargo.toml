@@ -24,6 +24,7 @@ repository = "https://github.com/gitaalekhyapaul/hypha-backend"
 prost = "=0.14.4"
 prost-reflect = { version = "=0.16.5", default-features = false }
 prost-types = "=0.14.4"
+raziel-canonical = { path = "crates/canonical" }
 raziel-policy-ir = { path = "crates/policy-ir" }
 raziel-proto = { path = "crates/proto" }
 serde = { version = "=1.0.228", features = ["derive"] }

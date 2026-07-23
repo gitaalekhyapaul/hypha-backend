@@ -599,29 +599,75 @@ display vectors. Rust remains the commitment authority.
 
 ### Leaf ordering
 
-Leaves shall be sorted by the canonical unblinded tuple key before blinded hashing.
+Relationship input shall already be in strict structural identity order by resource
+type, resource ID, relation, subject type, subject ID, and optional subject relation.
+The builder shall reject unordered or duplicate identities rather than silently sort
+them. Caveat name and stored context remain committed data but do not change identity.
 The sort key excludes the private snapshot salt.
+
+### Canonical relationship
+
+Version 1 shall encode the complete relationship and stored caveat context through
+explicit field order, `u32` lengths and counts, option tags, and scalar tags. Stored
+context entries shall use strict parameter-name order. Every record shall validate
+against the exact approved PolicyIR before hashing. Raw Protobuf and JSON bytes shall
+not enter the commitment.
 
 ### Leaf privacy
 
 A private per-snapshot salt shall enter each leaf hash. The salt remains in the
-snapshot secret material and private witness.
+snapshot secret material and private witness. One snapshot shall use one shared
+32-byte salt. Each leaf shall bind that salt, its zero-based index, and the canonical
+relationship bytes.
+
+### Tree shape and root
+
+The tree shall use the left-balanced unpadded shape from ADR-0009. Ordered child
+digests shall enter the node hash. Empty snapshots shall use the versioned empty-tree
+digest. The final root shall bind the tree digest, shared private salt, and exact
+private leaf count. The descriptor shall publish only the 32-byte root.
 
 ### Membership witness
 
-Each witness entry contains:
+A private witness set contains:
 
 ```text
-RelationshipWitness {
-  canonical_relationship
+RelationshipWitnessSetV1 {
+  format_version = 1
   snapshot_secret_salt
+  leaf_count
+  entries[]
+}
+
+RelationshipOpeningV1 {
+  canonical_relationship
   leaf_index
   sibling_hashes[]
-  direction_bits[]
 }
 ```
 
-The guest shall reject duplicate leaf indices and unused entries.
+Entries shall use strict leaf-index order. The guest shall derive each child side and
+the exact sibling count from `leaf_index` and `leaf_count`. Direction bits shall not
+enter the witness. The guest shall reject duplicate indices, out-of-range or phantom
+indices, malformed sibling counts, mixed salts, and unused entries.
+
+Private-input accounting shall use checked arithmetic over:
+
+```text
+4  witness version
+32 shared snapshot salt
+4  leaf count
+4  entry count
+
+for each entry:
+  4 + canonical relationship bytes
+  4 leaf index
+  4 sibling count
+  32 * sibling count
+```
+
+Selected context entries shall remain within the approved PolicyIR context limit.
+The derived total shall remain within `max_total_private_input_bytes`.
 
 ### Update model
 

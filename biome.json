@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!packages/proto-ts/src/gen"]
+    "includes": ["**", "!!packages/proto-ts/src/gen", "!!tests/vectors/relationship-tree-v1.json"]
   },
   "formatter": {
     "enabled": true,

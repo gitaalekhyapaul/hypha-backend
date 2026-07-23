@@ -282,12 +282,11 @@ The policy registry stores the canonical PolicyIR, version, status, validity win
 approver identity, and authority signature. `verifierd` recalculates `policy_hash`
 before accepting the record.
 
-### Relationship leaf
+### Relationship snapshot commitment
 
 ```text
-relationship_leaf = H(
-  "raziel/relationship-leaf/v1",
-  snapshot_secret_salt,
+canonical_relationship_v1 =
+  u32be(1) ||
   resource_type,
   resource_id,
   relation,
@@ -296,11 +295,37 @@ relationship_leaf = H(
   subject_relation,
   caveat_name,
   canonical_stored_caveat_context
+
+relationship_leaf = H(
+  "raziel/relationship-leaf/v1",
+  u32be(1) ||
+  u32be(leaf_index) ||
+  bytes(snapshot_secret_salt) ||
+  bytes(canonical_relationship_v1)
+)
+
+relationship_node = H(
+  "raziel/relationship-node/v1",
+  u32be(1) ||
+  bytes(left_digest) ||
+  bytes(right_digest)
+)
+
+relationship_snapshot_root = H(
+  "raziel/relationship-root/v1",
+  u32be(1) ||
+  u32be(private_leaf_count) ||
+  bytes(snapshot_secret_salt) ||
+  bytes(left_balanced_tree_digest)
 )
 ```
 
 The private snapshot salt reduces dictionary attacks against small, guessable
-relationship sets. The root and signed descriptor remain public.
+relationship sets. Records use strict structural identity order before hashing.
+Duplicate identities fail. The tree is left-balanced with no padding or duplicated
+leaf. The private count fixes the unique opening path and prevents phantom odd-leaf
+indices. Only the root and signed descriptor become public. ADR-0009 defines the
+complete encoding, empty-tree digest, limits, and opening rules.
 
 ### Relationship snapshot descriptor
 

@@ -1,9 +1,9 @@
 # ADR-0009: Blinded Relationship Tree
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-07-22
 - Milestone: M2
-- Maintainer approval: pending
+- Maintainer approval: approved 2026-07-23
 
 ## Context
 
@@ -22,7 +22,7 @@ last leaf, the duplicated digest can validate as both the real even index and a 
 adjacent odd index. A guest that checks only duplicate indices can then count the same
 tuple twice under two index values.
 
-## Proposed Decision
+## Decision
 
 ### Hash framing
 
@@ -186,6 +186,23 @@ shared witness metadata, and exact sibling counts. It never trusts caller-report
 `PolicyLimits.max_total_private_input_bytes` applies to the selected witness set, not
 the complete snapshot tree. The guest includes canonical selected records, the shared
 salt and count, indices, and sibling digests in checked private-byte accounting.
+Version 1 counts exact decoded bytes as:
+
+```text
+4  witness version
+32 shared snapshot salt
+4  leaf count
+4  entry count
+
+for each entry:
+  4 + canonical relationship bytes
+  4 leaf index
+  4 sibling count
+  32 * sibling count
+```
+
+The guest checks every addition and multiplication for overflow. It separately checks
+the selected relationship and stored-context counts against approved PolicyIR limits.
 
 B-0008 vectors and tests use `256` relationships, `4096` bytes per relationship, and
 `1_048_576` total canonical bytes as test-only ceilings. Production ceilings remain

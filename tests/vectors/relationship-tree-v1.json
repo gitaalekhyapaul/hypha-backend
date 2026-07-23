@@ -1,0 +1,713 @@
+{
+  "canonical_relationship_version": 1,
+  "domains": {
+    "empty": "raziel/relationship-empty/v1",
+    "leaf": "raziel/relationship-leaf/v1",
+    "node": "raziel/relationship-node/v1",
+    "root": "raziel/relationship-root/v1"
+  },
+  "fixed_private_test_salt_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+  "hash_algorithm": "sha256",
+  "negative_cases": [
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "unsupported-relationship-version",
+      "mutation": {
+        "offset": 0,
+        "operation": "replace",
+        "remove_bytes": 4,
+        "value_hex": "00000002"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "oversized-resource-type-length",
+      "mutation": {
+        "offset": 4,
+        "operation": "replace",
+        "remove_bytes": 4,
+        "value_hex": "ffffffff"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "invalid-resource-type-utf8",
+      "mutation": {
+        "offset": 8,
+        "operation": "replace",
+        "remove_bytes": 1,
+        "value_hex": "ff"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "invalid-subject-relation-option-tag",
+      "mutation": {
+        "offset": 85,
+        "operation": "replace",
+        "remove_bytes": 1,
+        "value_hex": "02"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "invalid-caveat-option-tag",
+      "mutation": {
+        "offset": 86,
+        "operation": "replace",
+        "remove_bytes": 1,
+        "value_hex": "02"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "unknown-bool-value-tag",
+      "mutation": {
+        "offset": 118,
+        "operation": "replace",
+        "remove_bytes": 1,
+        "value_hex": "00"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "invalid-bool-payload",
+      "mutation": {
+        "offset": 119,
+        "operation": "replace",
+        "remove_bytes": 1,
+        "value_hex": "02"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "truncated-relationship",
+      "mutation": {
+        "offset": 168,
+        "operation": "truncate",
+        "remove_bytes": 1,
+        "value_hex": ""
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "not_applicable",
+      "expected_typescript_parser_result": "reject",
+      "id": "trailing-relationship-byte",
+      "mutation": {
+        "offset": 169,
+        "operation": "append",
+        "remove_bytes": 0,
+        "value_hex": "00"
+      },
+      "target": "canonical_relationship"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-resource-type",
+      "mutation": null,
+      "target": "relationship.resource_type"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-resource-id",
+      "mutation": null,
+      "target": "relationship.resource_id"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-relation",
+      "mutation": null,
+      "target": "relationship.relation"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-subject-type",
+      "mutation": null,
+      "target": "relationship.subject_type"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-subject-id",
+      "mutation": null,
+      "target": "relationship.subject_id"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-subject-relation",
+      "mutation": null,
+      "target": "relationship.subject_relation"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-caveat",
+      "mutation": null,
+      "target": "relationship.stored_caveat"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-context-name",
+      "mutation": null,
+      "target": "relationship.context.name"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-context-bool",
+      "mutation": null,
+      "target": "relationship.context.bool"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-context-int",
+      "mutation": null,
+      "target": "relationship.context.int"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-context-string",
+      "mutation": null,
+      "target": "relationship.context.string"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-salt",
+      "mutation": null,
+      "target": "snapshot.salt"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-leaf-index",
+      "mutation": null,
+      "target": "opening.leaf_index"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-sibling",
+      "mutation": null,
+      "target": "opening.sibling"
+    },
+    {
+      "expected_rust_result": "sibling_count_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "extra-sibling-depth",
+      "mutation": null,
+      "target": "opening.depth"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-root",
+      "mutation": null,
+      "target": "snapshot.root"
+    },
+    {
+      "expected_rust_result": "distinct_digest",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "reversed-node-children",
+      "mutation": null,
+      "target": "tree.node_order"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mutated-leaf-count",
+      "mutation": null,
+      "target": "snapshot.leaf_count"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "unsorted-relationships",
+      "mutation": null,
+      "target": "snapshot.relationship_order"
+    },
+    {
+      "expected_rust_result": "reject",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "duplicate-relationship-identity",
+      "mutation": null,
+      "target": "snapshot.duplicate_identity"
+    },
+    {
+      "expected_rust_result": "leaf_index_out_of_range",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "phantom-index-three",
+      "mutation": null,
+      "target": "opening.phantom_index"
+    },
+    {
+      "expected_rust_result": "root_mismatch",
+      "expected_typescript_parser_result": "not_checked",
+      "id": "mixed-snapshot-salt",
+      "mutation": null,
+      "target": "witness.shared_salt"
+    }
+  ],
+  "private_test_only": true,
+  "relationship_cases": [
+    {
+      "canonical_byte_length": 169,
+      "canonical_hex": "0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d61000000086361766561746564000000056167656e740000001173796e7468657469632d6167656e742d6100010000000b6163636573735f72756c650000000300000008617070726f7665640101000000056c696d69740200000000000001f400000006726567696f6e030000001073796e7468657469632d726567696f6e",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_human_input",
+      "human_input": {
+        "relation": "caveated",
+        "resource_id": "synthetic-private-test-a",
+        "resource_type": "dataset",
+        "stored_caveat": {
+          "context": [
+            {
+              "name": "approved",
+              "value": {
+                "type": "bool",
+                "value": true
+              }
+            },
+            {
+              "name": "limit",
+              "value": {
+                "type": "int",
+                "value": "500"
+              }
+            },
+            {
+              "name": "region",
+              "value": {
+                "type": "string",
+                "value": "synthetic-region"
+              }
+            }
+          ],
+          "name": "access_rule"
+        },
+        "subject_id": "synthetic-agent-a",
+        "subject_relation": null,
+        "subject_type": "agent"
+      },
+      "id": "synthetic-caveated-direct",
+      "leaf_digest_hex": "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+      "leaf_index": 0,
+      "leaf_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6c6561662f7631000000d90000000100000000000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000a90000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d61000000086361766561746564000000056167656e740000001173796e7468657469632d6167656e742d6100010000000b6163636573735f72756c650000000300000008617070726f7665640101000000056c696d69740200000000000001f400000006726567696f6e030000001073796e7468657469632d726567696f6e",
+      "private_test_only": true
+    },
+    {
+      "canonical_byte_length": 85,
+      "canonical_hex": "0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6100000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d620000",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_human_input",
+      "human_input": {
+        "relation": "direct",
+        "resource_id": "synthetic-private-test-a",
+        "resource_type": "dataset",
+        "stored_caveat": null,
+        "subject_id": "synthetic-agent-b",
+        "subject_relation": null,
+        "subject_type": "agent"
+      },
+      "id": "synthetic-direct",
+      "leaf_digest_hex": "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+      "leaf_index": 1,
+      "leaf_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6c6561662f7631000000850000000100000001000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000550000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6100000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d620000",
+      "private_test_only": true
+    },
+    {
+      "canonical_byte_length": 94,
+      "canonical_hex": "0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d610000000767726f75706564000000047465616d0000001073796e7468657469632d7465616d2d6101000000066d656d62657200",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_human_input",
+      "human_input": {
+        "relation": "grouped",
+        "resource_id": "synthetic-private-test-a",
+        "resource_type": "dataset",
+        "stored_caveat": null,
+        "subject_id": "synthetic-team-a",
+        "subject_relation": "member",
+        "subject_type": "team"
+      },
+      "id": "synthetic-subject-set",
+      "leaf_digest_hex": "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e",
+      "leaf_index": 2,
+      "leaf_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6c6561662f76310000008e0000000100000002000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a0000005e0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d610000000767726f75706564000000047465616d0000001073796e7468657469632d7465616d2d6101000000066d656d62657200",
+      "private_test_only": true
+    },
+    {
+      "canonical_byte_length": 85,
+      "canonical_hex": "0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6200000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d610000",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_human_input",
+      "human_input": {
+        "relation": "direct",
+        "resource_id": "synthetic-private-test-b",
+        "resource_type": "dataset",
+        "stored_caveat": null,
+        "subject_id": "synthetic-agent-a",
+        "subject_relation": null,
+        "subject_type": "agent"
+      },
+      "id": "synthetic-second-resource",
+      "leaf_digest_hex": "113d6ef916875fb2c5b5fec81157c824752f0d84b5f0592ca482bc450bfb2c0f",
+      "leaf_index": 3,
+      "leaf_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6c6561662f7631000000850000000100000003000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000550000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6200000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d610000",
+      "private_test_only": true
+    },
+    {
+      "canonical_byte_length": 85,
+      "canonical_hex": "0000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6300000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d630000",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_human_input",
+      "human_input": {
+        "relation": "direct",
+        "resource_id": "synthetic-private-test-c",
+        "resource_type": "dataset",
+        "stored_caveat": null,
+        "subject_id": "synthetic-agent-c",
+        "subject_relation": null,
+        "subject_type": "agent"
+      },
+      "id": "synthetic-third-resource",
+      "leaf_digest_hex": "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547",
+      "leaf_index": 4,
+      "leaf_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6c6561662f7631000000850000000100000004000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000550000000100000007646174617365740000001873796e7468657469632d707269766174652d746573742d6300000006646972656374000000056167656e740000001173796e7468657469632d6167656e742d630000",
+      "private_test_only": true
+    }
+  ],
+  "relationship_tree_version": 1,
+  "test_ceilings": {
+    "max_relationship_bytes": 4096,
+    "max_relationships": 256,
+    "max_total_canonical_bytes": 1048576
+  },
+  "tree_cases": [
+    {
+      "empty_preimage_hex": "0000001c72617a69656c2f72656c6174696f6e736869702d656d7074792f76310000000400000001",
+      "expected_root_hex": "33c872a57b29149ce8a4680bf162afabf1f5fa16ed28565d950f929a07457be0",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_structure",
+      "id": "synthetic-tree-0-leaves",
+      "leaf_count": 0,
+      "leaf_digests_hex": [],
+      "node_steps": [],
+      "openings": [],
+      "relationship_ids": [],
+      "root_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d726f6f742f7631000000500000000100000000000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00000020e246cf38b93ffa8ed3cfeed7ffffbaed69ee47f91efb2f211495f13cbb99f3af",
+      "tree_digest_hex": "e246cf38b93ffa8ed3cfeed7ffffbaed69ee47f91efb2f211495f13cbb99f3af",
+      "tree_levels": []
+    },
+    {
+      "empty_preimage_hex": null,
+      "expected_root_hex": "e28851a94ddc76c53e5b1751b8405fdbdbe1db5362d0f1d6774efba21972ea6d",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_structure",
+      "id": "synthetic-tree-1-leaves",
+      "leaf_count": 1,
+      "leaf_digests_hex": [
+        "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f"
+      ],
+      "node_steps": [],
+      "openings": [
+        {
+          "leaf_index": 0,
+          "relationship_id": "synthetic-caveated-direct",
+          "sibling_hashes_hex": []
+        }
+      ],
+      "relationship_ids": [
+        "synthetic-caveated-direct"
+      ],
+      "root_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d726f6f742f7631000000500000000100000001000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00000020837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+      "tree_digest_hex": "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+      "tree_levels": []
+    },
+    {
+      "empty_preimage_hex": null,
+      "expected_root_hex": "0cf9b15c72a2b88af6ad6f664d2b28f36a1aa535160d1f0e78a700f600d8b890",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_structure",
+      "id": "synthetic-tree-2-leaves",
+      "leaf_count": 2,
+      "leaf_digests_hex": [
+        "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+        "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5"
+      ],
+      "node_steps": [
+        {
+          "digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+          "height": 1,
+          "leaf_count": 2,
+          "leaf_start": 0,
+          "left_digest_hex": "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c0000000100000020837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f00000020eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+          "right_digest_hex": "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5"
+        }
+      ],
+      "openings": [
+        {
+          "leaf_index": 0,
+          "relationship_id": "synthetic-caveated-direct",
+          "sibling_hashes_hex": [
+            "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5"
+          ]
+        },
+        {
+          "leaf_index": 1,
+          "relationship_id": "synthetic-direct",
+          "sibling_hashes_hex": [
+            "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f"
+          ]
+        }
+      ],
+      "relationship_ids": [
+        "synthetic-caveated-direct",
+        "synthetic-direct"
+      ],
+      "root_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d726f6f742f7631000000500000000100000002000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a000000205bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+      "tree_digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+      "tree_levels": [
+        {
+          "digests_hex": [
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f"
+          ],
+          "height": 1
+        }
+      ]
+    },
+    {
+      "empty_preimage_hex": null,
+      "expected_root_hex": "c456af869a126512d321786df9fab49e4b9431886a4b5994ff0d5df207221295",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_structure",
+      "id": "synthetic-tree-3-leaves",
+      "leaf_count": 3,
+      "leaf_digests_hex": [
+        "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+        "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+        "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e"
+      ],
+      "node_steps": [
+        {
+          "digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+          "height": 1,
+          "leaf_count": 2,
+          "leaf_start": 0,
+          "left_digest_hex": "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c0000000100000020837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f00000020eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+          "right_digest_hex": "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5"
+        },
+        {
+          "digest_hex": "e0ec4854edd6db838ff8d92a0b4cc655c9866f8859f2796b027fd7cc6a29eb09",
+          "height": 2,
+          "leaf_count": 3,
+          "leaf_start": 0,
+          "left_digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c00000001000000205bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f00000020199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e",
+          "right_digest_hex": "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e"
+        }
+      ],
+      "openings": [
+        {
+          "leaf_index": 0,
+          "relationship_id": "synthetic-caveated-direct",
+          "sibling_hashes_hex": [
+            "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+            "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e"
+          ]
+        },
+        {
+          "leaf_index": 1,
+          "relationship_id": "synthetic-direct",
+          "sibling_hashes_hex": [
+            "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+            "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e"
+          ]
+        },
+        {
+          "leaf_index": 2,
+          "relationship_id": "synthetic-subject-set",
+          "sibling_hashes_hex": [
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f"
+          ]
+        }
+      ],
+      "relationship_ids": [
+        "synthetic-caveated-direct",
+        "synthetic-direct",
+        "synthetic-subject-set"
+      ],
+      "root_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d726f6f742f7631000000500000000100000003000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00000020e0ec4854edd6db838ff8d92a0b4cc655c9866f8859f2796b027fd7cc6a29eb09",
+      "tree_digest_hex": "e0ec4854edd6db838ff8d92a0b4cc655c9866f8859f2796b027fd7cc6a29eb09",
+      "tree_levels": [
+        {
+          "digests_hex": [
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f"
+          ],
+          "height": 1
+        },
+        {
+          "digests_hex": [
+            "e0ec4854edd6db838ff8d92a0b4cc655c9866f8859f2796b027fd7cc6a29eb09"
+          ],
+          "height": 2
+        }
+      ]
+    },
+    {
+      "empty_preimage_hex": null,
+      "expected_root_hex": "46cb1c78860b84f64ee7de3180e00148a57d4fbe55292ad82e597c244a66adcc",
+      "expected_rust_result": "match",
+      "expected_typescript_parser_result": "match_structure",
+      "id": "synthetic-tree-5-leaves",
+      "leaf_count": 5,
+      "leaf_digests_hex": [
+        "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+        "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+        "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e",
+        "113d6ef916875fb2c5b5fec81157c824752f0d84b5f0592ca482bc450bfb2c0f",
+        "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+      ],
+      "node_steps": [
+        {
+          "digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+          "height": 1,
+          "leaf_count": 2,
+          "leaf_start": 0,
+          "left_digest_hex": "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c0000000100000020837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f00000020eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+          "right_digest_hex": "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5"
+        },
+        {
+          "digest_hex": "ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f",
+          "height": 1,
+          "leaf_count": 2,
+          "leaf_start": 2,
+          "left_digest_hex": "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c0000000100000020199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e00000020113d6ef916875fb2c5b5fec81157c824752f0d84b5f0592ca482bc450bfb2c0f",
+          "right_digest_hex": "113d6ef916875fb2c5b5fec81157c824752f0d84b5f0592ca482bc450bfb2c0f"
+        },
+        {
+          "digest_hex": "257c97112726308d87584379f2175d34c8a72c8a58792bc4ef3b04e80b7b0ff9",
+          "height": 2,
+          "leaf_count": 4,
+          "leaf_start": 0,
+          "left_digest_hex": "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c00000001000000205bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f00000020ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f",
+          "right_digest_hex": "ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f"
+        },
+        {
+          "digest_hex": "38bc03f4b065afb178a863119dba3112186be3f96c98d4db64056042365945ba",
+          "height": 3,
+          "leaf_count": 5,
+          "leaf_start": 0,
+          "left_digest_hex": "257c97112726308d87584379f2175d34c8a72c8a58792bc4ef3b04e80b7b0ff9",
+          "preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d6e6f64652f76310000004c0000000100000020257c97112726308d87584379f2175d34c8a72c8a58792bc4ef3b04e80b7b0ff90000002072084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547",
+          "right_digest_hex": "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+        }
+      ],
+      "openings": [
+        {
+          "leaf_index": 0,
+          "relationship_id": "synthetic-caveated-direct",
+          "sibling_hashes_hex": [
+            "eee8a0d6ec63a325838b9ac43251e2bae0f7515f43306dacd3ed701f7b78a1b5",
+            "ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f",
+            "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+          ]
+        },
+        {
+          "leaf_index": 1,
+          "relationship_id": "synthetic-direct",
+          "sibling_hashes_hex": [
+            "837cd261498697d142a1e36d7c18db2065ab833b872686bac04e607f0335385f",
+            "ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f",
+            "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+          ]
+        },
+        {
+          "leaf_index": 2,
+          "relationship_id": "synthetic-subject-set",
+          "sibling_hashes_hex": [
+            "113d6ef916875fb2c5b5fec81157c824752f0d84b5f0592ca482bc450bfb2c0f",
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+            "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+          ]
+        },
+        {
+          "leaf_index": 3,
+          "relationship_id": "synthetic-second-resource",
+          "sibling_hashes_hex": [
+            "199176557a6290a09ec6d9839f3e7e32c92fcef386591d191c281f965c36825e",
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+            "72084a45cfa9a66810b0c05bb01467db08cd22eb7471116bdb37d762ca8dc547"
+          ]
+        },
+        {
+          "leaf_index": 4,
+          "relationship_id": "synthetic-third-resource",
+          "sibling_hashes_hex": [
+            "257c97112726308d87584379f2175d34c8a72c8a58792bc4ef3b04e80b7b0ff9"
+          ]
+        }
+      ],
+      "relationship_ids": [
+        "synthetic-caveated-direct",
+        "synthetic-direct",
+        "synthetic-subject-set",
+        "synthetic-second-resource",
+        "synthetic-third-resource"
+      ],
+      "root_preimage_hex": "0000001b72617a69656c2f72656c6174696f6e736869702d726f6f742f7631000000500000000100000005000000205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a0000002038bc03f4b065afb178a863119dba3112186be3f96c98d4db64056042365945ba",
+      "tree_digest_hex": "38bc03f4b065afb178a863119dba3112186be3f96c98d4db64056042365945ba",
+      "tree_levels": [
+        {
+          "digests_hex": [
+            "5bcf5eb11c34d00156d412d8cded922394e2b310c7524b0388025eaf5774e56f",
+            "ce6ac72c1c62fa564db67357897b24724a3cdbf7d5b4bcef7efe176b6084eb8f"
+          ],
+          "height": 1
+        },
+        {
+          "digests_hex": [
+            "257c97112726308d87584379f2175d34c8a72c8a58792bc4ef3b04e80b7b0ff9"
+          ],
+          "height": 2
+        },
+        {
+          "digests_hex": [
+            "38bc03f4b065afb178a863119dba3112186be3f96c98d4db64056042365945ba"
+          ],
+          "height": 3
+        }
+      ]
+    }
+  ],
+  "vector_format_version": 1,
+  "warning": "Synthetic private-test records and fixed salt. Never use this salt in production."
+}
