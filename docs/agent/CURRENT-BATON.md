@@ -1,14 +1,14 @@
 # Current Engineering Baton
 
 - Baton ID: B-0009
-- State: READY
+- State: BLOCKED
 - Milestone: M2, Canonical commitments and snapshots
-- Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-07-23T05:00:24Z
+- Owner: Codex
+- Started UTC: 2026-07-23T05:03:36Z
+- Last updated UTC: 2026-07-23T05:25:05Z
 - Branch: `main`
-- Worktree: `main` at `c1359e1` with completed B-0008 changes awaiting final stage
-  and commit.
+- Worktree: `main` at `d2427ea` with only the B-0009 baton and proposed ADR-0010
+  changed.
 
 ## Objective
 
@@ -41,9 +41,12 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
 ## File Scope
 
 - `ARCHITECTURE.md` and `docs/spec/POC-TECHNICAL-SPEC.md`
-- `docs/decisions/` for O-004 and any registry trust decision
-- Existing snapshot and verifier-side Rust crates selected after inspection
-- Existing Protobuf contracts only if the accepted decision requires a wire correction
+- `docs/decisions/0010-authority-signatures-and-local-registries.md`
+- `proto/raziel/v1/` and frozen descriptor sets for accepted wire corrections
+- `crates/canonical/`, `crates/snapshot/`, and `crates/verifier/`
+- proposed host-only `crates/authority/`
+- proposed Rust operator binary under `tools/raziel-admin/`
+- `.dockerignore` and `docker-compose.yml` for exact role-specific mounts
 - Deterministic descriptor and registry vectors and tests
 - Cargo metadata only after dependency approval
 - Baton records
@@ -54,8 +57,11 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
 - Witness path search and PolicyIR evaluation
 - SP1 guest execution and proof generation
 - Capability issuance, gateway enforcement, SDK, and console
+- Gateway cache invalidation, which remains M5 work
+- Stopped-`razield` service testing, which remains M4 work
 - Real transaction data
 - Production hardware key management
+- Private-key generation inside Raziel
 
 ## Decisions
 
@@ -63,11 +69,18 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
 - Inherited: ADR-0001 through ADR-0009.
 - ADR-0008 fixes canonical SHA-256 framing and makes Rust the commitment authority.
 - ADR-0009 fixes the exact relationship root and private witness protocol.
-- Open O-004: snapshot signing algorithm and authority key storage.
+- Proposed ADR-0010 resolves O-004 and O-006 with strict Ed25519, separate role keys,
+  canonical signature payloads, external PKCS#8 key provisioning, trust-domain
+  binding, monotonic epochs, and local registry generations.
 
 ## Open Questions and Blockers
 
-- O-004 must be resolved before descriptor signature implementation.
+- Maintainer approval of proposed ADR-0010 is required before descriptor, signature,
+  registry, wire-contract, or key-mount implementation.
+- Dependency approval is required for exact `ed25519-dalek` 3.0.0 with only `alloc`,
+  `pkcs8`, `signature`, and `zeroize`.
+- Scope approval is required for the host-only `crates/authority` crate, the
+  `tools/raziel-admin` binary, and the listed Protobuf corrections.
 - The normal development `spicedb` service has a pre-existing command and key
   incompatibility. It does not block descriptor and registry design.
 - Deferred follow-up: carry this item through each baton reset. After the M7 exit gate
@@ -81,6 +94,20 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
   `docs/agent/history/B-0008-blinded-relationship-tree.md`.
 - The remaining M2 deliverables are the signed snapshot descriptor and local policy
   and accepted-root registries.
+- Reconciled B-0009 against clean `main` at `d2427ea` and claimed protocol inspection
+  and O-004 drafting as the only active phase.
+- Inspected the policy and snapshot Protobuf contracts, architecture, technical
+  specification, strict PolicyIR ingress, registry placeholders, crate graph, Compose
+  mounts, ignored secrets, and current Cargo dependency graph.
+- Drafted proposed ADR-0010 without changing accepted behavior, Protobuf, dependencies,
+  Compose, or Rust implementation.
+- Completed independent cryptographic and repository-compatibility reviews.
+- Incorporated findings for strict Ed25519 acceptance, `u64` bytes, deployment trust
+  domains, exact policy-record binding, policy renewal epochs, trusted snapshot epoch
+  allocation, one-way status, registry generations, cold-verification cache semantics,
+  strict persisted Protobuf, role-specific mounts, and crate ownership.
+- Prepared a documentation-only checkpoint. It changes no accepted architecture,
+  Protobuf contract, dependency, Compose mount, or Rust behavior.
 
 ## Validation Plan
 
@@ -94,6 +121,12 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
 | B-0008 archive | PASS | Blinded relationship-tree objective completed with all gates | 2026-07-23T05:00:24Z |
+| Descriptor and registry contract inspection | PASS | Existing fields, missing trust rules, crate boundaries, and persistence gaps identified | 2026-07-23T05:08:12Z |
+| Official Ed25519 dependency review | PASS | `ed25519-dalek` 3.0.0 supports strict verification, PKCS#8, zeroizing keys, and the pinned Rust toolchain | 2026-07-23T05:10:41Z |
+| Two independent ADR reviews | PASS after findings incorporated | Cryptographic, rollback, rotation, cache, persistence, Compose, and scope findings addressed | 2026-07-23T05:22:40Z |
+| `./scripts/dev pnpm format:check` | PASS | Proposed ADR and baton do not disturb repository formatting | 2026-07-23T05:14:22Z |
+| `git diff --check` | PASS | Proposed ADR-0010 and current baton | 2026-07-23T05:14:30Z |
+| Final proposal scope review | PASS | Only proposed ADR-0010 and the B-0009 baton differ from `d2427ea` | 2026-07-23T05:25:05Z |
 
 ## Risks and Private-Data Notes
 
@@ -106,6 +139,6 @@ registries. Resolve O-004 signing and key-storage rules before implementation.
 
 ## Exact Next Action
 
-Inspect the existing descriptor Protobuf, registry placeholders, architecture, and
-prior decisions. Draft the O-004 decision and request maintainer approval before
-changing signature or registry behavior.
+Obtain explicit maintainer approval for ADR-0010, the listed crate and Protobuf scope,
+and exact `ed25519-dalek` 3.0.0 dependency. After approval, mark the ADR accepted,
+align architecture and specification, then implement the approved B-0009 scope.
