@@ -1,0 +1,17 @@
+[package]
+name = "raziel-authority"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+ed25519-dalek.workspace = true
+raziel-canonical.workspace = true
+raziel-snapshot.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde_json.workspace = true

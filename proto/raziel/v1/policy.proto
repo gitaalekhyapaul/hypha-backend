@@ -29,4 +29,9 @@ message PolicyRecord {
   string signing_key_id = 11;
   bytes authority_signature = 12;
   google.protobuf.Timestamp registered_at = 13;
+  string trust_domain_id = 14;
+  uint64 approval_epoch = 15;
+  google.protobuf.Timestamp revoked_at = 16;
+  string revocation_reason = 17;
+  uint64 registry_generation = 18;
 }

@@ -131,8 +131,10 @@ verification separate from issuer trust.
 | `crates/proto` | Rust | Compile generated Protobuf message contracts for Rust components | Define canonical commitment bytes |
 | `crates/policy-ir` | Rust | PolicyIR types, validation, bounded evaluator | Parse arbitrary SpiceDB text |
 | `crates/canonical` | Rust | Domain-separated canonical encodings and commitments | Hash raw Protobuf serialization |
-| `crates/snapshot` | Rust | Tuple leaves, blinded Merkle tree, descriptor signing | Decide authorization |
+| `crates/snapshot` | Rust | Tuple leaves, blinded Merkle tree, descriptor claim encoding and intrinsic validation | Sign claims or decide authorization |
+| `crates/authority` | Rust | Host-only Ed25519 key loading, role-safe signing, strict verification, key identifiers, and trusted snapshot epoch allocation | Enter the SP1 guest graph or generate private keys |
 | `crates/witness` | Rust | Find positive paths and build Merkle openings | Produce `DENY` proofs |
+| `tools/raziel-admin` | Rust | Offline policy approval, key inspection, atomic registry publication, and one-way revocation | Generate keys or expose private material |
 | `tools/spicedb-ir-compiler` | Go | Run SpiceDB's compiler and translate its protos into PolicyIR | Make runtime decisions or perform cryptography |
 | `proto/raziel/v1` | Protobuf | Stable RPC and artifact contracts | Define canonical cryptographic bytes |
 | `examples/reconciliation` | Schema and adapters | Payment scenario policy, source manifest, field mapping, demo configuration | Contain generated acceptance data |
@@ -278,8 +280,9 @@ policy_hash = H(
 )
 ```
 
-The policy registry stores the canonical PolicyIR, version, status, validity window,
-approver identity, and authority signature. `verifierd` recalculates `policy_hash`
+The policy registry stores canonical PolicyIR, version, signed approval claims,
+mutable status, and registry generation. `verifierd` recalculates `policy_hash`,
+strictly verifies the authority signature, and checks the current local trust state
 before accepting the record.
 
 ### Relationship snapshot commitment
@@ -331,8 +334,11 @@ complete encoding, empty-tree digest, limits, and opening rules.
 
 ```text
 RelationshipSnapshotDescriptor {
+  format_version
+  trust_domain_id
   snapshot_id
   relationship_snapshot_root
+  policy_record_id
   policy_hash
   spicedb_revision
   epoch
@@ -347,7 +353,8 @@ RelationshipSnapshotDescriptor {
 The root commits one relationship snapshot. It does not track requests, prove
 freshness by itself, or establish that SpiceDB contained the tuples. The snapshot
 authority signature attests that provenance. Expiry and the verifier's accepted-root
-registry control freshness and revocation.
+registry control freshness and revocation. The descriptor binds one exact approved
+policy record inside one deployment trust domain.
 
 ### Capability request commitment
 

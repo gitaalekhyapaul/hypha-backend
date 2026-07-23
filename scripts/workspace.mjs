@@ -48,18 +48,32 @@ function run(command, args, options = {}) {
 }
 
 function goFiles() {
-  const output = run("git", ["ls-files", "--cached", "--others", "--exclude-standard", "*.go"], {
-    capture: true,
-  });
+  const output = run(
+    "git",
+    [
+      "-c",
+      "safe.directory=/workspace",
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "*.go",
+    ],
+    {
+      capture: true,
+    },
+  );
   return output.split("\n").filter(Boolean);
 }
 
 const commands = {
   build: () => {
-    run("pnpm", ["-r", "--if-present", "build"]);
+    run("pnpm", ["-r", "--workspace-concurrency=1", "--if-present", "build"]);
     run("cargo", ["build", "--workspace", "--exclude", "raziel-authorization-guest"]);
     run("cargo", ["prove", "build", "--locked", "--packages", "raziel-authorization-guest"]);
-    run("go", ["build", "./..."], { cwd: "tools/spicedb-ir-compiler" });
+    run("go", ["build", "-buildvcs=false", "./..."], {
+      cwd: "tools/spicedb-ir-compiler",
+    });
   },
   format: () => {
     run("pnpm", [

@@ -1,0 +1,189 @@
+{
+  "hash_algorithm": "sha256",
+  "negative_cases": [
+    {
+      "expected_rust_result": "claim_rejected",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.format_version"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.trust_domain_id"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.record_id"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.policy_name"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.policy_version"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.approval_epoch"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.policy_hash"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.valid_from"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.valid_until"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.approved_by"
+    },
+    {
+      "expected_rust_result": "invalid_key_id",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "policy.signing_key_id"
+    },
+    {
+      "expected_rust_result": "claim_rejected",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.format_version"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.trust_domain_id"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.snapshot_id"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.relationship_root"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.policy_record_id"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.policy_hash"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.spicedb_revision"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.epoch"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.issued_at"
+    },
+    {
+      "expected_rust_result": "invalid_signature",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.expires_at"
+    },
+    {
+      "expected_rust_result": "claim_rejected",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.canonicalization_version"
+    },
+    {
+      "expected_rust_result": "invalid_key_id",
+      "expected_typescript_parser_result": "match_structure",
+      "target": "snapshot.signing_key_id"
+    }
+  ],
+  "policy_approval": {
+    "canonical_payload_hex": "000000010000000b72617a69656c2d7465737400000018706f6c6963792d7265636f6e63696c696174696f6e2d76310000000e7265636f6e63696c696174696f6e0000000276310000000000000001000000201111111111111111111111111111111111111111111111111111111111111111000000006553f100000000006553ff100000001473796e7468657469632d6d61696e7461696e657200000048656432353531393a33343735306639386264353966636663393436646134356161616265393333626531353461346235303934653163346162663432383636353035663363393765",
+    "claims": {
+      "approval_epoch": "1",
+      "approved_by": "synthetic-maintainer",
+      "format_version": 1,
+      "policy_hash_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy_name": "reconciliation",
+      "policy_version": "v1",
+      "record_id": "policy-reconciliation-v1",
+      "signing_key_id": "ed25519:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e",
+      "trust_domain_id": "raziel-test",
+      "valid_from_unix_seconds": "1700000000",
+      "valid_until_unix_seconds": "1700003600"
+    },
+    "domain": "raziel/policy-approval-signature/v1",
+    "expected_rust_result": "match",
+    "expected_typescript_parser_result": "match_structure",
+    "key_id": "ed25519:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e",
+    "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signature_hex": "9e9c6d8db2560d135b484a789576a832b53b0a0fc9a3698270f86dd15712a712bbba72fe6bc27de6119601e145a4a1713fb946554e7f3e028311e8edaebbb90e",
+    "signature_message_hex": "0000002372617a69656c2f706f6c6963792d617070726f76616c2d7369676e61747572652f7631000000e7000000010000000b72617a69656c2d7465737400000018706f6c6963792d7265636f6e63696c696174696f6e2d76310000000e7265636f6e63696c696174696f6e0000000276310000000000000001000000201111111111111111111111111111111111111111111111111111111111111111000000006553f100000000006553ff100000001473796e7468657469632d6d61696e7461696e657200000048656432353531393a33343735306639386264353966636663393436646134356161616265393333626531353461346235303934653163346162663432383636353035663363393765"
+  },
+  "private_test_only": true,
+  "signature_algorithm": "Ed25519",
+  "snapshot_descriptor": {
+    "canonical_payload_hex": "000000010000000b72617a69656c2d7465737400000019736e617073686f742d7265636f6e63696c696174696f6e2d3100000020222222222222222222222222222222222222222222222222222222222222222200000018706f6c6963792d7265636f6e63696c696174696f6e2d76310000002011111111111111111111111111111111111111111111111111111111111111110000001573796e7468657469632d7a65642d746f6b656e2d310000000000000001000000006553f164000000006553f4e80000000100000048656432353531393a36613338303364356630353939303261316336646166626339626134373239323132663763616163303836333463633361653736623237353239663033383237",
+    "claims": {
+      "canonicalization_version": 1,
+      "epoch": "1",
+      "expires_at_unix_seconds": "1700001000",
+      "format_version": 1,
+      "issued_at_unix_seconds": "1700000100",
+      "policy_hash_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy_record_id": "policy-reconciliation-v1",
+      "relationship_snapshot_root_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signing_key_id": "ed25519:6a3803d5f059902a1c6dafbc9ba4729212f7caac08634cc3ae76b27529f03827",
+      "snapshot_id": "snapshot-reconciliation-1",
+      "spicedb_revision": "synthetic-zed-token-1",
+      "trust_domain_id": "raziel-test"
+    },
+    "domain": "raziel/snapshot-descriptor-signature/v1",
+    "expected_rust_result": "match",
+    "expected_typescript_parser_result": "match_structure",
+    "key_id": "ed25519:6a3803d5f059902a1c6dafbc9ba4729212f7caac08634cc3ae76b27529f03827",
+    "public_key_hex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+    "signature_hex": "d0048a579444664af6a9eb5df77eaf23033037d508d42c637cd5115dcb7abcb7edd6b14ec3e797b3a300023670327772c59101316e1ccbbf61b97f90d4036e0d",
+    "signature_message_hex": "0000002772617a69656c2f736e617073686f742d64657363726970746f722d7369676e61747572652f763100000115000000010000000b72617a69656c2d7465737400000019736e617073686f742d7265636f6e63696c696174696f6e2d3100000020222222222222222222222222222222222222222222222222222222222222222200000018706f6c6963792d7265636f6e63696c696174696f6e2d76310000002011111111111111111111111111111111111111111111111111111111111111110000001573796e7468657469632d7a65642d746f6b656e2d310000000000000001000000006553f164000000006553f4e80000000100000048656432353531393a36613338303364356630353939303261316336646166626339626134373239323132663763616163303836333463633361653736623237353239663033383237"
+  },
+  "u64_cases": [
+    {
+      "canonical_hex": "0000000000000000",
+      "value": "0"
+    },
+    {
+      "canonical_hex": "0000000000000001",
+      "value": "1"
+    },
+    {
+      "canonical_hex": "8000000000000000",
+      "value": "9223372036854775808"
+    },
+    {
+      "canonical_hex": "ffffffffffffffff",
+      "value": "18446744073709551615"
+    }
+  ],
+  "vector_format_version": 1,
+  "warning": "Synthetic deterministic authority keys. Never use these keys in production."
+}

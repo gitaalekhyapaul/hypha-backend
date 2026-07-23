@@ -74,6 +74,7 @@ fixtures remain required for tests.
 | D-015 | Use local proving and never send private witnesses to an external prover |
 | D-016 | A data-owner policy authority approves PolicyIR; `razield` cannot approve its own policy |
 | D-017 | Use the container-first pinned toolchain in ADR-0003 for M0 and CI |
+| D-018 | Use strict Ed25519 with separate policy and snapshot keys, canonical signed claims, deployment trust-domain binding, and verifier-local registries as defined by ADR-0010 |
 
 ## Open decisions
 
@@ -83,13 +84,8 @@ The following decisions must be closed before their milestone begins:
 | --- | --- | --- |
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
 | O-003 | Select the SP1 proof mode used for the final demo | After the first proving benchmark |
-| O-004 | Select the snapshot authority signing algorithm and key storage for the PoC | Before snapshot implementation |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
-| O-006 | Confirm whether policy approval signatures use the same authority as snapshots | Before policy registry implementation |
 | O-007 | Approve the protected-request signature envelope in ADR-0002 | Before gateway integration |
-
-Recommended PoC defaults for O-004 and O-006 are Ed25519 keys stored as mounted local
-development secrets, with separate policy and snapshot key IDs.
 
 ## Actors and entities
 
@@ -162,7 +158,7 @@ development secrets, with separate policy and snapshot key IDs.
 - **FR-031**: Every relationship leaf shall include the full tuple and stored caveat context.
 - **FR-032**: Leaves shall use domain separation and a private per-snapshot salt.
 - **FR-033**: The snapshot shall contain a public relationship root and signed descriptor.
-- **FR-034**: The descriptor shall include `policy_hash`, revision, epoch, issue time, expiry, and canonicalization version.
+- **FR-034**: The descriptor shall include the trust domain, exact policy record and hash, revision, epoch, issue time, expiry, canonicalization version, signing key identifier, and authority signature.
 - **FR-035**: The verifier shall maintain an accepted-root registry.
 - **FR-036**: A revoked or expired root shall invalidate new verification attempts.
 - **FR-037**: Snapshot creation shall never log tuple contents at normal log levels.
@@ -351,11 +347,14 @@ Required fields:
 - `policy_record_id`
 - `policy_hash`
 - `expires_at`
-- `snapshot_epoch`
+- `expected_previous_epoch`
 - `authority_key_id`
 
 The request must reference the ZedToken by runtime secret name. It must never carry a
 SpiceDB token value or persist one in a job record.
+
+The snapshot authority compares `expected_previous_epoch` with trusted publication
+state. It assigns the next signed epoch. A caller cannot select the signed epoch.
 
 ### `CreateCapabilityRequest`
 
@@ -690,12 +689,17 @@ PolicyRecord {
   signing_key_id
   authority_signature
   registered_at
+  trust_domain_id
+  approval_epoch
+  revoked_at
+  revocation_reason
+  registry_generation
 }
 ```
 
 The registry can use a local mounted directory in the PoC. Each record should have a
 binary Protobuf form and an inspectable JSON projection. Signature verification uses
-the binary canonical record payload, not JSON bytes.
+the canonical claim payload from ADR-0010, not Protobuf or JSON bytes.
 
 ## Capability semantics
 
@@ -1157,6 +1161,25 @@ define a root-acceptance window.
 
 Later work can add a query ledger, cumulative privacy budget, coarse relevance proof,
 and discovery-rate controls.
+
+### TEE-backed local authorization
+
+Revisit this experiment only after the M7 exit gate passes and the payment-
+reconciliation PoC satisfies its full definition of done.
+
+Future work can evaluate a local confidential PDP that lets an agent check its
+task-bound access before work starts. The discussion shall cover:
+
+- local capability inventory and pre-task access-needs checks
+- enclave and confidential-VM trust boundaries
+- remote attestation and attestation-bound secret provisioning
+- self-hosted key-broker deployment on SEV-SNP or TDX
+- protected state, revocation freshness, rollback, and query-oracle controls
+- cold starts, pre-warming, warm-path latency, and service availability
+- proof-carrying delegation options that do not require a TEE
+
+Keep task-needs metadata, normative authorization, and stateful leakage controls as
+separate artifacts. This experiment shall not change the baseline PoC.
 
 ### Verifier packaging
 

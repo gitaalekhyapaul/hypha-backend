@@ -22,6 +22,21 @@ x-toolchain-service: &toolchain-service
     - pnpm-store:/pnpm/store
   init: true
 
+x-secure-rust-service: &secure-rust-service
+  <<: *toolchain-service
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  environment:
+    CARGO_HOME: /usr/local/cargo
+    CARGO_NET_OFFLINE: "true"
+    CARGO_TARGET_DIR: /tmp/raziel-target
+    HOME: /tmp/raziel-home
+    RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+    RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    RUSTUP_TOOLCHAIN: "1.97.1"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,exec,mode=1777
+
 services:
   toolchain:
     <<: *toolchain-service
@@ -48,14 +63,76 @@ services:
     profiles: ["equivalence"]
 
   razield:
-    <<: *toolchain-service
-    command: ["cargo", "run", "-p", "razield"]
+    <<: *secure-rust-service
+    command: ["cargo", "run", "--locked", "--offline", "-p", "razield"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
+      - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
     profiles: ["services"]
 
   verifierd:
-    <<: *toolchain-service
-    command: ["cargo", "run", "-p", "verifierd"]
+    <<: *secure-rust-service
+    command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd"]
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
     profiles: ["services"]
+
+  raziel-admin-policy:
+    <<: *secure-rust-service
+    entrypoint: ["cargo", "run", "--locked", "--offline", "-p", "raziel-admin", "--"]
+    command: []
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_AUTHORITY_KEY_PATH: /run/secrets/raziel/policy-authority.pk8
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry
+      - ${RAZIEL_POLICY_KEY_PATH:-/dev/null}:/run/secrets/raziel/policy-authority.pk8:ro
+    profiles: ["admin"]
+
+  raziel-admin-snapshot:
+    <<: *secure-rust-service
+    entrypoint: ["cargo", "run", "--locked", "--offline", "-p", "raziel-admin", "--"]
+    command: []
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_AUTHORITY_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry
+      - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
+    profiles: ["admin"]
 
   demo-gateway:
     <<: *toolchain-service

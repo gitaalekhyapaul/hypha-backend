@@ -27,6 +27,8 @@ message RelationshipSnapshotDescriptor {
   uint32 canonicalization_version = 9;
   string signing_key_id = 10;
   bytes authority_signature = 11;
+  string trust_domain_id = 12;
+  string policy_record_id = 13;
 }
 
 // BuildSnapshotRequest references runtime configuration and an explicit SpiceDB
@@ -37,8 +39,20 @@ message BuildSnapshotRequest {
   string policy_record_id = 3;
   bytes policy_hash = 4;
   google.protobuf.Timestamp expires_at = 5;
-  uint64 snapshot_epoch = 6;
+  uint64 expected_previous_epoch = 6;
   string authority_key_id = 7;
+}
+
+// AcceptedRootRecord adds mutable local registry state around one immutable signed
+// descriptor.
+message AcceptedRootRecord {
+  uint32 format_version = 1;
+  RelationshipSnapshotDescriptor descriptor = 2;
+  SnapshotStatus status = 3;
+  google.protobuf.Timestamp registered_at = 4;
+  google.protobuf.Timestamp revoked_at = 5;
+  string revocation_reason = 6;
+  uint64 registry_generation = 7;
 }
 
 message BuildSnapshotResponse {

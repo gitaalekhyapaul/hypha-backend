@@ -2,12 +2,19 @@
 
 #![forbid(unsafe_code)]
 
+mod descriptor;
 mod error;
 mod hash;
 mod tree;
 mod validation;
 mod witness;
 
+pub use descriptor::{
+    SNAPSHOT_DESCRIPTOR_FORMAT_VERSION, SNAPSHOT_DESCRIPTOR_SIGNATURE_DOMAIN,
+    SnapshotDescriptorClaimsV1, SnapshotDescriptorError, SnapshotDescriptorLimits,
+    ValidatedSnapshotDescriptorClaimsV1, encode_snapshot_descriptor_claims,
+    snapshot_descriptor_signature_message,
+};
 pub use error::{PolicyReference, RelationshipField, SnapshotError, SnapshotLimit};
 pub use hash::{
     RELATIONSHIP_EMPTY_DOMAIN, RELATIONSHIP_LEAF_DOMAIN, RELATIONSHIP_NODE_DOMAIN,

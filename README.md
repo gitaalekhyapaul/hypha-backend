@@ -10,8 +10,10 @@ acceptance run.
 
 ## Current status
 
-The M0 scaffold is complete. TypeScript, Rust, Go, Protobuf, Docker Compose, and CI
-shells pass their root gates. M1 PolicyIR work is ready and not yet implemented.
+M0, M1, and M2 are complete. M2 delivered canonical commitments, the blinded
+relationship tree, authority signatures, and verifier-local registry libraries. M3
+adds SP1 guest execution and proof generation. The Rust service processes remain
+shells until their M4 wiring work.
 
 ## Read first
 
@@ -72,3 +74,58 @@ Start the local application and service shells with:
 ```bash
 ./scripts/compose --profile apps --profile services up --build
 ```
+
+## Authority administration
+
+Create separate policy and snapshot keys outside the repository:
+
+```bash
+openssl genpkey -algorithm ED25519 -outform DER -out policy-authority.pk8
+openssl genpkey -algorithm ED25519 -outform DER -out snapshot-authority.pk8
+chmod 0400 policy-authority.pk8 snapshot-authority.pk8
+```
+
+Copy `.env.example` to `.env`. Set `HOST_UID` from `id -u` and `HOST_GID` from
+`id -g`. Set both key paths to absolute host paths.
+
+Run the admin image as a one-off command. This example creates a public policy-key
+record:
+
+```bash
+./scripts/compose --env-file .env --profile admin run --rm raziel-admin-policy \
+  inspect-key \
+  --key /run/secrets/raziel/policy-authority.pk8 \
+  --role policy \
+  --trust-domain raziel-local-dev \
+  --valid-from 1700000000 \
+  --valid-until 1731536000 \
+  --generation 1 \
+  --output /var/lib/raziel/registry/drafts/policy-key.pb \
+  --json-output /var/lib/raziel/registry/drafts/policy-key.json
+```
+
+The remaining command forms are:
+
+```text
+approve-policy
+  --policy PATH --key PATH --trust-domain ID --record-id ID
+  --policy-name NAME --policy-version VERSION --approval-epoch N
+  --valid-from UNIX --valid-until UNIX --approved-by ID
+  --registered-at UNIX --generation N --output PATH --json-output PATH
+
+publish-registry
+  --root PATH --trust-domain ID --generation N --published-at UNIX
+  --observed-now UNIX --output-directory RELATIVE_NEW_DIRECTORY
+  --output-manifest PATH --output-json PATH [--previous-manifest PATH]
+  [--authority-key RELATIVE_PATH] [--policy RELATIVE_PATH]
+  [--root-record RELATIVE_PATH]
+
+revoke-record
+  --kind key|policy|root --input PATH --output NEW_PATH --json-output NEW_PATH
+  --trust-domain ID --generation N --revoked-at UNIX
+  --observed-now UNIX [--reason TEXT]
+```
+
+`publish-registry` requires a new output directory for each generation. Draft and
+revocation outputs cannot replace existing files. The manifest changes only after the
+complete candidate generation passes verifier validation.

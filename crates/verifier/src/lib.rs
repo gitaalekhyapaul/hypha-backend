@@ -1,14 +1,23 @@
-//! Independent proof-verification boundary for Raziel.
-//!
-//! M0 reserves this crate for local registry checks, proof verification, and public
-//! claim validation. It intentionally contains no verification behavior yet.
+//! Independent authority and registry verification for Raziel.
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn package_identity_is_stable() {
-        assert_eq!(env!("CARGO_PKG_NAME"), "raziel-verifier");
-    }
-}
+mod error;
+mod ingress;
+mod loader;
+mod model;
+mod registry;
+
+pub use error::RegistryError;
+pub use ingress::{
+    REGISTRY_DESCRIPTOR_SHA256, decode_accepted_root_record_strict,
+    decode_authority_key_record_strict, decode_policy_record_strict,
+    decode_registry_manifest_strict,
+};
+pub use loader::RegistryLoader;
+pub use model::{
+    AcceptedRootRecordV1, PolicyRecordStatus, PolicyRegistryRecordV1, RegistryConfig,
+    RegistryLimits, RootRecordStatus, authority_key_from_proto, authority_key_to_proto,
+    policy_record_from_proto, policy_record_to_proto, root_record_from_proto, root_record_to_proto,
+};
+pub use registry::{InstallOutcome, LocalRegistry, RegistryGenerationV1, ResolvedRoot};

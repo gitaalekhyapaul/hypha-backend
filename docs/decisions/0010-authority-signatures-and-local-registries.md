@@ -1,10 +1,10 @@
 # ADR-0010: Authority Signatures and Local Registries
 
-- Status: proposed for maintainer review
+- Status: accepted
 - Date: 2026-07-23
 - Milestone: M2
-- Maintainer approval: pending
-- Resolves after approval: O-004 and O-006
+- Maintainer approval: approved by Gita on 2026-07-23
+- Resolves: O-004 and O-006
 
 ## Context
 
@@ -216,8 +216,9 @@ The Docker build context excludes `secrets/`. Runtime services must not gain pri
 keys through the shared source-tree mount. Synthetic test keys remain checked-in only
 as explicit test fixtures.
 
-The loader moves file bytes into a zeroizing secret document before parsing. Loaded
-signing keys zeroize owned secret material on drop. The PoC makes no memory-locking,
+The loader rejects symbolic links and reads through one checked file handle with a
+4,096-byte ceiling. It wipes the read buffer before returning. Loaded signing keys
+zeroize owned secret material on drop. The PoC makes no memory-locking,
 hardware-backed key, or process-dump protection claim.
 
 ### Public trust records
@@ -342,6 +343,11 @@ verification attempt.
 The snapshot publication authority allocates the next epoch from trusted local state.
 It rejects overflow and gaps. A client cannot select the signed epoch.
 
+`SnapshotAuthorityPublisher` receives trusted per-policy high watermarks at startup.
+It compares `expected_previous_epoch`, allocates with checked addition, validates and
+signs the claims, and advances state only after signing succeeds. The lower-level
+signer remains available for deterministic vectors and already allocated claims.
+
 Snapshot revocation is one-way. A revoked root never returns to `ACCEPTED`. Loaders
 derive the snapshot high watermark from every persisted descriptor, including revoked
 descriptors, without depending on directory iteration order.
@@ -374,9 +380,33 @@ Check in each frozen descriptor set with its SHA-256 checksum and one reviewed
 regeneration command. A descriptor change requires a checksum update and strict
 ingress mutation tests.
 
+Version 1 embeds
+`crates/verifier/descriptors/raziel-registry-v1.binpb`. Its SHA-256 checksum is
+`610b682ae00a2cfa0f2efa5beeb7e9e6e47735b0b2570a978a51a017e536aa28`.
+The reviewed regeneration command is:
+
+```bash
+./scripts/dev buf build \
+  --path proto/raziel/v1/authority.proto \
+  --path proto/raziel/v1/policy.proto \
+  --path proto/raziel/v1/snapshot.proto \
+  --as-file-descriptor-set \
+  --exclude-source-info \
+  -o crates/verifier/descriptors/raziel-registry-v1.binpb
+```
+
+Do not run this command during normal generation. Replacing the descriptor requires
+the same protocol review as changing an accepted registry field.
+
 Registry directories live under ignored local state and mount read-only into
 `verifierd`. State mutation tooling writes a new file and atomically renames it into
 place. Readers never accept a partially written record.
+
+Generation record paths are immutable. Operator tooling creates one new generation
+directory, writes records without replacement, syncs each file and containing
+directory, validates the complete candidate, then atomically replaces and syncs the
+manifest. Revocation creates a new draft record and cannot overwrite a file from the
+active generation.
 
 Each complete registry publication has an immutable increasing generation. Revocation
 tombstones and policy and snapshot high watermarks never decrease inside one accepted
@@ -423,16 +453,20 @@ epoch as `expected_previous_epoch + 1`. No external consumer exists yet.
 
 A Rust binary under `tools/raziel-admin` owns offline policy approval, public-key
 inspection, atomic registry publication, and one-way revocation. It does not generate
-private keys.
+private keys. Each command writes binary Protobuf plus an output-only JSON projection.
+The verifier never loads the JSON projection. Exact command forms live in `README.md`.
 
 Operators provision Ed25519 keys outside Raziel. One valid OpenSSL command is:
 
 ```bash
 openssl genpkey -algorithm ED25519 -outform DER -out snapshot-authority.pk8
+chmod 0400 snapshot-authority.pk8
 ```
 
-The same command with a separate output path creates the policy approval key. Raziel
-does not need a random-number dependency for key generation.
+The same two commands with a separate output path create and restrict the policy
+approval key. Raziel rejects key files that grant group or other access, or remain
+writable through the effective process identity. Raziel does not need a random-number
+dependency for key generation.
 
 ## Dependency Approval
 
@@ -462,7 +496,9 @@ signature vectors.
 Without this dependency, work can define canonical payloads and abstract signer
 traits. It cannot meet the M2 signed-descriptor or authority-verification gate.
 
-No TypeScript, Go, or runtime service dependency is proposed. OpenSSL is an optional
+The admin tool reuses the workspace-pinned `serde_json` package for output-only
+operator projections. It adds no package or lockfile version. No TypeScript, Go, or
+runtime service dependency is proposed. OpenSSL is an optional
 external provisioning tool, not a repository bootstrap dependency. Raziel can accept a
 valid PKCS#8 DER key produced by another trusted tool.
 

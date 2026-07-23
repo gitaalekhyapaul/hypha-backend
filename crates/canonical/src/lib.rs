@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+mod authority;
 mod encoding;
 mod policy;
 mod relationship;
@@ -46,6 +47,10 @@ pub fn policy_hash(program: &ValidatedPolicyProgram) -> Result<[u8; 32], Canonic
 }
 
 pub fn framed_hash_preimage(domain: &[u8], payload: &[u8]) -> Result<Vec<u8>, CanonicalError> {
+    framed_message(domain, payload)
+}
+
+pub fn framed_message(domain: &[u8], payload: &[u8]) -> Result<Vec<u8>, CanonicalError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.write_bytes(domain)?;
     encoder.write_bytes(payload)?;
@@ -56,3 +61,8 @@ pub fn framed_hash(domain: &[u8], payload: &[u8]) -> Result<[u8; 32], CanonicalE
     let preimage = framed_hash_preimage(domain, payload)?;
     Ok(Sha256::digest(preimage).into())
 }
+pub use authority::{
+    AUTHORITY_CLAIMS_FORMAT_VERSION, POLICY_APPROVAL_SIGNATURE_DOMAIN, PolicyApprovalClaimsV1,
+    PolicyApprovalLimits, PolicyApprovalValidationError, ValidatedPolicyApprovalClaimsV1,
+    encode_policy_approval_claims, policy_approval_signature_message,
+};

@@ -7,3 +7,12 @@ license.workspace = true
 publish = false
 
 [dependencies]
+prost.workspace = true
+prost-reflect.workspace = true
+prost-types.workspace = true
+raziel-authority.workspace = true
+raziel-canonical.workspace = true
+raziel-policy-ir = { workspace = true, features = ["strict-protobuf"] }
+raziel-proto.workspace = true
+raziel-snapshot.workspace = true
+sha2.workspace = true

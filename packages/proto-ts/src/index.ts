@@ -1,4 +1,5 @@
 export * from "./gen/raziel/v1/audit_pb.js";
+export * from "./gen/raziel/v1/authority_pb.js";
 export * from "./gen/raziel/v1/capability_pb.js";
 export * from "./gen/raziel/v1/common_pb.js";
 export * from "./gen/raziel/v1/policy_ir_pb.js";

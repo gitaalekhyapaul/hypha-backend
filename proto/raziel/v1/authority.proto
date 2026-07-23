@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AuthorityRole keeps policy approval separate from online snapshot publication.
+enum AuthorityRole {
+  AUTHORITY_ROLE_UNSPECIFIED = 0;
+  AUTHORITY_ROLE_POLICY_APPROVAL = 1;
+  AUTHORITY_ROLE_SNAPSHOT = 2;
+}
+
+// AuthorityKeyStatus is mutable verifier trust-store state.
+enum AuthorityKeyStatus {
+  AUTHORITY_KEY_STATUS_UNSPECIFIED = 0;
+  AUTHORITY_KEY_STATUS_ACTIVE = 1;
+  AUTHORITY_KEY_STATUS_REVOKED = 2;
+}
+
+// AuthorityKeyRecord stores one public Ed25519 trust anchor. It never contains
+// private key material.
+message AuthorityKeyRecord {
+  uint32 format_version = 1;
+  string trust_domain_id = 2;
+  string key_id = 3;
+  AuthorityRole role = 4;
+  bytes public_key = 5;
+  AuthorityKeyStatus status = 6;
+  google.protobuf.Timestamp valid_from = 7;
+  google.protobuf.Timestamp valid_until = 8;
+  google.protobuf.Timestamp revoked_at = 9;
+  string revocation_reason = 10;
+  uint64 registry_generation = 11;
+}
+
+// RegistryFile binds one immutable file in a complete registry generation.
+message RegistryFile {
+  string relative_path = 1;
+  bytes sha256 = 2;
+}
+
+// RegistryGenerationManifest is the atomic publication boundary consumed by
+// verifierd. Paths are relative to its read-only registry mount.
+message RegistryGenerationManifest {
+  uint32 format_version = 1;
+  string trust_domain_id = 2;
+  uint64 generation = 3;
+  repeated RegistryFile authority_keys = 4;
+  repeated RegistryFile policies = 5;
+  repeated RegistryFile accepted_roots = 6;
+  google.protobuf.Timestamp published_at = 7;
+}

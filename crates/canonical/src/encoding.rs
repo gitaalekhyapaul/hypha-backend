@@ -25,6 +25,10 @@ impl CanonicalEncoder {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
+    pub fn write_u64(&mut self, value: u64) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+
     pub fn write_i64(&mut self, value: i64) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
@@ -92,6 +96,25 @@ mod tests {
         for (value, expected) in cases {
             let mut encoder = CanonicalEncoder::new();
             encoder.write_i64(value);
+            assert_eq!(encoder.finish(), expected);
+        }
+    }
+
+    #[test]
+    fn writes_unsigned_integer_boundaries_in_big_endian() {
+        let cases = [
+            (0, [0x00; 8]),
+            (1, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            (
+                1_u64 << 63,
+                [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            ),
+            (u64::MAX, [0xff; 8]),
+        ];
+
+        for (value, expected) in cases {
+            let mut encoder = CanonicalEncoder::new();
+            encoder.write_u64(value);
             assert_eq!(encoder.finish(), expected);
         }
     }
