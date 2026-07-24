@@ -272,6 +272,7 @@ services/
   razield/
   verifierd/
 crates/
+  authorization-core/
   canonical/
   policy-ir/
   snapshot/
@@ -371,7 +372,12 @@ Required fields:
 - `requested_expires_at`
 - `issuance_nonce`
 - `snapshot_id`
+- `request_context`
 - `request_signature`
+
+`agent_id` is service metadata. Authorization derives the PolicyIR subject from
+`agent_key_thumbprint` as specified by ADR-0011. Request context is private, typed,
+strictly ordered, and covered by `capability_request_commitment`.
 
 ### `ProofJob`
 
@@ -465,6 +471,8 @@ AuthorizationPublicValues {
 
 The verifier must compare every public value with the capability claims or a canonical
 commitment recomputed from those claims. Extra public values fail verification.
+The SP1 journal is the exact ADR-0011 canonical byte sequence. It is not a serialized
+`AuthorizationPublicValues` Protobuf message.
 
 ## PolicyIR schema
 
@@ -708,7 +716,7 @@ the canonical claim payload from ADR-0010, not Protobuf or JSON bytes.
 The baseline scope is:
 
 ```text
-agent = agent:recon-17
+agent = agent:<lowercase hexadecimal key thumbprint>
 task = task:review-482
 purpose = reconciliation
 action = query
@@ -717,11 +725,15 @@ resource_scope = sg-payments
 expires_at <= minimum(policy, snapshot, delegation, requested expiry)
 ```
 
+`resource_scope` is one exact PolicyIR object ID in the baseline. Scenario adapters
+must resolve product aliases before the agent signs the capability request.
+
 ### Key binding
 
 The capability carries `agent_key_thumbprint`. Each protected request carries an
 Ed25519 signature from that key. A copied capability without the agent private key is
-not usable.
+not usable. The same thumbprint derives the PolicyIR subject. A friendly `agent_id`
+cannot redirect evaluation to another subject.
 
 ### Reuse
 

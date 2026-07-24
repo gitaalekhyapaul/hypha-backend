@@ -1,4 +1,8 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+use std::fmt::{self, Debug, Formatter};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct PolicyProgram {
     pub ir_version: u32,
     pub compiler_name: String,
@@ -10,33 +14,33 @@ pub struct PolicyProgram {
     pub limits: PolicyLimits,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct ObjectDefinition {
     pub name: String,
     pub relations: Vec<RelationDefinition>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct RelationDefinition {
     pub name: String,
     pub allowed_subject_types: Vec<AllowedSubjectType>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct AllowedSubjectType {
     pub object_type: String,
     pub subject_relation: Option<String>,
     pub caveat_name: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct PermissionDefinition {
     pub object_type: String,
     pub name: String,
     pub expression: PermissionExpr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum PermissionExpr {
     RelationRef {
         name: String,
@@ -70,21 +74,21 @@ impl PermissionExpr {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct CaveatDefinition {
     pub name: String,
     pub parameters: Vec<CaveatParameter>,
     pub expression: CaveatExpr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct CaveatParameter {
     pub source: CaveatInputSource,
     pub name: String,
     pub value_type: CaveatValueType,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum CaveatInputSource {
     RequestContext,
     RelationshipContext,
@@ -101,7 +105,7 @@ impl CaveatInputSource {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum CaveatValueType {
     Bool,
     Int,
@@ -118,7 +122,7 @@ impl CaveatValueType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum CaveatExpr {
     ConstBool(bool),
     ConstInt(i64),
@@ -159,7 +163,7 @@ impl CaveatExpr {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct PolicyLimits {
     pub max_expression_nodes: u32,
     pub max_caveat_nodes: u32,
@@ -171,7 +175,7 @@ pub struct PolicyLimits {
     pub max_total_private_input_bytes: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct ValidationCeilings {
     pub policy_limits: PolicyLimits,
     pub max_definitions: u32,
@@ -183,13 +187,13 @@ pub struct ValidationCeilings {
     pub max_syntax_depth: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct ObjectRef {
     pub object_type: String,
     pub object_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct EvaluationRequest {
     pub resource: ObjectRef,
     pub subject: ObjectRef,
@@ -198,13 +202,19 @@ pub struct EvaluationRequest {
     pub capability_claims: Vec<ContextEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EvaluationOutcome {
+    pub allowed: bool,
+    pub used_witness_ids: Vec<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct ContextEntry {
     pub name: String,
     pub value: CaveatValue,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum CaveatValue {
     Bool(bool),
     Int(i64),
@@ -221,17 +231,25 @@ impl CaveatValue {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct RelationshipCaveat {
     pub name: String,
     pub context: Vec<ContextEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct ResolvedRelationship {
     pub subject: ObjectRef,
     pub subject_relation: Option<String>,
     pub caveat: Option<RelationshipCaveat>,
-    pub merkle_depth: u32,
-    pub private_input_bytes: u32,
+    pub witness_id: Option<u32>,
+}
+
+impl Debug for ResolvedRelationship {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ResolvedRelationship")
+            .field("private_fields", &"<redacted>")
+            .finish()
+    }
 }

@@ -1,7 +1,11 @@
-use std::fmt::{self, Debug, Formatter};
+use std::{
+    cmp::Ordering,
+    fmt::{self, Debug, Formatter},
+};
 
-use raziel_canonical::RelationshipRecord;
+use raziel_canonical::{RelationshipRecord, compare_relationship_identity};
 use raziel_policy_ir::ValidatedPolicyProgram;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     Digest, SnapshotError, SnapshotLimit, SnapshotLimits, derived_tree_depth,
@@ -12,7 +16,7 @@ use crate::{
 pub const RELATIONSHIP_WITNESS_SET_VERSION: u32 = 1;
 const WITNESS_SET_HEADER_BYTES: u64 = 4 + 32 + 4 + 4;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct RelationshipOpeningV1 {
     pub canonical_relationship: RelationshipRecord,
     pub leaf_index: u32,
@@ -28,7 +32,7 @@ impl Debug for RelationshipOpeningV1 {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct RelationshipWitnessSetV1 {
     pub format_version: u32,
     pub snapshot_secret_salt: Digest,
@@ -77,6 +81,16 @@ pub fn verify_witness_set(
         .any(|pair| pair[0].leaf_index >= pair[1].leaf_index)
     {
         return Err(SnapshotError::WitnessEntriesNotStrictlySorted);
+    }
+    for pair in witness.entries.windows(2) {
+        match compare_relationship_identity(
+            &pair[0].canonical_relationship,
+            &pair[1].canonical_relationship,
+        ) {
+            Ordering::Less => {}
+            Ordering::Equal => return Err(SnapshotError::DuplicateRelationshipIdentity),
+            Ordering::Greater => return Err(SnapshotError::RelationshipsNotStrictlySorted),
+        }
     }
 
     let mut private_bytes = WITNESS_SET_HEADER_BYTES;

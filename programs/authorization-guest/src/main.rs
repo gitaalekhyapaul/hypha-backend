@@ -1,10 +1,13 @@
 //! SP1 authorization guest entrypoint for Raziel.
-//!
-//! M0 compiles this boundary without inputs, evaluation, commitments, or public
-//! values.
 
 #![no_main]
 
+use raziel_authorization_core::{AuthorizationGuestInputV1, authorize};
+
 sp1_zkvm::entrypoint!(main);
 
-pub fn main() {}
+pub fn main() {
+    let input = sp1_zkvm::io::read::<AuthorizationGuestInputV1>();
+    let result = authorize(&input).unwrap_or_else(|_| panic!("authorization guest rejected input"));
+    sp1_zkvm::io::commit_slice(&result.public_values_bytes);
+}

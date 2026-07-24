@@ -268,8 +268,7 @@ pub fn relationship(subject: ObjectRef) -> ResolvedRelationship {
         subject,
         subject_relation: None,
         caveat: None,
-        merkle_depth: 8,
-        private_input_bytes: 64,
+        witness_id: None,
     }
 }
 
@@ -284,8 +283,7 @@ pub fn caveated_relationship(subject: ObjectRef, amount: i64) -> ResolvedRelatio
                 value: CaveatValue::Int(amount),
             }],
         }),
-        merkle_depth: 8,
-        private_input_bytes: 96,
+        witness_id: None,
     }
 }
 

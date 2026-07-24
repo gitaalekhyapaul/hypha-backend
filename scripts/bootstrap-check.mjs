@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const versions = Object.fromEntries(
   readFileSync(new URL("../tools/toolchain-versions.env", import.meta.url), "utf8")
@@ -46,7 +46,15 @@ checkVersion("rustc", "rustc", ["--version"], versions.RUST_VERSION);
 checkVersion("cargo", "cargo", ["--version"], versions.RUST_VERSION);
 checkVersion("Go", "go", ["version"], `go${versions.GO_VERSION}`);
 checkVersion("Buf", "buf", ["--version"], versions.BUF_VERSION);
+checkVersion("Protobuf compiler", "protoc", ["--version"], `libprotoc ${versions.PROTOC_VERSION}`);
 checkVersion("SP1", "cargo", ["prove", "--version"], versions.SP1_CARGO_PROVE_COMMIT);
+
+const protobufEmptyType = "/usr/include/google/protobuf/empty.proto";
+if (!existsSync(protobufEmptyType)) {
+  failures.push(`Protobuf well-known types: missing ${protobufEmptyType}`);
+} else {
+  process.stdout.write(`Protobuf well-known types: ${protobufEmptyType}\n`);
+}
 
 if (!new Set(["arm64", "x64"]).has(process.arch)) {
   failures.push(`Architecture: unsupported Node architecture ${process.arch}`);

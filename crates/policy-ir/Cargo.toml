@@ -2,7 +2,7 @@
 name = "raziel-policy-ir"
 version.workspace = true
 edition = "2024"
-rust-version.workspace = true
+rust-version = "1.91.1"
 license.workspace = true
 publish = false
 
@@ -11,15 +11,16 @@ name = "equivalence_host"
 required-features = ["strict-protobuf"]
 
 [features]
-default = []
-strict-protobuf = ["dep:prost-reflect"]
+default = ["wire"]
+strict-protobuf = ["wire", "dep:prost-reflect"]
+wire = ["dep:prost", "dep:raziel-proto"]
 
 [dependencies]
-prost.workspace = true
+prost = { workspace = true, optional = true }
 prost-reflect = { workspace = true, optional = true }
-raziel-proto.workspace = true
+raziel-proto = { workspace = true, optional = true }
+serde.workspace = true
 
 [dev-dependencies]
-serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

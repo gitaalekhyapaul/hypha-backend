@@ -129,6 +129,7 @@ verification separate from issuer trust.
 | `services/verifierd` | Rust | Policy-registry lookup, proof verification, snapshot checks, claim validation | Call `razield` or read private graph data |
 | `programs/authorization-guest` | Rust and SP1 | Check commitments, Merkle membership, PolicyIR evaluation, caveats, capability claims | Perform network or filesystem I/O |
 | `crates/proto` | Rust | Compile generated Protobuf message contracts for Rust components | Define canonical commitment bytes |
+| `crates/authorization-core` | Rust | Shared guest statement, request binding, witness usage, and public journal bytes | Read files, clocks, registries, keys, or networks |
 | `crates/policy-ir` | Rust | PolicyIR types, validation, bounded evaluator | Parse arbitrary SpiceDB text |
 | `crates/canonical` | Rust | Domain-separated canonical encodings and commitments | Hash raw Protobuf serialization |
 | `crates/snapshot` | Rust | Tuple leaves, blinded Merkle tree, descriptor claim encoding and intrinsic validation | Sign claims or decide authorization |
@@ -368,12 +369,21 @@ capability_request_commitment = H(
   resource_type,
   resource_scope,
   requested_expiry,
-  issuance_nonce
+  issuance_nonce,
+  snapshot_id,
+  request_context
 )
 ```
 
 The proof binds an authorization envelope, not each transaction query. The gateway
-checks that every API request remains inside the proven envelope.
+checks that every API request remains inside the proven envelope. Request context is
+private, typed, strictly ordered, and covered by the commitment. ADR-0011 defines the
+exact framing, scope hash, and issuance nullifier.
+
+The proof subject is `agent:<lowercase hexadecimal key thumbprint>`. A friendly
+`agent_id` is service metadata and cannot select a PolicyIR subject. The action is the
+PolicyIR permission name. `resource_type` and `resource_scope` form one exact PolicyIR
+object reference.
 
 ## PolicyIR baseline
 
@@ -471,6 +481,7 @@ services/
   razield/                    Rust prover service
   verifierd/                  Rust verifier sidecar
 crates/
+  authorization-core/
   canonical/
   policy-ir/
   snapshot/
@@ -558,7 +569,9 @@ AuthorizationPublicValues {
 ```
 
 No private tuple, path identifier, caveat value, or Merkle sibling may enter public
-values or logs.
+values or logs. The guest commits the exact ADR-0011 byte encoding once with
+`commit_slice`. Protobuf remains a service wire model and is not the SP1 journal
+encoding.
 
 ### Host and guest split
 
@@ -566,9 +579,10 @@ Host responsibilities:
 
 - resolve the requested policy and snapshot
 - search for one satisfying positive path
-- collect every relationship leaf and Merkle opening
+- collect each relationship used by that path and its Merkle opening
 - collect stored and request-time caveat inputs
 - enforce size and depth limits before proving
+- validate the candidate input through `authorization-core`
 - supply private and public inputs to SP1
 - package proof output without reinterpreting `ALLOW`
 
@@ -579,7 +593,9 @@ Guest responsibilities:
 - verify every Merkle membership path
 - evaluate the bounded PolicyIR
 - evaluate the bounded caveat IR
-- bind agent, task, purpose, action, resource scope, nonce, and expiry
+- derive the subject from the agent key thumbprint
+- derive capability claims from the issuance envelope
+- bind task, purpose, action, resource scope, nonce, snapshot, context, and expiry
 - commit `ALLOW` and the exact public values
 - fail on malformed, unused, ambiguous, or excess witness data
 
@@ -597,7 +613,10 @@ Verifier responsibilities:
 
 The first guest proves only `ALLOW`. It receives the positive relationships needed by
 the supported expression. Intersection requires positive evidence for both branches.
-Union requires one valid branch. The compiler does not emit exclusion nodes.
+Union uses the first canonical successful branch after every branch has run under M1
+error semantics. The evaluator returns the exact leaf IDs used by that path. The guest
+rejects any supplied opening outside that set. The compiler does not emit exclusion
+nodes.
 
 `DENY` responses come from failed proof creation or verification and carry no ZK proof.
 User-facing denials remain generic. Internal logs use typed reason codes without graph

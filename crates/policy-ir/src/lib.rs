@@ -11,19 +11,20 @@ mod evaluation;
 mod ingress;
 mod model;
 mod validation;
+#[cfg(feature = "wire")]
 mod wire;
 
 pub use error::{
     CollectionKind, EvaluationError, LimitKind, PolicyError, ReferenceKind, ResolverError,
 };
-pub use evaluation::{RelationshipResolver, evaluate};
+pub use evaluation::{RelationshipResolver, evaluate, evaluate_with_usage};
 #[cfg(feature = "strict-protobuf")]
 pub use ingress::{PolicyIngressError, decode_policy_program_strict};
 pub use model::{
     AllowedSubjectType, CaveatDefinition, CaveatExpr, CaveatInputSource, CaveatParameter,
-    CaveatValue, CaveatValueType, ContextEntry, EvaluationRequest, ObjectDefinition, ObjectRef,
-    PermissionDefinition, PermissionExpr, PolicyLimits, PolicyProgram, RelationDefinition,
-    RelationshipCaveat, ResolvedRelationship, ValidationCeilings,
+    CaveatValue, CaveatValueType, ContextEntry, EvaluationOutcome, EvaluationRequest,
+    ObjectDefinition, ObjectRef, PermissionDefinition, PermissionExpr, PolicyLimits, PolicyProgram,
+    RelationDefinition, RelationshipCaveat, ResolvedRelationship, ValidationCeilings,
 };
 pub use validation::ValidatedPolicyProgram;
 

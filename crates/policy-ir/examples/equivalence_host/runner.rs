@@ -192,8 +192,7 @@ fn to_resolved_relationship(value: &FixtureRelationship) -> ResolvedRelationship
             name: caveat.name.clone(),
             context: to_context(&caveat.context),
         }),
-        merkle_depth: 0,
-        private_input_bytes: 0,
+        witness_id: None,
     }
 }
 

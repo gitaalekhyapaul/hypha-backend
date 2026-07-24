@@ -5,9 +5,9 @@ use crate::validation::{
     resolve_subject_set_target,
 };
 use crate::{
-    CaveatExpr, CaveatInputSource, CaveatValue, ContextEntry, EvaluationError, EvaluationRequest,
-    LimitKind, ObjectRef, PermissionDefinition, PermissionExpr, PolicyLimits, PolicyProgram,
-    RelationDefinition, ResolvedRelationship, ResolverError, ValidatedPolicyProgram,
+    CaveatExpr, CaveatInputSource, CaveatValue, ContextEntry, EvaluationError, EvaluationOutcome,
+    EvaluationRequest, LimitKind, ObjectRef, PermissionDefinition, PermissionExpr, PolicyLimits,
+    PolicyProgram, RelationDefinition, ResolvedRelationship, ResolverError, ValidatedPolicyProgram,
 };
 
 pub trait RelationshipResolver {
@@ -23,6 +23,14 @@ pub fn evaluate<R: RelationshipResolver>(
     request: &EvaluationRequest,
     resolver: &R,
 ) -> Result<bool, EvaluationError> {
+    evaluate_with_usage(program, request, resolver).map(|outcome| outcome.allowed)
+}
+
+pub fn evaluate_with_usage<R: RelationshipResolver>(
+    program: &ValidatedPolicyProgram,
+    request: &EvaluationRequest,
+    resolver: &R,
+) -> Result<EvaluationOutcome, EvaluationError> {
     let program = program.program();
     validate_request(request, program.limits)?;
     let permission = find_permission(program, &request.resource.object_type, &request.permission)
@@ -35,7 +43,7 @@ pub fn evaluate<R: RelationshipResolver>(
             .checked_add(request.capability_claims.len())
             .ok_or(EvaluationError::BudgetExceeded(LimitKind::ContextEntries))?,
     )?;
-    evaluate_permission(
+    let outcome = evaluate_permission(
         program,
         request,
         resolver,
@@ -43,7 +51,33 @@ pub fn evaluate<R: RelationshipResolver>(
         &request.resource,
         permission,
         0,
-    )
+    )?;
+    Ok(EvaluationOutcome {
+        allowed: outcome.allowed,
+        used_witness_ids: outcome.used_witness_ids,
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TraceOutcome {
+    allowed: bool,
+    used_witness_ids: Vec<u32>,
+}
+
+impl TraceOutcome {
+    const fn denied() -> Self {
+        Self {
+            allowed: false,
+            used_witness_ids: Vec::new(),
+        }
+    }
+
+    fn allowed(witness_id: Option<u32>) -> Self {
+        Self {
+            allowed: true,
+            used_witness_ids: witness_id.into_iter().collect(),
+        }
+    }
 }
 
 fn evaluate_permission<R: RelationshipResolver>(
@@ -54,7 +88,7 @@ fn evaluate_permission<R: RelationshipResolver>(
     resource: &ObjectRef,
     permission: &PermissionDefinition,
     path_depth: u32,
-) -> Result<bool, EvaluationError> {
+) -> Result<TraceOutcome, EvaluationError> {
     evaluate_permission_expr(
         program,
         request,
@@ -74,7 +108,7 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
     resource: &ObjectRef,
     expression: &PermissionExpr,
     path_depth: u32,
-) -> Result<bool, EvaluationError> {
+) -> Result<TraceOutcome, EvaluationError> {
     budget.consume_expression_node()?;
     let definition =
         find_definition(program, &resource.object_type).ok_or(EvaluationError::InvalidRequest)?;
@@ -90,11 +124,16 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                 relation,
                 path_depth.saturating_add(1),
             )?;
-            Ok(relationships.iter().any(|relationship| {
-                relationship.subject == request.subject
-                    && relationship.subject_relation.is_none()
-                    && relationship.caveat.is_none()
-            }))
+            Ok(relationships
+                .iter()
+                .find(|relationship| {
+                    relationship.subject == request.subject
+                        && relationship.subject_relation.is_none()
+                        && relationship.caveat.is_none()
+                })
+                .map_or_else(TraceOutcome::denied, |relationship| {
+                    TraceOutcome::allowed(relationship.witness_id)
+                }))
         }
         PermissionExpr::SubjectRelationRef {
             relation,
@@ -112,7 +151,7 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                 source,
                 path_depth.saturating_add(1),
             )?;
-            let mut allowed = false;
+            let mut selected = None;
             for relationship in relationships.iter().filter(|relationship| {
                 relationship.subject.object_type == target_type
                     && relationship.subject_relation.as_deref() == Some(subject_relation)
@@ -130,33 +169,49 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                     target_relation,
                     path_depth.saturating_add(2),
                 )?;
-                if target_relationships.iter().any(|target| {
+                if let Some(target) = target_relationships.iter().find(|target| {
                     target.subject == request.subject
                         && target.subject_relation.is_none()
                         && target.caveat.is_none()
-                }) {
-                    allowed = true;
+                }) && selected.is_none()
+                {
+                    let mut outcome = TraceOutcome::allowed(relationship.witness_id);
+                    push_witness_id(&mut outcome.used_witness_ids, target.witness_id);
+                    selected = Some(outcome);
                 }
             }
-            Ok(allowed)
+            Ok(selected.unwrap_or_else(TraceOutcome::denied))
         }
         PermissionExpr::AnyOf(children) => {
-            let mut allowed = false;
+            let mut selected = None;
             for child in children {
-                allowed |= evaluate_permission_expr(
+                let outcome = evaluate_permission_expr(
                     program, request, resolver, budget, resource, child, path_depth,
                 )?;
+                if outcome.allowed && selected.is_none() {
+                    selected = Some(outcome);
+                }
             }
-            Ok(allowed)
+            Ok(selected.unwrap_or_else(TraceOutcome::denied))
         }
         PermissionExpr::AllOf(children) => {
             let mut allowed = true;
+            let mut used_witness_ids = Vec::new();
             for child in children {
-                allowed &= evaluate_permission_expr(
+                let outcome = evaluate_permission_expr(
                     program, request, resolver, budget, resource, child, path_depth,
                 )?;
+                allowed &= outcome.allowed;
+                merge_witness_ids(&mut used_witness_ids, outcome.used_witness_ids);
             }
-            Ok(allowed)
+            Ok(if allowed {
+                TraceOutcome {
+                    allowed,
+                    used_witness_ids,
+                }
+            } else {
+                TraceOutcome::denied()
+            })
         }
         PermissionExpr::Arrow {
             source_relation,
@@ -174,7 +229,7 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                 source,
                 path_depth.saturating_add(1),
             )?;
-            let mut allowed = false;
+            let mut selected = None;
             for relationship in relationships.iter().filter(|relationship| {
                 relationship.subject.object_type == target_type
                     && relationship.subject_relation.is_none()
@@ -182,7 +237,7 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
             }) {
                 let target = find_permission(program, target_type, target_permission)
                     .ok_or(EvaluationError::MissingPermission)?;
-                allowed |= evaluate_permission(
+                let outcome = evaluate_permission(
                     program,
                     request,
                     resolver,
@@ -191,8 +246,13 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                     target,
                     path_depth.saturating_add(1),
                 )?;
+                if outcome.allowed && selected.is_none() {
+                    let mut outcome = outcome;
+                    push_witness_id(&mut outcome.used_witness_ids, relationship.witness_id);
+                    selected = Some(outcome);
+                }
             }
-            Ok(allowed)
+            Ok(selected.unwrap_or_else(TraceOutcome::denied))
         }
         PermissionExpr::CaveatedRelation {
             relation,
@@ -210,7 +270,7 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                 source,
                 path_depth.saturating_add(1),
             )?;
-            let mut allowed = false;
+            let mut selected = None;
             for relationship in relationships.iter().filter(|relationship| {
                 relationship.subject == request.subject
                     && relationship.subject_relation.is_none()
@@ -231,10 +291,28 @@ fn evaluate_permission_expr<R: RelationshipResolver>(
                     relationship_context,
                     budget,
                 )?;
-                allowed |= as_bool(result)?;
+                let allowed = as_bool(result)?;
+                if allowed && selected.is_none() {
+                    selected = Some(TraceOutcome::allowed(relationship.witness_id));
+                }
             }
-            Ok(allowed)
+            Ok(selected.unwrap_or_else(TraceOutcome::denied))
         }
+    }
+}
+
+fn push_witness_id(ids: &mut Vec<u32>, witness_id: Option<u32>) {
+    if let Some(witness_id) = witness_id {
+        match ids.binary_search(&witness_id) {
+            Ok(_) => {}
+            Err(index) => ids.insert(index, witness_id),
+        }
+    }
+}
+
+fn merge_witness_ids(ids: &mut Vec<u32>, incoming: Vec<u32>) {
+    for witness_id in incoming {
+        push_witness_id(ids, Some(witness_id));
     }
 }
 
@@ -276,7 +354,6 @@ fn validate_relationship(
     if let Some(caveat) = &relationship.caveat {
         check_runtime_identifier(&caveat.name, budget.limits)?;
         validate_context(&caveat.context, budget.limits)?;
-        budget.consume_context_entries(caveat.context.len())?;
     }
     if relationship.subject_relation.is_some() && relationship.caveat.is_some() {
         return Err(EvaluationError::InvalidRelationshipData);
@@ -292,19 +369,17 @@ fn validate_relationship(
     }) {
         return Err(EvaluationError::InvalidRelationshipData);
     }
-    budget.consume_relationship(relationship)
+    let first_witness_use = budget.consume_relationship(relationship)?;
+    if first_witness_use && let Some(caveat) = &relationship.caveat {
+        budget.consume_context_entries(caveat.context.len())?;
+    }
+    Ok(())
 }
 
 fn compare_relationship_key(left: &ResolvedRelationship, right: &ResolvedRelationship) -> Ordering {
     left.subject
         .cmp(&right.subject)
         .then_with(|| left.subject_relation.cmp(&right.subject_relation))
-        .then_with(|| {
-            left.caveat
-                .as_ref()
-                .map(|caveat| &caveat.name)
-                .cmp(&right.caveat.as_ref().map(|caveat| &caveat.name))
-        })
 }
 
 fn evaluate_caveat_expr(
@@ -509,8 +584,8 @@ struct EvaluationBudget {
     expression_nodes: u32,
     caveat_nodes: u32,
     relationship_witnesses: u32,
+    counted_witness_ids: Vec<u32>,
     context_entries: u32,
-    private_input_bytes: u32,
 }
 
 impl EvaluationBudget {
@@ -520,8 +595,8 @@ impl EvaluationBudget {
             expression_nodes: 0,
             caveat_nodes: 0,
             relationship_witnesses: 0,
+            counted_witness_ids: Vec::new(),
             context_entries: 0,
-            private_input_bytes: 0,
         }
     }
 
@@ -557,9 +632,12 @@ impl EvaluationBudget {
     fn consume_relationship(
         &mut self,
         relationship: &ResolvedRelationship,
-    ) -> Result<(), EvaluationError> {
-        if relationship.merkle_depth > self.limits.max_merkle_depth {
-            return Err(EvaluationError::BudgetExceeded(LimitKind::MerkleDepth));
+    ) -> Result<bool, EvaluationError> {
+        if let Some(witness_id) = relationship.witness_id {
+            match self.counted_witness_ids.binary_search(&witness_id) {
+                Ok(_) => return Ok(false),
+                Err(index) => self.counted_witness_ids.insert(index, witness_id),
+            }
         }
         consume(
             &mut self.relationship_witnesses,
@@ -567,12 +645,7 @@ impl EvaluationBudget {
             self.limits.max_relationship_witnesses,
             LimitKind::RelationshipWitnesses,
         )?;
-        consume(
-            &mut self.private_input_bytes,
-            relationship.private_input_bytes,
-            self.limits.max_total_private_input_bytes,
-            LimitKind::TotalPrivateInputBytes,
-        )
+        Ok(true)
     }
 
     fn check_path_depth(&self, path_depth: u32) -> Result<(), EvaluationError> {
@@ -649,5 +722,34 @@ mod tests {
             );
             assert_eq!(budget.caveat_nodes, 2);
         }
+    }
+
+    #[test]
+    fn witness_budget_counts_a_present_leaf_id_once() {
+        let relationship = ResolvedRelationship {
+            subject: ObjectRef {
+                object_type: "user".into(),
+                object_id: "alice".into(),
+            },
+            subject_relation: None,
+            caveat: None,
+            witness_id: Some(7),
+        };
+        let mut budget = EvaluationBudget::new(PolicyLimits {
+            max_relationship_witnesses: 1,
+            ..TEST_LIMITS
+        });
+
+        assert_eq!(budget.consume_relationship(&relationship), Ok(true));
+        assert_eq!(budget.consume_relationship(&relationship), Ok(false));
+
+        let mut another = relationship;
+        another.witness_id = Some(8);
+        assert_eq!(
+            budget.consume_relationship(&another),
+            Err(EvaluationError::BudgetExceeded(
+                LimitKind::RelationshipWitnesses
+            ))
+        );
     }
 }

@@ -7,4 +7,5 @@ license.workspace = true
 publish = false
 
 [dependencies]
+raziel-authorization-core.workspace = true
 sp1-zkvm.workspace = true

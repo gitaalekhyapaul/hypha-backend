@@ -1,7 +1,8 @@
 # ADR-0003: M0 Toolchain Pins
 
-- Status: accepted for M0
+- Status: accepted for M0, amended for M3
 - Date: 2026-07-18
+- Amended: 2026-07-24
 - Applies to: repository scaffold, local development, and CI
 
 ## Context
@@ -32,6 +33,8 @@ host tools.
 | Rust | `1.97.1` | [Rust release notes](https://doc.rust-lang.org/stable/releases.html#version-1971-2026-07-16) |
 | Go | `1.26.5` | [Go release history](https://go.dev/doc/devel/release#go1.26.5) |
 | Buf | `1.72.0` | [Buf release](https://github.com/bufbuild/buf/releases/tag/v1.72.0) |
+| Protobuf compiler | `3.21.12`, Debian `3.21.12-3+deb12u1` | [Debian Bookworm package](https://packages.debian.org/bookworm/protobuf-compiler) |
+| Protobuf development files | Debian `3.21.12-3+deb12u1` | [Debian Bookworm package](https://packages.debian.org/bookworm/libprotobuf-dev) |
 | Protobuf-ES generator and runtime | `2.12.1`, revision `1` | [Protobuf-ES release](https://github.com/bufbuild/protobuf-es/releases/tag/v2.12.1) |
 | Prost generator | `0.5.0`, revision `1` | [Prost plugin](https://buf.build/community/neoeinstein-prost) |
 | Tonic generator | `0.5.0`, revision `1` | [Tonic plugin](https://buf.build/community/neoeinstein-tonic) |
@@ -51,6 +54,9 @@ Pin locations:
 - Cargo manifests use exact SP1 crate versions and commit `Cargo.lock`.
 - Go manifests record Go `1.26.5`; the shared version file records SpiceDB `v1.54.0`.
 - `tools/toolchain-versions.env` records shared versions and image digests.
+- The same file pins the Debian Protobuf compiler and development packages. The image
+  and bootstrap checks require the matching `libprotoc` version and
+  `google/protobuf/empty.proto`.
 - `buf.gen.yaml` records exact remote generator versions, revisions, and output paths.
   This workspace has no Buf module or plugin dependencies that produce `buf.lock`.
 - Dockerfiles and Compose use versioned tags plus OCI manifest digests.
@@ -65,6 +71,12 @@ The selected Node, Rust, Go, Buf, and SpiceDB image indexes contain native
 
 Official release channels and package registries were checked again on 2026-07-18
 before any dependency download.
+
+The M3 amendment adds Debian Bookworm `protobuf-compiler=3.21.12-3+deb12u1`.
+`sp1-prover-types 6.3.1` invokes `protoc` from its build script and imports a
+well-known Protobuf type. Debian ships that type in
+`libprotobuf-dev=3.21.12-3+deb12u1`. The maintainer approved both packages and
+toolchain rebuilds on 2026-07-24.
 
 ## Bootstrap and approval boundary
 

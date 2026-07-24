@@ -111,6 +111,48 @@ fn verifies_a_bounded_shared_witness_set_and_derives_accounting() {
 }
 
 #[test]
+fn witness_sets_independently_reject_duplicate_and_unsorted_structural_identities() {
+    let policy = policy();
+    let tree = SnapshotTree::build(
+        &policy,
+        relationships()[..2].to_vec(),
+        &TEST_SALT,
+        TEST_SNAPSHOT_LIMITS,
+    )
+    .unwrap();
+    let witness = RelationshipWitnessSetV1 {
+        format_version: RELATIONSHIP_WITNESS_SET_VERSION,
+        snapshot_secret_salt: TEST_SALT,
+        leaf_count: 2,
+        entries: vec![tree.opening(0).unwrap(), tree.opening(1).unwrap()],
+    };
+
+    let mut duplicate = witness.clone();
+    duplicate.entries[1].canonical_relationship =
+        duplicate.entries[0].canonical_relationship.clone();
+    duplicate.entries[1]
+        .canonical_relationship
+        .stored_caveat
+        .as_mut()
+        .unwrap()
+        .context[1]
+        .value = CaveatValue::Int(501);
+    assert_eq!(
+        verify_witness_set(&policy, &duplicate, &tree.root(), TEST_SNAPSHOT_LIMITS),
+        Err(SnapshotError::DuplicateRelationshipIdentity)
+    );
+
+    let mut unsorted = witness;
+    let first = unsorted.entries[0].canonical_relationship.clone();
+    unsorted.entries[0].canonical_relationship = unsorted.entries[1].canonical_relationship.clone();
+    unsorted.entries[1].canonical_relationship = first;
+    assert_eq!(
+        verify_witness_set(&policy, &unsorted, &tree.root(), TEST_SNAPSHOT_LIMITS),
+        Err(SnapshotError::RelationshipsNotStrictlySorted)
+    );
+}
+
+#[test]
 fn enforces_exact_private_input_byte_limits_for_sets_and_single_openings() {
     let policy = policy();
     let tree = SnapshotTree::build(

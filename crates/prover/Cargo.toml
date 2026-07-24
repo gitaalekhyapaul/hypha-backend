@@ -7,3 +7,10 @@ license.workspace = true
 publish = false
 
 [dependencies]
+raziel-authorization-core.workspace = true
+sp1-sdk.workspace = true
+
+[dev-dependencies]
+raziel-canonical.workspace = true
+raziel-policy-ir.workspace = true
+raziel-snapshot.workspace = true

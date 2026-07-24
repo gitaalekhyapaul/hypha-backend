@@ -1,0 +1,16 @@
+[package]
+name = "raziel-authorization-core"
+version.workspace = true
+edition = "2024"
+rust-version = "1.91.1"
+license.workspace = true
+publish = false
+
+[dependencies]
+raziel-canonical.workspace = true
+raziel-policy-ir.workspace = true
+raziel-snapshot.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

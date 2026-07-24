@@ -11,6 +11,9 @@ FROM ${BUF_IMAGE} AS buf-toolchain
 FROM ${RUST_IMAGE} AS toolchain
 
 ARG PNPM_VERSION
+ARG PROTOC_VERSION
+ARG PROTOBUF_COMPILER_PACKAGE_VERSION
+ARG LIBPROTOBUF_DEV_PACKAGE_VERSION
 ARG SP1_VERSION
 ARG SP1_CARGO_PROVE_AMD64_SHA256
 ARG SP1_CARGO_PROVE_ARM64_SHA256
@@ -24,7 +27,14 @@ ENV PATH="/root/.sp1/bin:/pnpm/bin:/usr/local/go/bin:${PATH}" \
     PNPM_HOME="/pnpm" \
     PNPM_STORE_DIR="/pnpm/store"
 
-RUN npm install --global "pnpm@${PNPM_VERSION}" \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+      "protobuf-compiler=${PROTOBUF_COMPILER_PACKAGE_VERSION}" \
+      "libprotobuf-dev=${LIBPROTOBUF_DEV_PACKAGE_VERSION}" \
+    && test "$(protoc --version)" = "libprotoc ${PROTOC_VERSION}" \
+    && test -f /usr/include/google/protobuf/empty.proto \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install --global "pnpm@${PNPM_VERSION}" \
     && mkdir -p "${PNPM_STORE_DIR}" \
     && pnpm config set store-dir "${PNPM_STORE_DIR}" --global \
     && mkdir -p /root/.sp1/bin \

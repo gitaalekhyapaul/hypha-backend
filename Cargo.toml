@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/authorization-core",
   "crates/authority",
   "crates/canonical",
   "crates/policy-ir",
@@ -28,11 +29,13 @@ prost = "=0.14.4"
 prost-reflect = { version = "=0.16.5", default-features = false }
 prost-types = "=0.14.4"
 raziel-authority = { path = "crates/authority" }
+raziel-authorization-core = { path = "crates/authorization-core" }
 raziel-canonical = { path = "crates/canonical" }
-raziel-policy-ir = { path = "crates/policy-ir" }
+raziel-policy-ir = { path = "crates/policy-ir", default-features = false }
 raziel-proto = { path = "crates/proto" }
 raziel-snapshot = { path = "crates/snapshot" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
 sha2 = { version = "=0.10.9", default-features = false }
-sp1-zkvm = { version = "=6.3.1", default-features = false }
+sp1-sdk = { version = "=6.3.1", default-features = false, features = ["blocking"] }
+sp1-zkvm = { version = "=6.3.1", default-features = false, features = ["lib"] }

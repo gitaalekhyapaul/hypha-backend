@@ -2,12 +2,13 @@ mod support;
 
 use raziel_policy_ir::{
     CaveatExpr, CaveatValue, ContextEntry, EvaluationError, EvaluationRequest, LimitKind,
-    RelationshipCaveat, ResolvedRelationship, ValidatedPolicyProgram, evaluate,
+    PermissionExpr, RelationshipCaveat, ResolvedRelationship, ValidatedPolicyProgram, evaluate,
+    evaluate_with_usage,
 };
 
 use support::{
-    CAVEAT_NAME, Resolver, all_caveat_nodes_program, base_program, caveated_relationship, ceilings,
-    object, relationship,
+    CAVEAT_NAME, Resolver, all_caveat_nodes_program, base_program, caveated_relation,
+    caveated_relationship, ceilings, object, relation_ref, relationship,
 };
 
 fn request(permission: &str) -> EvaluationRequest {
@@ -48,6 +49,225 @@ fn evaluates_direct_union_and_intersection_paths() {
     let denied = Resolver::default();
     assert!(!evaluate(&program, &request("direct"), &denied).unwrap());
     assert!(!evaluate(&program, &request("constrained"), &direct).unwrap());
+}
+
+#[test]
+fn traced_union_propagates_a_later_budget_error_after_an_allowing_branch() {
+    let mut program = base_program();
+    program.limits.max_expression_nodes = 13;
+    let program = ValidatedPolicyProgram::new(program, &ceilings()).unwrap();
+    let document = object("document", "doc_1");
+    let mut editor = relationship(object("user", "alice"));
+    editor.witness_id = Some(1);
+    let parents = (0..10)
+        .map(|index| {
+            let mut parent = relationship(object("folder", &format!("folder_{index:02}")));
+            parent.witness_id = Some(index + 2);
+            parent
+        })
+        .collect();
+    let mut resolver = Resolver::default();
+    resolver.insert(document.clone(), "editor", vec![editor]);
+    resolver.insert(document, "parent", parents);
+
+    assert_eq!(
+        evaluate_with_usage(&program, &request("access"), &resolver),
+        Err(EvaluationError::BudgetExceeded(LimitKind::ExpressionNodes))
+    );
+}
+
+#[test]
+fn traces_the_first_canonical_positive_path() {
+    let program = ValidatedPolicyProgram::new(base_program(), &ceilings()).unwrap();
+    let document = object("document", "doc_1");
+    let group = object("group", "ops");
+    let folder = object("folder", "payments");
+
+    let mut editor = relationship(object("user", "alice"));
+    editor.witness_id = Some(7);
+    let mut viewer = relationship(object("user", "alice"));
+    viewer.witness_id = Some(3);
+    let mut group_tuple = relationship(group.clone());
+    group_tuple.subject_relation = Some("member".into());
+    group_tuple.witness_id = Some(4);
+    let mut member = relationship(object("user", "alice"));
+    member.witness_id = Some(2);
+    let mut parent = relationship(folder.clone());
+    parent.witness_id = Some(9);
+    let mut reader = relationship(object("user", "alice"));
+    reader.witness_id = Some(5);
+
+    let mut resolver = Resolver::default();
+    resolver.insert(document.clone(), "editor", vec![editor]);
+    resolver.insert(document.clone(), "viewer", vec![group_tuple, viewer]);
+    resolver.insert(document.clone(), "parent", vec![parent]);
+    resolver.insert(group, "member", vec![member]);
+    resolver.insert(folder, "reader", vec![reader]);
+
+    assert_eq!(
+        evaluate_with_usage(&program, &request("access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [7]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("constrained"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [3, 7]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("group_access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [2, 4]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("parent_access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [5, 9]
+    );
+}
+
+#[test]
+fn trace_selection_uses_the_first_success_in_resolver_order() {
+    let program = ValidatedPolicyProgram::new(base_program(), &ceilings()).unwrap();
+    let document = object("document", "doc_1");
+    let group_a = object("group", "a");
+    let group_b = object("group", "b");
+    let folder_a = object("folder", "a");
+    let folder_b = object("folder", "b");
+
+    let with_id = |mut relationship: ResolvedRelationship, witness_id| {
+        relationship.witness_id = Some(witness_id);
+        relationship
+    };
+
+    let mut group_tuple_a = with_id(relationship(group_a.clone()), 20);
+    group_tuple_a.subject_relation = Some("member".into());
+    let mut group_tuple_b = with_id(relationship(group_b.clone()), 21);
+    group_tuple_b.subject_relation = Some("member".into());
+
+    let mut resolver = Resolver::default();
+    resolver.insert(
+        document.clone(),
+        "editor",
+        vec![with_id(relationship(object("user", "alice")), 10)],
+    );
+    resolver.insert(
+        document.clone(),
+        "viewer",
+        vec![
+            group_tuple_a,
+            group_tuple_b,
+            with_id(caveated_relationship(object("user", "alice"), 20), 12),
+        ],
+    );
+    resolver.insert(
+        group_a,
+        "member",
+        vec![with_id(relationship(object("user", "alice")), 22)],
+    );
+    resolver.insert(
+        group_b,
+        "member",
+        vec![with_id(relationship(object("user", "alice")), 23)],
+    );
+    resolver.insert(
+        document.clone(),
+        "parent",
+        vec![
+            with_id(relationship(folder_a.clone()), 30),
+            with_id(relationship(folder_b.clone()), 31),
+        ],
+    );
+    resolver.insert(
+        folder_a,
+        "reader",
+        vec![with_id(relationship(object("user", "alice")), 32)],
+    );
+    resolver.insert(
+        folder_b,
+        "reader",
+        vec![with_id(relationship(object("user", "alice")), 33)],
+    );
+
+    assert_eq!(
+        evaluate_with_usage(&program, &request("direct"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [10]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("conditional"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [12]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("group_access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [20, 22]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("parent_access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [30, 32]
+    );
+    assert_eq!(
+        evaluate_with_usage(&program, &request("access"), &resolver)
+            .unwrap()
+            .used_witness_ids,
+        [10]
+    );
+}
+
+#[test]
+fn reused_caveated_witness_is_charged_once_at_the_context_ceiling() {
+    let mut program = base_program();
+    program.limits.max_context_entries = 3;
+    program
+        .permissions
+        .iter_mut()
+        .find(|permission| permission.name == "conditional")
+        .unwrap()
+        .expression = PermissionExpr::AllOf(vec![
+        PermissionExpr::AnyOf(vec![relation_ref("editor"), caveated_relation("viewer")]),
+        caveated_relation("viewer"),
+    ]);
+    let program = ValidatedPolicyProgram::new(program, &ceilings()).unwrap();
+
+    let mut caveated = caveated_relationship(object("user", "alice"), 10);
+    caveated.witness_id = Some(7);
+    let mut resolver = Resolver::default();
+    resolver.insert(object("document", "doc_1"), "viewer", vec![caveated]);
+
+    let outcome = evaluate_with_usage(&program, &request("conditional"), &resolver).unwrap();
+    assert!(outcome.allowed);
+    assert_eq!(outcome.used_witness_ids, [7]);
+}
+
+#[test]
+fn resolver_rejects_duplicate_structural_identity_across_caveat_forms() {
+    let program = ValidatedPolicyProgram::new(base_program(), &ceilings()).unwrap();
+    let mut direct = relationship(object("user", "alice"));
+    direct.witness_id = Some(1);
+    let mut caveated = caveated_relationship(object("user", "alice"), 10);
+    caveated.witness_id = Some(2);
+    let mut resolver = Resolver::default();
+    resolver.insert(
+        object("document", "doc_1"),
+        "viewer",
+        vec![direct, caveated],
+    );
+
+    assert_eq!(
+        evaluate_with_usage(&program, &request("conditional"), &resolver),
+        Err(EvaluationError::InvalidRelationshipData)
+    );
 }
 
 #[test]
@@ -142,12 +362,28 @@ fn caveat_booleans_absorb_only_decisive_missing_inputs() {
 
     assert!(!evaluate(&and_program, &false_branch, &resolver).unwrap());
     assert_eq!(
+        evaluate_with_usage(&and_program, &false_branch, &resolver).map(|outcome| outcome.allowed),
+        Ok(false)
+    );
+    assert_eq!(
         evaluate(&and_program, &true_branch, &resolver),
+        Err(EvaluationError::MissingCaveatInput)
+    );
+    assert_eq!(
+        evaluate_with_usage(&and_program, &true_branch, &resolver),
         Err(EvaluationError::MissingCaveatInput)
     );
     assert!(evaluate(&or_program, &true_branch, &resolver).unwrap());
     assert_eq!(
+        evaluate_with_usage(&or_program, &true_branch, &resolver).map(|outcome| outcome.allowed),
+        Ok(true)
+    );
+    assert_eq!(
         evaluate(&or_program, &false_branch, &resolver),
+        Err(EvaluationError::MissingCaveatInput)
+    );
+    assert_eq!(
+        evaluate_with_usage(&or_program, &false_branch, &resolver),
         Err(EvaluationError::MissingCaveatInput)
     );
 
@@ -159,6 +395,10 @@ fn caveat_booleans_absorb_only_decisive_missing_inputs() {
     mistyped_branch.capability_claims.sort();
     assert_eq!(
         evaluate(&and_program, &mistyped_branch, &resolver),
+        Err(EvaluationError::CaveatInputTypeMismatch)
+    );
+    assert_eq!(
+        evaluate_with_usage(&and_program, &mistyped_branch, &resolver),
         Err(EvaluationError::CaveatInputTypeMismatch)
     );
 }
@@ -174,8 +414,7 @@ fn caveat_context_never_crosses_tuple_boundaries() {
             name: CAVEAT_NAME.into(),
             context: vec![],
         }),
-        merkle_depth: 8,
-        private_input_bytes: 64,
+        witness_id: None,
     };
     let bob = caveated_relationship(object("user", "bob"), 10);
     let mut resolver = Resolver::default();
@@ -188,7 +427,7 @@ fn caveat_context_never_crosses_tuple_boundaries() {
 }
 
 #[test]
-fn runtime_rejects_each_private_input_limit_one_over_boundary() {
+fn runtime_rejects_relationship_witness_limit_one_over_boundary() {
     let document = object("document", "doc_1");
 
     let mut witness_program = base_program();
@@ -207,36 +446,6 @@ fn runtime_rejects_each_private_input_limit_one_over_boundary() {
         evaluate(&witness_program, &request("direct"), &witnesses),
         Err(EvaluationError::BudgetExceeded(
             LimitKind::RelationshipWitnesses
-        ))
-    );
-
-    let mut merkle_program = base_program();
-    merkle_program.limits.max_merkle_depth = 7;
-    let merkle_program = ValidatedPolicyProgram::new(merkle_program, &ceilings()).unwrap();
-    let mut merkle = Resolver::default();
-    merkle.insert(
-        document.clone(),
-        "editor",
-        vec![relationship(object("user", "alice"))],
-    );
-    assert_eq!(
-        evaluate(&merkle_program, &request("direct"), &merkle),
-        Err(EvaluationError::BudgetExceeded(LimitKind::MerkleDepth))
-    );
-
-    let mut private_program = base_program();
-    private_program.limits.max_total_private_input_bytes = 63;
-    let private_program = ValidatedPolicyProgram::new(private_program, &ceilings()).unwrap();
-    let mut private = Resolver::default();
-    private.insert(
-        document,
-        "editor",
-        vec![relationship(object("user", "alice"))],
-    );
-    assert_eq!(
-        evaluate(&private_program, &request("direct"), &private),
-        Err(EvaluationError::BudgetExceeded(
-            LimitKind::TotalPrivateInputBytes
         ))
     );
 }

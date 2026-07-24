@@ -2,12 +2,13 @@ use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
 
 use raziel_policy_ir::CaveatValue;
+use serde::{Deserialize, Serialize};
 
 use crate::{CanonicalEncoder, CanonicalError};
 
 pub const CANONICAL_RELATIONSHIP_ENCODING_VERSION: u32 = 1;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct RelationshipRecord {
     pub resource_type: String,
     pub resource_id: String,
@@ -27,13 +28,13 @@ impl Debug for RelationshipRecord {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct StoredCaveat {
     pub name: String,
     pub context: Vec<StoredContextEntry>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub struct StoredContextEntry {
     pub name: String,
     pub value: CaveatValue,

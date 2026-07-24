@@ -62,8 +62,22 @@ message AuthorizationPublicValues {
   bytes issuance_nullifier = 9;
 }
 
+// AuthorizationContextEntry carries private request-time caveat input. Services
+// convert it to the ADR-0011 canonical request commitment. Protobuf bytes are never
+// commitment input.
+message AuthorizationContextEntry {
+  string name = 1;
+  oneof value {
+    bool bool_value = 2;
+    sint64 int_value = 3;
+    string string_value = 4;
+  }
+}
+
 message CreateCapabilityRequest {
   uint32 format_version = 1;
+  // agent_id is presentation metadata. The proof subject derives from the public
+  // key thumbprint.
   string agent_id = 2;
   bytes agent_public_key = 3;
   string task_id = 4;
@@ -75,6 +89,7 @@ message CreateCapabilityRequest {
   bytes issuance_nonce = 10;
   string snapshot_id = 11;
   bytes request_signature = 12;
+  repeated AuthorizationContextEntry request_context = 13;
 }
 
 message GetCapabilityRequest {
