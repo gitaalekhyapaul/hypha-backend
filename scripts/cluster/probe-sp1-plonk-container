@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+expected_memory_max=${RAZIEL_SP1_PROBE_MEMORY_MAX_BYTES:-268435456}
+cgroup_relative_path=$(
+  awk -F: '$1 == "0" { print $3; found = 1 } END { exit found ? 0 : 1 }' \
+    /proc/self/cgroup
+)
+case "$cgroup_relative_path" in
+  /) cgroup_path=/sys/fs/cgroup ;;
+  /*) cgroup_path="/sys/fs/cgroup$cgroup_relative_path" ;;
+  *)
+    echo "probe cgroup v2 process path is invalid" >&2
+    exit 1
+    ;;
+esac
+
+memory_max_path="$cgroup_path/memory.max"
+memory_peak_path="$cgroup_path/memory.peak"
+memory_current_path="$cgroup_path/memory.current"
+memory_events_path="$cgroup_path/memory.events"
+memory_swap_current_path="$cgroup_path/memory.swap.current"
+memory_swap_max_path="$cgroup_path/memory.swap.max"
+memory_swap_peak_path="$cgroup_path/memory.swap.peak"
+cpu_max_path="$cgroup_path/cpu.max"
+for required_control in \
+  "$memory_max_path" \
+  "$memory_peak_path" \
+  "$memory_current_path" \
+  "$memory_events_path" \
+  "$memory_swap_current_path" \
+  "$memory_swap_max_path" \
+  "$memory_swap_peak_path" \
+  "$cpu_max_path"
+do
+  if [ ! -r "$required_control" ]; then
+    echo "probe cannot read a cgroup v2 control required by the proof runner" >&2
+    exit 1
+  fi
+done
+if [ "$(cat "$memory_max_path")" != "$expected_memory_max" ]; then
+  echo "probe memory cap does not match the requested byte count" >&2
+  exit 1
+fi
+if [ "$(cat "$memory_swap_max_path")" != 0 ]; then
+  echo "probe swap cap is not zero" >&2
+  exit 1
+fi
+if [ "$(stat -f -c %T /tmp)" != tmpfs ]; then
+  echo "probe temporary directory is not tmpfs" >&2
+  exit 1
+fi
+if [ -w /workspace ] || [ -w /opt/sp1/circuits/plonk/v6.1.0 ]; then
+  echo "probe input mounts are not read-only" >&2
+  exit 1
+fi
+for interface_path in /sys/class/net/*; do
+  if [ -r "$interface_path/operstate" ] &&
+    [ "$(basename "$interface_path")" != lo ] &&
+    [ "$(cat "$interface_path/operstate")" != down ]
+  then
+    echo "probe has an active non-loopback network interface" >&2
+    exit 1
+  fi
+done
+if [ "$(wc -l </proc/net/route | tr -d ' ')" != 1 ] ||
+  awk '$NF != "lo" { found = 1 } END { exit found ? 0 : 1 }' /proc/net/ipv6_route
+then
+  echo "probe has a non-loopback network route" >&2
+  exit 1
+fi
+
+printf 'sif_isolation=pass\n'
+printf 'sif_memory_max_bytes=%s\n' "$expected_memory_max"
+printf 'sif_swap_max_bytes=0\n'
+printf 'sif_network=none\n'
+printf 'sif_tmp=tmpfs\n'
+printf 'sif_inputs=read-only\n'
+printf 'sif_cgroup_evidence=complete\n'

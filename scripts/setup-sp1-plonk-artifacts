@@ -1,0 +1,274 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+. ./tools/toolchain-versions.env
+. ./tools/sp1-plonk-artifact.env
+
+archive_directory=.sp1/downloads
+archive_path="$archive_directory/$SP1_CIRCUIT_VERSION-plonk.tar.gz"
+install_base=.sp1/circuits/plonk
+install_path="$install_base/$SP1_CIRCUIT_VERSION"
+staging_path="$install_base/.$SP1_CIRCUIT_VERSION.tmp.$$"
+entry_list="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.entries.$$"
+detail_list="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.details.$$"
+duplicate_list="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.duplicates.$$"
+expected_entry_list="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.expected.$$"
+computed_file_hashes="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.files.$$"
+computed_file_sizes="$archive_directory/.$SP1_CIRCUIT_VERSION-plonk.sizes.$$"
+tracked_file_hashes=tools/sp1-plonk-files.sha256
+tracked_file_sizes=tools/sp1-plonk-files.size
+lock_parent=.sp1/locks
+lock_directory="$lock_parent/sp1-plonk-artifact"
+maximum_entries=1024
+maximum_expanded_bytes=8589934592
+
+cleanup() {
+  rm -f \
+    "$entry_list" \
+    "$detail_list" \
+    "$duplicate_list" \
+    "$expected_entry_list" \
+    "$computed_file_hashes" \
+    "$computed_file_sizes"
+  if [ -d "$staging_path" ]; then
+    rm -rf "$staging_path"
+  fi
+  rmdir "$lock_directory"
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+mkdir -p "$archive_directory" "$install_base" "$lock_parent"
+if ! mkdir "$lock_directory"; then
+  echo "another SP1 Plonk artifact operation holds $lock_directory" >&2
+  exit 1
+fi
+trap cleanup EXIT HUP INT TERM
+
+if [ ! -f "$archive_path" ] ||
+  [ -f "$archive_path.ranges.json" ] ||
+  [ "$(wc -c <"$archive_path" | tr -d ' ')" != "$SP1_PLONK_ARTIFACT_SIZE" ]
+then
+  node ./scripts/download-sp1-plonk-artifact.mjs \
+    "$SP1_PLONK_ARTIFACT_URL" \
+    "$archive_path" \
+    "$SP1_PLONK_ARTIFACT_SIZE"
+fi
+
+actual_size=$(wc -c <"$archive_path" | tr -d ' ')
+if [ "$actual_size" != "$SP1_PLONK_ARTIFACT_SIZE" ]; then
+  echo "Plonk archive size mismatch: expected $SP1_PLONK_ARTIFACT_SIZE, found $actual_size" >&2
+  exit 1
+fi
+
+actual_sha256=$(sha256_file "$archive_path")
+if [ -z "$SP1_PLONK_ARTIFACT_SHA256" ]; then
+  printf 'SP1_PLONK_ARTIFACT_SHA256=%s\n' "$actual_sha256"
+  echo "Pin this digest in tools/sp1-plonk-artifact.env, then rerun this command." >&2
+  exit 2
+fi
+if [ "$actual_sha256" != "$SP1_PLONK_ARTIFACT_SHA256" ]; then
+  corrupt_path="$archive_path.corrupt.$(date -u +%Y%m%dT%H%M%SZ)"
+  mv "$archive_path" "$corrupt_path"
+  rm -f "$archive_path.ranges.json" "$archive_path.ranges.json.tmp"
+  echo "Plonk archive SHA-256 mismatch; moved it to $corrupt_path" >&2
+  exit 1
+fi
+
+if [ "${RAZIEL_SP1_SETUP_DOWNLOAD_ONLY:-0}" = 1 ]; then
+  printf 'Pinned Plonk archive verified at %s\n' "$archive_path"
+  exit 0
+fi
+if [ "$(uname -s)" != Linux ] ||
+  ! tar --version | head -n 1 | grep -Fq "GNU tar"
+then
+  echo "Plonk extraction requires GNU tar in the pinned Linux toolchain container" >&2
+  exit 1
+fi
+
+tar --warning=no-unknown-keyword -tzf "$archive_path" >"$entry_list"
+if [ ! -s "$entry_list" ]; then
+  echo "Plonk archive is empty" >&2
+  exit 1
+fi
+
+printf '%s\n' \
+  ./ \
+  ./._PlonkVerifier.sol \
+  ./._SP1VerifierPlonk.sol \
+  ./._constraints.json \
+  ./._plonk_circuit.bin \
+  ./._plonk_pk.bin \
+  ./._plonk_vk.bin \
+  ./._plonk_witness.json \
+  ./SP1VerifierPlonk.sol \
+  ./plonk_witness.json \
+  ./PlonkVerifier.sol \
+  ./plonk_pk.bin \
+  ./constraints.json \
+  ./plonk_circuit.bin \
+  ./plonk_vk.bin \
+  ._. |
+  LC_ALL=C sort >"$expected_entry_list"
+if ! LC_ALL=C sort "$entry_list" | cmp -s - "$expected_entry_list"; then
+  echo "Plonk archive entries do not match the pinned allowlist" >&2
+  exit 1
+fi
+if awk '
+  function unsafe(name, count, parts, part_index) {
+    if (substr(name, 1, 1) == "/") {
+      return 1
+    }
+    count = split(name, parts, "/")
+    for (part_index = 1; part_index <= count; part_index++) {
+      if (parts[part_index] == "..") {
+        return 1
+      }
+    }
+    return 0
+  }
+  unsafe($0) { print $0; found = 1 }
+  END { exit found ? 0 : 1 }
+' "$entry_list"; then
+  echo "Plonk archive contains an unsafe path" >&2
+  exit 1
+fi
+
+entry_count=$(wc -l <"$entry_list" | tr -d ' ')
+if [ "$entry_count" -gt "$maximum_entries" ]; then
+  echo "Plonk archive exceeds the entry-count limit" >&2
+  exit 1
+fi
+
+LC_ALL=C sort "$entry_list" | uniq -d >"$duplicate_list"
+if [ -s "$duplicate_list" ]; then
+  echo "Plonk archive contains duplicate paths" >&2
+  exit 1
+fi
+
+tar --warning=no-unknown-keyword -tvzf "$archive_path" >"$detail_list"
+if awk '$1 !~ /^[-d]/ { print; found = 1 } END { exit found ? 0 : 1 }' "$detail_list"; then
+  echo "Plonk archive contains a non-file entry" >&2
+  exit 1
+fi
+
+expanded_size=$(awk '$1 ~ /^-/ { total += $3 } END { printf "%.0f", total }' "$detail_list")
+if [ "$expanded_size" -gt "$maximum_expanded_bytes" ]; then
+  echo "Plonk archive exceeds the expanded-size limit" >&2
+  exit 1
+fi
+
+compute_file_hashes() {
+  artifact_directory=$1
+  (
+    cd "$artifact_directory"
+    sha256sum \
+      constraints.json \
+      plonk_circuit.bin \
+      plonk_pk.bin \
+      plonk_vk.bin
+  ) >"$computed_file_hashes"
+}
+
+compute_file_sizes() {
+  artifact_directory=$1
+  for file in \
+    constraints.json \
+    plonk_circuit.bin \
+    plonk_pk.bin \
+    plonk_vk.bin
+  do
+    size=$(wc -c <"$artifact_directory/$file" | tr -d ' ')
+    printf '%s  %s\n' "$size" "$file"
+  done >"$computed_file_sizes"
+}
+
+manifest_path="$install_path/RAZIEL-ARTIFACT-MANIFEST"
+if [ -d "$install_path" ]; then
+  if [ ! -f "$manifest_path" ] ||
+    ! cmp -s tools/sp1-plonk-artifact.env "$manifest_path"
+  then
+    echo "Existing Plonk artifact directory has no matching Raziel manifest" >&2
+    exit 1
+  fi
+  compute_file_hashes "$install_path"
+  compute_file_sizes "$install_path"
+  if [ ! -s "$tracked_file_hashes" ] ||
+    ! cmp -s "$tracked_file_hashes" "$computed_file_hashes"
+  then
+    echo "Existing Plonk artifact files do not match the pinned file hashes" >&2
+    exit 1
+  fi
+  if [ ! -s "$tracked_file_sizes" ] ||
+    ! cmp -s "$tracked_file_sizes" "$computed_file_sizes"
+  then
+    echo "Existing Plonk artifact files do not match the pinned file sizes" >&2
+    exit 1
+  fi
+  installed_file_sizes="$install_path/RAZIEL-FILE-SIZE"
+  if [ -f "$installed_file_sizes" ]; then
+    if ! cmp -s "$tracked_file_sizes" "$installed_file_sizes"; then
+      echo "Existing Plonk artifact size manifest does not match" >&2
+      exit 1
+    fi
+  else
+    cp "$tracked_file_sizes" "$installed_file_sizes"
+    chmod a-w "$installed_file_sizes"
+  fi
+  printf 'Plonk artifacts verified at %s\n' "$install_path"
+  exit 0
+fi
+
+mkdir "$staging_path"
+tar \
+  --extract \
+  --gzip \
+  --file "$archive_path" \
+  --directory "$staging_path" \
+  --warning=no-unknown-keyword \
+  --no-xattrs \
+  --no-same-owner \
+  --no-same-permissions \
+  --delay-directory-restore \
+  --strip-components=1 \
+  --keep-old-files \
+  ./constraints.json \
+  ./plonk_circuit.bin \
+  ./plonk_pk.bin \
+  ./plonk_vk.bin
+compute_file_hashes "$staging_path"
+compute_file_sizes "$staging_path"
+if [ ! -s "$tracked_file_hashes" ]; then
+  echo "Pin these extracted-file hashes in tools/sp1-plonk-files.sha256, then rerun:" >&2
+  cat "$computed_file_hashes"
+  exit 2
+fi
+if ! cmp -s "$tracked_file_hashes" "$computed_file_hashes"; then
+  echo "Extracted Plonk files do not match the pinned file hashes" >&2
+  exit 1
+fi
+if [ ! -s "$tracked_file_sizes" ]; then
+  echo "Pin these extracted-file sizes in tools/sp1-plonk-files.size, then rerun:" >&2
+  cat "$computed_file_sizes"
+  exit 2
+fi
+if ! cmp -s "$tracked_file_sizes" "$computed_file_sizes"; then
+  echo "Extracted Plonk files do not match the pinned file sizes" >&2
+  exit 1
+fi
+cp tools/sp1-plonk-artifact.env "$staging_path/RAZIEL-ARTIFACT-MANIFEST"
+cp "$tracked_file_hashes" "$staging_path/RAZIEL-FILE-SHA256"
+cp "$tracked_file_sizes" "$staging_path/RAZIEL-FILE-SIZE"
+chmod -R a-w "$staging_path"
+mv "$staging_path" "$install_path"
+
+printf 'Plonk artifacts installed at %s\n' "$install_path"

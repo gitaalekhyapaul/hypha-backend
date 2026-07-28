@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/sp1-plonk-common"
+
+repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+cd "$repo_root"
+umask 077
+
+test_executable=$(raziel_prepared_test_executable_path "$repo_root")
+guest_elf=$(raziel_guest_elf_path "$repo_root")
+raziel_stage_run_bundle "$repo_root" "$test_executable" "$guest_elf"

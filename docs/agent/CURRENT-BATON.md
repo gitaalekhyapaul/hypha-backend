@@ -1,14 +1,20 @@
 # Current Engineering Baton
 
 - Baton ID: B-0011
-- State: READY
+- State: ACTIVE
 - Milestone: M3, SP1 execution and proof
-- Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-07-24T07:36:34Z
+- Owner: Codex
+- Started UTC: 2026-07-24T09:01:33Z
+- Resumed UTC: 2026-07-27T10:16:28Z
+- Resumed after Plonk approval UTC: 2026-07-27T19:45:18Z
+- Resumed after maintainer pause UTC: 2026-07-28T11:32:51Z
+- Last updated UTC: 2026-07-28T11:41:08Z
 - Branch: `main`
-- Worktree: B-0010 is archived and ready for its scoped commit. Reconcile Git state
-  before claiming B-0011.
+- Worktree: This B-0011 implementation commit is based on `10fbc88`. It contains
+  accepted ADR-0012, the local Plonk proof path, and secured Slurm plumbing. The
+  approved 7 GiB gate failed three times, and the approved 30 GiB no-swap diagnostic
+  failed once. The proposed 36 GiB gate and the future x86 SIF provenance tuple
+  remain unapproved. No run produced a proof, so M3 remains open.
 
 ## Objective
 
@@ -18,7 +24,7 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 ## Acceptance Criteria
 
-- [ ] One accepted decision record fixes the local proof mode, verification-key ID,
+- [x] One accepted decision record fixes the local proof mode, verification-key ID,
       proof artifact encoding, public-journal handling, and failure rules.
 - [ ] A concrete local `CpuProver` creates a proof without selecting an SP1 network
       prover.
@@ -47,7 +53,12 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - `ARCHITECTURE.md` and `docs/spec/POC-TECHNICAL-SPEC.md`
 - `crates/prover/`
 - Proof fixtures, mutation tests, and benchmark records
-- Cargo metadata only after dependency review and approval
+- `docker-compose.yml` for the isolated capped benchmark service
+- Plonk setup, benchmark, feature-gate, and in-container measurement scripts
+- Cluster preparation, Slurm template, proof-only runners, public result exporter,
+  and runbook
+- `tools/docker/toolchain.Dockerfile` and `tools/toolchain-versions.env`
+- Cargo metadata for the approved exact dependencies
 - Baton records
 
 ## Out of Scope
@@ -67,21 +78,105 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - Inherited: ADR-0001 through ADR-0011.
 - ADR-0011 fixes the guest input, public journal, local execute boundary, and the use
   of local `CpuProver` for this proof-generation slice.
+- Accepted ADR-0012 defines a benchmark-gated Core proof profile, a local
+  `CpuProver`/`LightProver` split, verification-key identity, strict proof artifact
+  bytes, unsafe SP1 environment rejection, and a verifier-owned trusted program key.
+  The maintainer approved the record and its two exact dependencies on 2026-07-27.
+- The approved amendment excludes the SDK version from `verification_key_id`. The
+  proof artifact still binds the SDK version for serialization compatibility.
+- A post-approval security review found no witness masking in the pinned Core prover.
+  Core commits generated traces directly and serializes witness-derived multilinear
+  openings. ADR-0012 now suspends Core capability use until a reviewed
+  zero-knowledge path exists.
+- A follow-up source audit favors Plonk over Groth16 for the first outer-proof
+  experiment. Both paths use the same SP1 native Gnark bridge. Plonk uses the Aztec
+  Ignition universal setup and its release artifact is 2,305,113,029 bytes. Groth16
+  uses a circuit-specific setup and its release artifact is 6,211,807,514 bytes.
+  Groth16's smaller proof and lower on-chain gas do not benefit this local PoC.
+- The proposed Plonk claim is computational zero knowledge. The pinned CPU BN254
+  prover generates random blinding polynomials for the L, R, O, and permutation
+  witness polynomials. SP1 exposes only the program-key hash, committed-values
+  digest, exit code, recursion-key root, and proof nonce as outer public inputs.
+  SP1 does not request Gnark's optional statistical-zero-knowledge mode, so the
+  stronger statistical claim is out of scope.
+- SP1 replaces official Gnark `v0.14.0` with `p4u/gnark` commit
+  `cd7874155e266e08ca8dc247dbc66efb1030bd3b`. Its Go module content is pinned by
+  `go.sum`. The CPU BN254 Plonk prover differs from official `v0.14.0` only by two
+  lint-suppression comments. No cryptographic code differs in that file.
+- The maintainer approved the ADR-0012 Plonk amendment, SP1 `native-gnark`, pinned
+  `libclang-14-dev=1:14.0.6-12`, and the one-time 2,305,113,029-byte setup artifact
+  download with SHA-256 pinning on 2026-07-27.
+- The maintainer allocated 33,600,331,776 bytes to Docker and approved one bounded
+  diagnostic. The container uses a 30 GiB hard cap and a 24 GiB Go soft heap target.
+  A passing run accepts its measured peak. A failed run does not authorize another
+  memory increase.
+- A pre-proof live audit found Docker's default extra 30 GiB swap allowance. The
+  first 30 GiB attempt was stopped before peak memory and produced no artifact.
+  Compose now sets equal memory and memory-plus-swap limits. The runner requires
+  zero cgroup swap, records cgroup events, hashes the exact test binary, and uses an
+  atomic host lock to prevent concurrent benchmark runs.
+- A proposed cluster profile requests one node, four CPUs, 64 GiB scheduler memory,
+  two hours, and at least 60 GiB free disk. The proof process receives an exact
+  36 GiB no-swap cap. This profile is plumbing, not an approved ADR amendment.
+- Cluster preparation may use network access without witness construction. The
+  scheduled proof phase uses the prepared source tree and pinned image, then rejects
+  non-loopback routes, swap, cgroup drift, source drift, and setup drift.
+- A shared NUS cluster may receive only the checked-in synthetic M3 fixture. Real
+  transactions, production relationships, stored caveat values, Merkle openings,
+  and snapshot salts need a separate trust and data-governance decision.
+- The maintainer confirmed NUS uses Slurm and has no Docker support on its nodes.
+  NUS runtime selection rejects Docker. Docker remains supported on a separate
+  independent Linux machine.
+- The approval flag fixes the complete `cluster-36g` profile. Callers cannot
+  override its memory, disk, Go heap, worker count, or benchmark identity.
+- NUS preparation and proving require Slurm. Ambient container-runtime controls fail
+  closed. The Docker standby path accepts only a local Unix-socket daemon.
+- The maintainer approved baking the pinned Rust `1.97.1` Rustfmt and Clippy
+  components into the toolchain image on 2026-07-28. The build receives the existing
+  `RUST_VERSION` pin and installs no unversioned toolchain.
+- The witness-bearing process mounts an owner-only allowlisted run bundle rather than
+  the repository. Preparation and proving share one operation lock, and the public
+  result binds the bundle-manifest digest.
+- M4 must decode and verify remote artifacts in a memory-capped, time-capped child
+  process.
 - B-0010 measured the combined accepted ceiling at 94,608,186 instructions and the
   depth-8 case at 93,284,394 under the provisional 100,000,000 operating maximum.
 
 ## Open Questions and Blockers
 
-- Decision required: select the pinned SP1 proof mode for the PoC artifact. Core,
-  compressed, and succinct on-chain modes have different proof size, runtime, and
-  verification dependencies.
-- Decision required: define `verification_key_id` from stable SP1 verification-key
-  material rather than a display string or process-local object.
-- Decision required: define stable proof bytes for the Protobuf `zk_proof` field and
-  reject alternate or trailing encodings.
-- Measurement required: confirm local ARM64 CPU and memory cost for the selected mode.
+- The approved 7 GiB Plonk gate ended with exit 137 on three runs. Each
+  cgroup peak reached exactly 7,516,192,768 bytes. No proof artifact was produced.
+- The fixed `2^25` Gnark Plonk domain has a source-derived live-memory floor near
+  15.75 GiB before the circuit, witness, FFT, MSM, runtime, and proof buffers.
+- BLOCKED: The Docker VM exposes 33,600,331,776 bytes. The 30 GiB no-swap diagnostic
+  reached exactly 32,212,254,720 bytes and recorded one cgroup OOM kill. No proof
+  artifact was produced.
+- A 36 GiB cap on a project-controlled machine with at least 48 GiB RAM remains the
+  next recommendation. NUS cluster plumbing now supports that cap. The cap is not
+  approved, and the scheduled runner refuses to start without an approval flag.
+- The maintainer confirmed that NUS uses Slurm and does not provide Docker on its
+  nodes. The exact NUS SIF runtime remains unknown. Pinned Apptainer and Singularity
+  paths exist. Docker remains available for a separate independent Linux machine.
+- Until an independent machine is available, all remote execution planning assumes
+  NUS Slurm plus a pinned Apptainer or Singularity SIF. The Docker path remains
+  standby only.
+- A caller-supplied SIF SHA-256 proves handoff consistency but not approved-image
+  provenance. Before proof submission, record and approve the x86 Docker image ID,
+  Docker archive SHA-256, and resulting SIF SHA-256. SIF signing remains a separate
+  dependency and key-management decision.
+- The toolchain definition now includes Rustfmt and Clippy for pinned Rust `1.97.1`.
+  The local Docker daemon is stopped, so the updated image build and component
+  version checks remain pending on the x86 build machine.
+- NUS compute-node outbound HTTPS remains unknown. The witness-free Slurm
+  preparation job needs HTTPS for Cargo dependencies and the pinned setup archive.
+  If egress is blocked, run the complete gate on the independent Docker machine.
+- Hosted or SP1 network proving remains disallowed. It would move the private witness
+  outside Raziel's local trust boundary.
 - SP1's transitive `proc-macro-error2 v2.0.1` emits a Rust future-compatibility
   warning under the pinned toolchain.
+- The host feature-tree rerun is skipped. One unrelated locked package is absent from
+  the host Cargo cache, and the gate requires offline mode. The pinned Docker
+  benchmark runs the same gate before proof generation.
 - ADR-0011 establishes a feature and code-path no-network boundary. M4 must add
   process-level network isolation before a service handles private witness data.
 - Deferred follow-up: carry these items through each baton reset. After the M7 exit
@@ -102,6 +197,128 @@ before `verifierd`, capability job APIs, or gateway wiring.
   boundary fixtures.
 - B-0010 is archived at
   `docs/agent/history/B-0010-sp1-guest-execute-equivalence.md`.
+- Completed a post-restart sanity audit after the earlier `CpuProver` terminal
+  freeze. No Cargo, SP1 runner, or project container remained. The pinned toolchain,
+  guest build, result tests, serial execute suite, and both boundary fixtures passed.
+- Audited the pinned SP1 `6.3.1` proof APIs. `CpuProver` is the concrete local proof
+  path. `LightProver` performs real proof verification without creating proofs.
+- Confirmed SP1 Core proofs grow with shard count, Compressed proofs add recursive
+  aggregation, and Plonk/Groth16 target on-chain verification.
+- Confirmed the SDK proof file format uses bincode `1.3.3` with a
+  trailing-byte-permitting decoder.
+- Confirmed `SP1_DUMP` can write the full private stdin to `stdin.bin` and exit with a
+  success status.
+- Drafted proposed ADR-0012 for maintainer and dependency approval.
+- The maintainer approved ADR-0012 and its exact `bincode 1.3.3` and
+  `sp1-core-executor 6.3.1` dependencies on 2026-07-27.
+- Amended the accepted key-ID formula to bind the circuit version and SP1 program-key
+  digest without binding the SDK release.
+- Implemented the fixed local `CpuProver` profile, circuit-bound key identifier,
+  strict proof artifact codec, unsafe SP1 environment guard, local Core prover, and
+  independent `LightProver` verifier.
+- Bound `LightProver` to a verifier-owned trusted guest key. Request data cannot
+  select the guest ELF or verification key.
+- Added canonical inner-payload re-encoding and panic-to-error containment. Recorded
+  the 64 MiB limit as a wire-byte ceiling rather than a heap-allocation ceiling.
+- Moved the direct authorization case into a shared execute/prove fixture and added
+  proof, key-ID, journal, version, trailing-byte, TEE, malicious-length, and dump
+  rejection coverage.
+- Added a reproducible benchmark wrapper that prebuilds outside the measurement
+  container, applies the 7 GiB cgroup cap, and runs execute, prove, verify, and
+  mutation checks under separate deadlines. It records public timing, size, hardware,
+  version, idle-memory, and peak-memory data.
+- Completed the post-approval privacy review. The pinned Core prover commits main
+  traces without an identified masking step and exposes main-trace multilinear
+  openings. Recorded the security hold in ADR-0012 before any capability emission.
+- Audited both SP1 outer-proof build paths. Native Plonk or Groth16 needs the
+  `native-gnark` SDK feature, the bundled Go/Gnark bridge, bindgen, and libclang.
+  Release proving needs preinstalled circuit artifacts. The SDK otherwise downloads
+  those artifacts during the witness-bearing proof request.
+- Measured the immutable release object headers. The SP1 `v6.1.0` Plonk archive is
+  2,305,113,029 bytes with S3 CRC64NVME `qtkhMmLw/yQ=`. The Groth16 archive is
+  6,211,807,514 bytes with S3 CRC64NVME `YwP5cL7BIIg=`. CRC64 detects corruption but
+  is not the cryptographic supply-chain pin Raziel requires.
+- Audited the exact SP1 Plonk dependency path. The outer circuit has five declared
+  public fields. Its private recursion witness remains private input. The pinned
+  Gnark prover blinds the witness polynomials with fresh field elements before
+  commitment and opening.
+- Compared the fork's CPU BN254 Plonk prover against official Gnark `v0.14.0`. The
+  only differences are two `nolint:staticcheck` comments. The published Gnark
+  private-commitment advisory states that Plonk is not affected, and `v0.14.0` is
+  newer than its first patched release. OSV returned no known advisory for the
+  queried Gnark, Gnark Crypto, Gnark Ignition, or Icicle Gnark versions.
+- Confirmed SP1 calls `plonk.Prove` without
+  `backend.WithStatisticalZeroKnowledge()`. The proposed privacy contract must claim
+  computational zero knowledge only.
+- The maintainer approved the Plonk privacy amendment, native build graph, pinned
+  libclang package, and one-time setup artifact download on 2026-07-27.
+- Downloaded the approved 2,305,113,029-byte Plonk archive and pinned SHA-256
+  `b3e2f5b5dd5ca89675c73975d2d1cc4a0f9e7cde048ec5354dabc7b0694aa39b`.
+- Validated archive paths, entry types, duplicate paths, entry count, and expanded
+  size in the pinned Linux image. Pinned SHA-256 values for the constraints, circuit,
+  proving key, and verification key.
+- Built the pinned ARM64 toolchain with `native-gnark` and
+  `libclang-14-dev=1:14.0.6-12`. The locked feature graph contains `blocking` and
+  `native-gnark`, with no network, CUDA, or experimental SP1 feature.
+- Implemented local Plonk generation, strict canonical proof bytes, wrapper-key hash
+  validation, setup-file streaming hashes, a verifier-owned key, `LightProver`
+  verification, nonce field reduction, and fail-closed mutation tests.
+- The isolated benchmark uses a read-only root and workspace, a private `/tmp`
+  tmpfs, no non-loopback route, a read-only setup mount, one proof job, and exact
+  cgroup limits.
+- The direct execute gate passed at 422,138 instructions in 330 to 366 ms across the
+  recorded attempts.
+- Three Plonk attempts hit the exact 7 GiB limit. Lower trace concurrency, a smaller
+  shard preallocation, four Rust and Go workers, a 5 GiB Go soft heap target, and a
+  2 GiB native executor child limit did not make the outer proof fit.
+- The 30 GiB no-swap diagnostic passed the 422,138-instruction execute gate in 306
+  milliseconds, then reached the exact cgroup cap. The kernel recorded one OOM kill.
+  No proof artifact was produced.
+- Added a clean-clone cluster workflow with separate networked preparation,
+  network-isolated proof execution, and allowlisted public result export.
+- Added a Slurm job template for one node, four CPUs, 64 GiB scheduler memory, and
+  a two-hour wall limit.
+- Added Docker, Apptainer, and Singularity runtime preflight checks. The SIF path
+  requires a caller-supplied SHA-256 pin. The proof runner resolves its nested
+  cgroup-v2 path through `/proc/self/cgroup`.
+- Moved SP1 binaries and the guest Rust toolchain from root-owned home state to
+  world-readable `/opt/raziel/sp1` paths for unprivileged HPC execution.
+- Added a commit-safe Markdown exporter. It rejects dirty source, swap use, OOM
+  events, missing proof gates, and missing mutation checks. It omits hostnames,
+  users, scheduler accounts, scheduler job IDs, internal paths, and raw logs.
+- Consolidated cluster runtime selection, positive-integer validation, and portable
+  SHA-256 handling in one sourced POSIX helper.
+- Removed the hostname and scheduler job ID from the benchmark log itself. Added a
+  repeatable plumbing self-test for exact Compose limits and result redaction.
+- Added a Slurm preparation job for the witness-free networked build stage. The
+  proof job remains a separate offline Slurm job.
+- Bound the preparation handoff to exact SHA-256 values for the compiled proof-test
+  executable, authorization guest ELF, and tracked Plonk setup manifest. The proof
+  job recomputes them and rechecks every setup-file hash and size before execution.
+- NUS now has one scheduler path: Slurm plus a pinned Apptainer or Singularity SIF.
+  An explicit independent-machine profile keeps Docker available.
+- Added a small Slurm probe for runtime discovery, compute-node HTTPS, cgroup-v2
+  memory delegation, zero-swap enforcement, network isolation, and private `/tmp`.
+  Its setup URL check sends only an HTTPS HEAD request and constructs no witness.
+- NUS preparation and proving now require a real Slurm job identifier. An
+  unscheduled login-node invocation fails before container startup.
+- Tightened the public result exporter to one exact cluster profile. It rejects
+  duplicate fields, execution-path drift, malformed identities, unsafe Markdown,
+  inconsistent proof gates, and values beyond the approved ceilings.
+- Fixed the independent review findings for resource-profile overrides, ambient
+  Apptainer and Docker controls, remote Docker contexts, permissive logs, incomplete
+  probe checks, run-bundle privacy, preparation races, and report parsing.
+- Added an owner-only allowlisted proof run bundle. Its manifest covers the proof
+  test, guest ELF, exact source files, runner, and pinned toolchain and setup records.
+- Changed the real verification gate to derive expected public values from the fixed
+  authorization fixture rather than a journal file emitted by the prover.
+- Rejected every `SP1_WORKER_*` setting before proving and verification. The pinned
+  host toolchain no longer attempts Rust component installation during SIF use.
+- Added `--no-eval` and disabled administrator-configured host, home, and current
+  directory mounts for every SIF execution. Only explicit build or proof mounts
+  remain.
+- Rebuilt the release proof test after hardening and restaged its complete run-bundle
+  manifest.
 
 ## Validation Plan
 
@@ -118,7 +335,75 @@ before `verifierd`, capability job APIs, or gateway wiring.
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
 | B-0010 archive | PASS | Bounded guest, public values, execute equality, and cycle measurements | 2026-07-24T07:36:34Z |
-| Not run | B-0011 is unclaimed | Proof generation and verification | 2026-07-24T07:36:34Z |
+| B-0011 claim reconciliation | PASS | Clean `main` at `10fbc88`; scope matches the remaining M3 proof work | 2026-07-24T09:01:33Z |
+| Post-restart process and Compose check | PASS | No exact Cargo process, SP1 executor runner, or running project container | 2026-07-24T09:05:33Z |
+| `pnpm bootstrap:check` and pinned guest build | PASS | ARM64 toolchain pins and authorization guest ELF rebuilt | 2026-07-24T09:05:33Z |
+| `cargo test -p raziel-prover --lib` | PASS, 2 tests | Exit-status and public-journal mismatch checks | 2026-07-24T09:05:33Z |
+| Serial ignored SP1 suite | PASS, 5 tests | Execute cases in 7.60 seconds; boundary cases in 63.25 seconds | 2026-07-24T09:05:33Z |
+| Pinned SP1 `6.3.1` source audit | PASS | Local prover roles, modes, key digest, serialization, memory defaults, and dump behavior identified | 2026-07-24T09:20:01Z |
+| Docker resource query | PASS | 11 CPUs and 8,216,719,360 bytes available to the Linux VM | 2026-07-24T09:20:01Z |
+| `pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt checks after proposed ADR-0012 | 2026-07-24T09:20:01Z |
+| Maintainer approval | PASS | ADR-0012, conditional Core gate, strict artifact, key identity, and two exact dependencies | 2026-07-27T10:16:28Z |
+| Rust `1.97.1` host compile | PASS | `raziel-prover` library and all integration-test targets compile against the locked SP1 `6.3.1` APIs | 2026-07-27T10:38:03Z |
+| `cargo test -p raziel-prover --tests` | PASS, 13 active tests | Artifact, key, profile, nonce, execute-result, and active `SP1_DUMP` checks; six SP1 tests remain ignored | 2026-07-27T10:38:03Z |
+| SP1 SDK feature tree | PASS | `sp1-sdk 6.3.1` has only `blocking`; network, CUDA, and experimental features are absent | 2026-07-27T10:38:03Z |
+| Benchmark script syntax | PASS | Both POSIX shell runners parse with `sh -n` | 2026-07-27T10:38:03Z |
+| Docker availability | BLOCKED | Daemon socket is unavailable; no proof benchmark was started | 2026-07-27T10:38:03Z |
+| `cargo check --locked -p raziel-prover --tests` | PASS | Trusted verifier key ownership, strict artifact codec, guard, prover, verifier, and all test targets compile | 2026-07-27T15:07:59Z |
+| `cargo test --locked -p raziel-prover --lib` | PASS, 13 tests | Artifact, key, profile, nonce, guard, execution-result, and panic-containment tests | 2026-07-27T15:07:59Z |
+| `cargo test --locked -p raziel-prover --tests` | PASS, 14 active and 9 ignored | All active prover tests pass; execute and real-proof tests remain gated on the pinned guest build and capped container | 2026-07-27T15:07:59Z |
+| `cargo clippy --locked -p raziel-prover --tests -- -D warnings` | PASS | Edited Rust code and affected local crates | 2026-07-27T15:07:59Z |
+| `sh -n` benchmark scripts | PASS | Benchmark wrapper, in-container runner, and feature gate | 2026-07-27T15:07:59Z |
+| `docker compose config --quiet` | PASS | Benchmark profile and 7 GiB service configuration parse | 2026-07-27T15:07:59Z |
+| Host feature-tree rerun | SKIPPED | Offline Cargo cache lacks unrelated locked `base64 0.13.1`; Docker gate remains required | 2026-07-27T15:07:59Z |
+| Docker availability recheck | BLOCKED | Daemon socket remains unavailable; no proof benchmark was started | 2026-07-27T15:07:59Z |
+| Pinned Core privacy source review | BLOCKED | Core commits unmasked main traces and serializes witness-derived multilinear openings; no pinned zero-knowledge assurance was found | 2026-07-27T15:14:53Z |
+| SP1 outer-proof source audit | PASS | Native feature, Go and libclang build requirements, release artifact download path, and setup trust identified | 2026-07-27T15:21:29Z |
+| SP1 release artifact headers | PASS | Plonk is 2,305,113,029 bytes; Groth16 is 6,211,807,514 bytes; neither path has SDK cryptographic checksum verification | 2026-07-27T15:21:29Z |
+| Pinned Plonk privacy source review | PASS | Fresh L/R/O/Z blinding, five public inputs, exact fork diff, Go content hashes, and non-statistical mode identified | 2026-07-27T15:26:41Z |
+| Pinned Go advisory query | PASS | OSV returned no known advisory for the four queried module versions; the result does not replace source review of the fork | 2026-07-27T15:26:41Z |
+| Plonk archive download and pin | PASS | 2,305,113,029 bytes; SHA-256 `b3e2f5b5dd5ca89675c73975d2d1cc4a0f9e7cde048ec5354dabc7b0694aa39b` | 2026-07-27T20:14:00Z |
+| Pinned Linux setup install | PASS | Safe archive checks and four per-file SHA-256 pins; installed read-only at `.sp1/circuits/plonk/v6.1.0` | 2026-07-27T20:21:00Z |
+| Docker toolchain bootstrap | PASS | ARM64 Node, Rust, Go, Buf, Protobuf, SP1, native Gnark, and exact libclang package | 2026-07-27T20:25:00Z |
+| `cargo test --locked --offline -p raziel-prover --lib` | PASS, 18 tests | Artifact, setup, key, profile, nonce, guard, execute-result, and panic-containment tests | 2026-07-27T20:32:00Z |
+| Serial ignored SP1 execute suite | PASS, 5 tests | Three execute cases and two boundary cases against the rebuilt guest ELF | 2026-07-27T20:36:00Z |
+| First isolated Plonk attempt | FAIL, exit 137 | 7 GiB cgroup peak; no proof artifact | 2026-07-27T20:48:00Z |
+| Reduced-concurrency Plonk attempt | FAIL, exit 137 | One trace slot, `2^20` shard, four Rust and Go workers; 7 GiB cgroup peak | 2026-07-27T20:56:00Z |
+| 2 GiB executor Plonk attempt | FAIL, exit 137 | Conservative native executor child limit; 7 GiB cgroup peak; no proof artifact | 2026-07-27T21:01:00Z |
+| `cargo test --locked --offline -p raziel-prover --tests` | PASS, 19 active tests | Final artifact, setup, key, profile, nonce, guard, execute-result, panic-containment, and unsafe-environment coverage | 2026-07-27T21:08:02Z |
+| `pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt in the pinned toolchain container | 2026-07-27T21:08:02Z |
+| 30 GiB no-swap Plonk diagnostic | FAIL, exit 137 | Execute passed at 422,138 instructions in 306 ms; proof reached 32,212,254,720 bytes; one cgroup OOM kill; no proof artifact | 2026-07-27T21:43:33Z |
+| Cluster shell syntax and diff check | PASS | Local, Docker, Apptainer, Slurm, setup, and result scripts parse; `git diff --check` passes | 2026-07-28T06:27:26Z |
+| 36 GiB Compose rendering | PASS | Exact 38,654,705,664-byte memory and memory-plus-swap limits; four workers; 24 GiB Go target; no network | 2026-07-28T06:27:26Z |
+| Public result exporter self-test | PASS | Fixed public field allowlist renders; raw proof, journal, witness, hostname, user, account, and job ID remain absent | 2026-07-28T06:27:26Z |
+| Pinned ARM64 toolchain rebuild | PASS | Toolchain archive size and SHA-256 pins pass; image ID `sha256:8139ef8cd17b83b420a9b3fcab6708ef0b205e6716923d8c20c1fa39c77d8122` | 2026-07-28T06:27:26Z |
+| Unprivileged toolchain access | PASS | UID 65534 executes `cargo-prove 6.3.1` and `rustc 1.94.0-dev` from world-readable `/opt/raziel/sp1` | 2026-07-28T06:27:26Z |
+| `cargo test --locked --offline -p raziel-prover --lib` | PASS, 21 tests | Rebuilt pinned image; artifact, setup, key, profile, guard, prover, and verifier units | 2026-07-28T06:27:26Z |
+| SP1 feature gate | PASS | Rebuilt image has only `blocking` and `native-gnark`; network, CUDA, and experimental features remain absent | 2026-07-28T06:27:26Z |
+| `pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt checks after cluster plumbing | 2026-07-28T06:29:50Z |
+| `check-sp1-plonk-plumbing` | PASS | Shared helpers parse; 36 GiB Compose limits render; public report excludes raw hostname and scheduler job ID | 2026-07-28T06:36:30Z |
+| Prepared-artifact handoff check | PASS | Actual proof-test binary, guest ELF, and all four Plonk setup files pass path, type, size, and SHA-256 checks in pinned Linux | 2026-07-28T06:45:34Z |
+| Slurm and runtime policy self-test | PASS | NUS rejects Docker; independent Linux accepts Docker; only Slurm templates remain | 2026-07-28T06:45:34Z |
+| Cluster plumbing and exact-option self-test | PASS | Slurm-only templates, exact runtime option tokens, independent Docker standby, Compose limits, and public-result redaction | 2026-07-28T06:52:05Z |
+| Cluster and benchmark shell syntax | PASS | All current POSIX shell entry points parse with `sh -n`; `git diff --check` passes | 2026-07-28T06:52:05Z |
+| `cargo test --locked --offline -p raziel-prover --tests` in the pinned toolchain | PASS, 22 active and 9 ignored | All active proof codec, setup, key, profile, guard, prover, verifier, and unsafe-environment tests; real proof and guest execution remain gated | 2026-07-28T07:04:54Z |
+| Strict Slurm and result-export self-test | PASS | NUS rejects unscheduled execution; Slurm and independent Docker paths render; duplicate required fields fail closed | 2026-07-28T07:04:54Z |
+| `pnpm format:check` in the pinned toolchain | PASS | Biome, Rustfmt, and Gofmt after scheduler and exporter hardening | 2026-07-28T07:04:54Z |
+| Independent Rust and cluster review | PASS with one external provenance question | Two read-only reviews covered proof semantics, strict decoding, resource controls, container isolation, handoff integrity, and result safety | 2026-07-28T07:23:01Z |
+| Allowlisted run-bundle staging in pinned Linux | PASS | Exact approved file set, per-file SHA-256 checks, no links or special entries, owner-only modes | 2026-07-28T07:23:01Z |
+| Expanded 256 MiB isolation probe in Docker-equivalent cgroup v2 | PASS | Exact memory, zero swap, complete cgroup evidence, read-only mounts, tmpfs, and no network | 2026-07-28T07:23:01Z |
+| Strict profile and runtime-control self-tests | PASS | Memory override, Apptainer bind injection, remote Docker endpoint, and unscheduled NUS path fail closed | 2026-07-28T07:23:01Z |
+| Release proof-test rebuild and run-bundle restage | PASS | Hardened Rust source compiled in release mode; exact binary, guest, runner, source, and tool manifests rehashed | 2026-07-28T07:30:23Z |
+| Final cluster plumbing self-test | PASS | Both execution paths render; wrong profile, duplicate field, and mismatched verification key fail closed | 2026-07-28T07:30:23Z |
+| `cargo fmt --all -- --check` and `git diff --check` | PASS | Hardened Rust code and complete worktree diff | 2026-07-28T07:30:23Z |
+| Latest pinned-container `pnpm format:check` | BLOCKED after Biome pass | Runtime component installation is now disabled; image lacks approved `rustfmt` and `clippy` components | 2026-07-28T07:30:23Z |
+| Pinned-container `pnpm typecheck` split gate | PASS for TypeScript and Rust; Go blocked before compilation | Four TypeScript packages and the Cargo workspace check passed. The offline container has no cached `github.com/authzed/authzed-go@v1.9.0`, so `GOPROXY=off` rejected module lookup without fetching it | 2026-07-28T07:36:30Z |
+| `pnpm -r --if-present test` in the pinned toolchain | PASS, 20 tests | Console, gateway, generated protocol package, and TypeScript SDK | 2026-07-28T07:36:30Z |
+| `cargo test --locked --offline --workspace --exclude raziel-authorization-guest` | PASS | Full non-guest Rust workspace. Five prepared-guest execution tests and four real Plonk proof gates remain ignored by design | 2026-07-28T07:36:30Z |
+| Resume reconciliation and local static checks | PASS | Baton returned to `ACTIVE`; exact Rust `1.97.1` Rustfmt, shell syntax, Node syntax, Compose rendering, cluster plumbing, `git diff --check`, private-string scan, and private-artifact ignore rules | 2026-07-28T11:38:56Z |
+| Focused host Clippy rerun | NOT AVAILABLE | The native Gnark build reached `sp1-recursion-gnark-ffi` and stopped because the host has no Go binary. No Clippy diagnostic was emitted | 2026-07-28T11:38:56Z |
+| Pinned-container Biome, Buf, Gofmt, and Clippy rerun | NOT AVAILABLE | Docker daemon socket is absent after the maintainer pause. No container validation process started | 2026-07-28T11:38:56Z |
+| Pinned Rustfmt and Clippy toolchain amendment | PASS | Maintainer approval recorded; Compose passes `RUST_VERSION` into the image build; Dockerfile installs only Rustfmt and Clippy for exact Rust `1.97.1`; Compose, plumbing, formatting, syntax, and diff checks pass | 2026-07-28T11:41:08Z |
 
 ## Privacy Checks
 
@@ -128,8 +413,20 @@ before `verifierd`, capability job APIs, or gateway wiring.
   data.
 - PASS: B-0010 public values contain only ADR-0011 fields.
 - PASS: The verifier policy source remains its trusted local registry.
-- NOT APPLICABLE: Independent proof verification is the B-0011 and M4 work.
+- PENDING: The independent `LightProver` path compiles and its failure checks pass.
+  The approved memory cap prevented creation of a real proof.
+- PASS: Core remains excluded from agent-facing and verifier-facing capabilities.
+- BLOCKED: The approved Plonk path needs a real proof and mutation run on a machine
+  that can satisfy a revised memory decision.
 - PASS: Real transaction data and private runtime artifacts remain outside Git.
+- PASS: The cluster result exporter copies only public aggregate fields and source
+  identities. Raw scheduler and proof logs remain ignored.
+- PASS: The benchmark log itself omits hostname and scheduler job ID.
+- PASS: The NUS path is limited to the synthetic M3 fixture pending a separate
+  decision for any real or production-derived data.
+- PASS: The witness-bearing container receives only the allowlisted run bundle and
+  pinned setup directory. It does not receive the repository or ignored private
+  files.
 
 ## Risks and Private-Data Notes
 
@@ -144,6 +441,13 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 ## Exact Next Action
 
-After the B-0010 commit, claim B-0011, inspect the pinned SP1 `6.3.1` local proving,
-verification, key, and serialization APIs, then draft ADR-0012 choices for maintainer
-approval before implementation.
+Push or transfer this immutable implementation commit to a clean NUS clone, then
+submit
+`scripts/cluster/slurm-probe-sp1-plonk` to identify the container runtime,
+compute-node HTTPS, and SIF isolation support. Build the clean x86_64 image and SIF,
+then record the Docker image ID, source archive SHA-256, and SIF SHA-256 for
+maintainer review. Obtain approval for the SIF provenance tuple and the proposed
+36 GiB Plonk cap. Then submit the proof-only job inside a 64 GiB Slurm allocation.
+Keep the independent Docker machine as the standby path. A later commit adds only
+the generated public Markdown result and baton closure. Do not use real data, hosted
+proving, or Core as a capability gate.

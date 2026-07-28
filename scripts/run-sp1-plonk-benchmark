@@ -1,0 +1,249 @@
+#!/bin/sh
+set -eu
+umask 077
+
+. /workspace/tools/toolchain-versions.env
+. /workspace/tools/sp1-plonk-artifact.env
+(
+  cd /workspace
+  sha256sum --check --strict RAZIEL-RUN-BUNDLE-SHA256
+)
+
+expected_memory_max=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-32212254720}
+expected_worker_threads=${RAZIEL_SP1_EXPECTED_WORKER_THREADS:-4}
+expected_go_memory_limit=${RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT:-24GiB}
+benchmark_profile=${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}
+cgroup_relative_path=$(awk -F: '$1 == "0" { print $3; found = 1 } END { exit found ? 0 : 1 }' /proc/self/cgroup)
+case "$cgroup_relative_path" in
+  /*) ;;
+  *)
+    echo "cgroup v2 process path is invalid" >&2
+    exit 1
+    ;;
+esac
+if [ "$cgroup_relative_path" = / ]; then
+  cgroup_path=/sys/fs/cgroup
+else
+  cgroup_path="/sys/fs/cgroup$cgroup_relative_path"
+fi
+memory_max_path="$cgroup_path/memory.max"
+memory_peak_path="$cgroup_path/memory.peak"
+memory_current_path="$cgroup_path/memory.current"
+memory_events_path="$cgroup_path/memory.events"
+memory_swap_current_path="$cgroup_path/memory.swap.current"
+memory_swap_max_path="$cgroup_path/memory.swap.max"
+memory_swap_peak_path="$cgroup_path/memory.swap.peak"
+cpu_max_path="$cgroup_path/cpu.max"
+plonk_artifact_directory="$SP1_PLONK_CIRCUIT_PATH/v6.1.0"
+test_executable=$(cat target/raziel-sp1-plonk-test-executable)
+
+case "$expected_memory_max" in
+  *[!0-9]* | "")
+    echo "expected memory limit must use an exact byte count" >&2
+    exit 1
+    ;;
+esac
+case "$expected_worker_threads" in
+  *[!0-9]* | "" | 0)
+    echo "expected worker count must be a positive integer" >&2
+    exit 1
+    ;;
+esac
+
+for forbidden_env in \
+  SP1_DUMP \
+  SP1_RECORD_WRITE_DIR \
+  TRACE_FILE \
+  DUMP_ELF_OUTPUT \
+  SP1_RECORD_MAX_ARITY_INPUT \
+  SP1_RECORD_SHRINK_INPUT \
+  WITHOUT_VK_VERIFICATION \
+  SP1_CIRCUIT_MODE
+do
+  if printenv "$forbidden_env" >/dev/null 2>&1; then
+    echo "$forbidden_env must be absent for the proof benchmark" >&2
+    exit 1
+  fi
+done
+if env | awk -F= '$1 ~ /^SP1_WORKER_/ { found = 1 } END { exit found ? 0 : 1 }'; then
+  echo "SP1 worker environment settings must be absent for the proof benchmark" >&2
+  exit 1
+fi
+
+if [ ! -d "$plonk_artifact_directory" ] ||
+  [ -w "$plonk_artifact_directory" ] ||
+  [ -w /workspace ]
+then
+  echo "proof inputs and workspace must be mounted read-only" >&2
+  exit 1
+fi
+if [ "$(stat -f -c %T /tmp)" != tmpfs ]; then
+  echo "proof temporary files must use tmpfs" >&2
+  exit 1
+fi
+for interface_path in /sys/class/net/*; do
+  if [ -r "$interface_path/operstate" ] &&
+    [ "$(basename "$interface_path")" != lo ] &&
+    [ "$(cat "$interface_path/operstate")" != down ]
+  then
+    echo "proof container must not have an active non-loopback interface" >&2
+    exit 1
+  fi
+done
+if [ "$(wc -l </proc/net/route | tr -d ' ')" != 1 ] ||
+  awk '$NF != "lo" { found = 1 } END { exit found ? 0 : 1 }' /proc/net/ipv6_route
+then
+  echo "proof container must not have a non-loopback route" >&2
+  exit 1
+fi
+case "$test_executable" in
+  /workspace/target/release/deps/prove_guest-*) ;;
+  *)
+    echo "unexpected proof test executable path" >&2
+    exit 1
+    ;;
+esac
+if [ ! -x "$test_executable" ]; then
+  echo "prepared proof test executable is unavailable" >&2
+  exit 1
+fi
+(
+  cd "$plonk_artifact_directory"
+  sha256sum --check /workspace/tools/sp1-plonk-files.sha256
+)
+
+if [ ! -r "$memory_max_path" ] ||
+  [ ! -r "$memory_peak_path" ] ||
+  [ ! -r "$memory_current_path" ] ||
+  [ ! -r "$memory_events_path" ] ||
+  [ ! -r "$memory_swap_current_path" ] ||
+  [ ! -r "$memory_swap_max_path" ] ||
+  [ ! -r "$memory_swap_peak_path" ]
+then
+  echo "cgroup v2 memory and swap limits are required for the proof benchmark" >&2
+  exit 1
+fi
+
+memory_max=$(cat "$memory_max_path")
+if [ "$memory_max" != "$expected_memory_max" ]; then
+  echo "expected a $expected_memory_max byte container limit, found $memory_max bytes" >&2
+  exit 1
+fi
+memory_swap_max=$(cat "$memory_swap_max_path")
+if [ "$memory_swap_max" != 0 ]; then
+  echo "proof benchmark swap must be disabled, found $memory_swap_max bytes" >&2
+  exit 1
+fi
+if [ "$GOMAXPROCS" != "$expected_worker_threads" ] ||
+  [ "$RAYON_NUM_THREADS" != "$expected_worker_threads" ] ||
+  [ "$GOMEMLIMIT" != "$expected_go_memory_limit" ]
+then
+  echo "proof worker and Go heap limits do not match the benchmark profile" >&2
+  exit 1
+fi
+
+artifact_directory=$(mktemp -d /tmp/raziel-sp1-plonk.XXXXXX)
+export RAZIEL_SP1_BENCHMARK_DIRECTORY="$artifact_directory"
+mkdir -p "$HOME"
+
+report_peak_memory() {
+  status=$?
+  trap - EXIT
+  printf 'container_memory_peak_bytes=%s\n' "$(cat "$memory_peak_path")"
+  printf 'container_swap_peak_bytes=%s\n' "$(cat "$memory_swap_peak_path")"
+  printf 'container_memory_events:\n'
+  cat "$memory_events_path"
+  printf 'container_oom_count=%s\n' \
+    "$(awk '$1 == "oom" { print $2 }' "$memory_events_path")"
+  printf 'container_oom_kill_count=%s\n' \
+    "$(awk '$1 == "oom_kill" { print $2 }' "$memory_events_path")"
+  rm -f \
+    "$artifact_directory/plonk-proof.bin" \
+    "$artifact_directory/verification-key-id.txt"
+  rmdir "$artifact_directory"
+  exit "$status"
+}
+trap report_peak_memory EXIT
+
+printf 'benchmark_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf 'benchmark_profile=%s\n' "$benchmark_profile"
+printf 'architecture=%s\n' "$(uname -m)"
+printf 'kernel_name=%s\n' "$(uname -s)"
+printf 'kernel_release=%s\n' "$(uname -r)"
+printf 'cpu_model=%s\n' \
+  "$(awk -F ': ' '/^(model name|Model|Hardware)/ { print $2; exit }' /proc/cpuinfo)"
+printf 'available_cpus=%s\n' "$(getconf _NPROCESSORS_ONLN)"
+printf 'cpu_max=%s\n' "$(cat "$cpu_max_path")"
+printf 'container_memory_max_bytes=%s\n' "$memory_max"
+printf 'container_memory_idle_bytes=%s\n' "$(cat "$memory_current_path")"
+printf 'container_swap_max_bytes=%s\n' "$memory_swap_max"
+printf 'container_swap_idle_bytes=%s\n' "$(cat "$memory_swap_current_path")"
+printf 'go_max_procs=%s\n' "$GOMAXPROCS"
+printf 'go_memory_limit=%s\n' "$GOMEMLIMIT"
+printf 'rayon_threads=%s\n' "$RAYON_NUM_THREADS"
+printf 'vm_memory_total_bytes=%s\n' \
+  "$(awk '/^MemTotal:/ { printf "%.0f\n", $2 * 1024 }' /proc/meminfo)"
+printf 'cargo_profile=release\n'
+case "$(uname -m)" in
+  aarch64) rust_host=aarch64-unknown-linux-gnu ;;
+  x86_64) rust_host=x86_64-unknown-linux-gnu ;;
+  *)
+    echo "unsupported benchmark architecture" >&2
+    exit 1
+    ;;
+esac
+rust_toolchain_bin="/usr/local/rustup/toolchains/$RUST_VERSION-$rust_host/bin"
+printf 'rustc_version=%s\n' "$("$rust_toolchain_bin/rustc" --version)"
+printf 'cargo_version=%s\n' "$("$rust_toolchain_bin/cargo" --version)"
+printf 'cargo_prove_version=sp1 %s commit %s\n' \
+  "$SP1_VERSION" \
+  "$SP1_CARGO_PROVE_COMMIT"
+printf 'sp1_plonk_setup_archive_sha256=%s\n' "$SP1_PLONK_ARTIFACT_SHA256"
+source_hash_manifest=$(mktemp /tmp/raziel-sp1-source-hashes.XXXXXX)
+sha256sum \
+  Cargo.lock \
+  Cargo.toml \
+  crates/prover/Cargo.toml \
+  crates/prover/src/*.rs \
+  crates/prover/tests/prove_guest.rs \
+  crates/prover/tests/support/authorization_fixture.rs \
+  "$test_executable" \
+  target/elf-compilation/riscv64im-succinct-zkvm-elf/release/raziel-authorization-guest \
+  >"$source_hash_manifest"
+cat "$source_hash_manifest"
+printf 'source_manifest_sha256=%s\n' \
+  "$(sha256sum "$source_hash_manifest" | awk '{print $1}')"
+rm "$source_hash_manifest"
+
+timeout --signal=TERM --kill-after=10s 2m \
+  "$test_executable" \
+  local_plonk_execute_records_the_adr_0012_fixture_metrics \
+  --ignored \
+  --exact \
+  --nocapture \
+  --test-threads=1
+
+timeout --signal=TERM --kill-after=30s 60m \
+  "$test_executable" \
+  local_plonk_proof_passes_the_adr_0012_generation_gate \
+  --ignored \
+  --exact \
+  --nocapture \
+  --test-threads=1
+
+timeout --signal=TERM --kill-after=10s 60s \
+  "$test_executable" \
+  local_plonk_verification_passes_the_adr_0012_gate \
+  --ignored \
+  --exact \
+  --nocapture \
+  --test-threads=1
+
+timeout --signal=TERM --kill-after=30s 5m \
+  "$test_executable" \
+  local_plonk_proof_mutations_fail_closed \
+  --ignored \
+  --exact \
+  --nocapture \
+  --test-threads=1
+printf 'adr_0012_mutations=pass\n'

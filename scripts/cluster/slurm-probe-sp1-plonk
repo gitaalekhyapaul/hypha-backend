@@ -1,0 +1,18 @@
+#!/bin/sh
+#SBATCH --job-name=raziel-sp1-probe
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --time=00:10:00
+#SBATCH --export=ALL
+#SBATCH --output=/dev/null
+
+set -eu
+umask 077
+
+cd "${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is required}"
+mkdir -p .sp1/slurm-logs
+chmod 700 .sp1 .sp1/slurm-logs
+exec >".sp1/slurm-logs/raziel-sp1-probe-${SLURM_JOB_ID:?}.log" 2>&1
+exec ./scripts/cluster/probe-sp1-plonk-slurm

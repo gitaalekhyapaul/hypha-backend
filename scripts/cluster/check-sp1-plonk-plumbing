@@ -1,0 +1,215 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+cd "$repo_root"
+
+test_id="cluster-plumbing-self-test-$$"
+raw_report=".sp1/benchmarks/$test_id.pass.log"
+public_report="docs/benchmarks/sp1-plonk/$test_id.md"
+independent_raw_report=".sp1/benchmarks/$test_id-independent.pass.log"
+independent_public_report="docs/benchmarks/sp1-plonk/$test_id-independent.md"
+wrong_profile_report=".sp1/benchmarks/$test_id-wrong-profile.pass.log"
+wrong_profile_public_report="docs/benchmarks/sp1-plonk/$test_id-wrong-profile.md"
+wrong_key_report=".sp1/benchmarks/$test_id-wrong-key.pass.log"
+wrong_key_public_report="docs/benchmarks/sp1-plonk/$test_id-wrong-key.md"
+compose_output=$(mktemp /tmp/raziel-sp1-cluster-compose.XXXXXX)
+
+cleanup() {
+  rm -f \
+    "$raw_report" \
+    "$public_report" \
+    "$independent_raw_report" \
+    "$independent_public_report" \
+    "$wrong_profile_report" \
+    "$wrong_profile_public_report" \
+    "$wrong_key_report" \
+    "$wrong_key_public_report" \
+    "$compose_output"
+}
+trap cleanup EXIT HUP INT TERM
+
+sh -n \
+  scripts/benchmark-sp1-plonk \
+  scripts/run-sp1-plonk-benchmark \
+  scripts/cluster/sp1-plonk-common \
+  scripts/cluster/check-sp1-plonk-host \
+  scripts/cluster/probe-sp1-plonk-container \
+  scripts/cluster/probe-sp1-plonk-slurm \
+  scripts/cluster/prepare-sp1-plonk \
+  scripts/cluster/stage-sp1-plonk-run-bundle \
+  scripts/cluster/run-sp1-plonk \
+  scripts/cluster/render-sp1-plonk-result \
+  scripts/cluster/slurm-probe-sp1-plonk \
+  scripts/cluster/slurm-prepare-sp1-plonk \
+  scripts/cluster/slurm-sp1-plonk
+node --check scripts/download-sp1-plonk-artifact.mjs
+
+. ./scripts/cluster/sp1-plonk-common
+if raziel_runtime_help_has_option '  --memory-swap string' --memory; then
+  echo "runtime option matching confused --memory with --memory-swap" >&2
+  exit 1
+fi
+if ! raziel_runtime_help_has_option '  --memory string' --memory; then
+  echo "runtime option matching rejected an exact --memory option" >&2
+  exit 1
+fi
+
+if (
+  export RAZIEL_CLUSTER_NAME=nus
+  export RAZIEL_CLUSTER_RUNTIME=docker
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_resolve_cluster_runtime
+) >/dev/null 2>&1; then
+  echo "NUS runtime selection accepted Docker" >&2
+  exit 1
+fi
+independent_runtime=$(
+  export RAZIEL_CLUSTER_NAME=independent
+  export RAZIEL_CLUSTER_RUNTIME=docker
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_resolve_cluster_runtime
+)
+if [ "$independent_runtime" != docker ]; then
+  echo "independent-machine runtime selection rejected Docker" >&2
+  exit 1
+fi
+if (
+  unset SLURM_JOB_ID
+  export RAZIEL_CLUSTER_NAME=nus
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_resolve_cluster_scheduler
+) >/dev/null 2>&1; then
+  echo "NUS scheduler selection accepted an unscheduled invocation" >&2
+  exit 1
+fi
+nus_scheduler=$(
+  export RAZIEL_CLUSTER_NAME=nus
+  export SLURM_JOB_ID=123
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_resolve_cluster_scheduler
+)
+if [ "$nus_scheduler" != slurm ]; then
+  echo "NUS scheduler selection rejected a Slurm invocation" >&2
+  exit 1
+fi
+if (
+  export RAZIEL_SP1_MEMORY_LIMIT=68719476736
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_configure_cluster_proof_profile
+) >/dev/null 2>&1; then
+  echo "cluster profile accepted a memory override" >&2
+  exit 1
+fi
+if (
+  export APPTAINER_BIND=/tmp:/workspace
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_reject_container_runtime_environment
+) >/dev/null 2>&1; then
+  echo "cluster preflight accepted an Apptainer bind override" >&2
+  exit 1
+fi
+if (
+  . ./scripts/cluster/sp1-plonk-common
+  raziel_require_local_docker_endpoint tcp://remote.example:2376
+) >/dev/null 2>&1; then
+  echo "cluster preflight accepted a remote Docker endpoint" >&2
+  exit 1
+fi
+raziel_require_local_docker_endpoint unix:///var/run/docker.sock
+
+RAZIEL_SP1_MEMORY_LIMIT=38654705664 \
+  RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES=38654705664 \
+  RAZIEL_SP1_BENCHMARK_PROFILE=cluster-36g \
+  docker compose \
+  --env-file tools/toolchain-versions.env \
+  --profile benchmark \
+  config >"$compose_output"
+
+grep -Fq 'mem_limit: "38654705664"' "$compose_output"
+grep -Fq 'memswap_limit: "38654705664"' "$compose_output"
+grep -Fq 'network_mode: none' "$compose_output"
+grep -Fq 'RAZIEL_SP1_BENCHMARK_PROFILE: cluster-36g' "$compose_output"
+grep -Fq 'RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "38654705664"' "$compose_output"
+
+mkdir -p .sp1/benchmarks
+{
+  printf 'benchmark_profile=cluster-36g\n'
+  printf 'cluster_name=nus\n'
+  printf 'cluster_scheduler=slurm\n'
+  printf 'cluster_job_id=secret-job-id\n'
+  printf 'host_kernel=Linux secret-hostname\n'
+  printf 'source_git_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+  printf 'source_git_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'
+  printf 'source_git_status=clean\n'
+  printf 'container_runtime=apptainer\n'
+  printf 'container_runtime_version=1.4.2\n'
+  printf 'toolchain_image_id=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n'
+  printf 'benchmark_utc=2026-07-28T00:00:00Z\n'
+  printf 'architecture=x86_64\n'
+  printf 'kernel_release=6.8.0\n'
+  printf 'cpu_model=Test CPU\n'
+  printf 'available_cpus=4\n'
+  printf 'cpu_max=400000 100000\n'
+  printf 'container_memory_max_bytes=38654705664\n'
+  printf 'container_swap_max_bytes=0\n'
+  printf 'go_max_procs=4\n'
+  printf 'go_memory_limit=24GiB\n'
+  printf 'rayon_threads=4\n'
+  printf 'rustc_version=rustc 1.97.1\n'
+  printf 'cargo_version=cargo 1.97.1\n'
+  printf 'cargo_prove_version=sp1 6.3.1 commit 8252c29\n'
+  printf 'sp1_plonk_setup_archive_sha256=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n'
+  printf 'source_manifest_sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n'
+  printf 'run_bundle_manifest_sha256=1111111111111111111111111111111111111111111111111111111111111111\n'
+  printf 'adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=422138, execute_ms=306\n'
+  printf 'adr_0012_prove: proof_mode=plonk, prove_ms=120000, artifact_bytes=4096, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
+  printf 'adr_0012_verify: proof_mode=plonk, verify_ms=300, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
+  printf 'adr_0012_mutations=pass\n'
+  printf 'container_memory_peak_bytes=34359738368\n'
+  printf 'container_swap_peak_bytes=0\n'
+  printf 'container_oom_count=0\n'
+  printf 'container_oom_kill_count=0\n'
+} >"$raw_report"
+
+./scripts/cluster/render-sp1-plonk-result "$raw_report" >/dev/null
+grep -Fq 'Status: pass' "$public_report"
+grep -Fq 'Memory limit bytes | `38654705664`' "$public_report"
+if grep -Eq 'secret-job-id|secret-hostname' "$public_report"; then
+  echo "public benchmark result copied a private raw-log identifier" >&2
+  exit 1
+fi
+sed \
+  -e 's/^cluster_name=nus$/cluster_name=independent/' \
+  -e 's/^cluster_scheduler=slurm$/cluster_scheduler=unscheduled/' \
+  -e 's/^container_runtime=apptainer$/container_runtime=docker/' \
+  "$raw_report" >"$independent_raw_report"
+./scripts/cluster/render-sp1-plonk-result "$independent_raw_report" >/dev/null
+grep -Fq 'Status: pass' "$independent_public_report"
+
+sed 's/^benchmark_profile=cluster-36g$/benchmark_profile=cluster-64g/' \
+  "$raw_report" >"$wrong_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted a different resource profile" >&2
+  exit 1
+fi
+awk '
+  /^adr_0012_verify:/ {
+    sub(/f+$/, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  }
+  { print }
+' "$raw_report" >"$wrong_key_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_key_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted mismatched proof and verification keys" >&2
+  exit 1
+fi
+
+rm "$public_report"
+printf 'source_git_status=clean\n' >>"$raw_report"
+if ./scripts/cluster/render-sp1-plonk-result "$raw_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted a duplicate required field" >&2
+  exit 1
+fi
+
+printf 'sp1_plonk_cluster_plumbing=pass\n'

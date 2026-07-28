@@ -14,16 +14,24 @@ ARG PNPM_VERSION
 ARG PROTOC_VERSION
 ARG PROTOBUF_COMPILER_PACKAGE_VERSION
 ARG LIBPROTOBUF_DEV_PACKAGE_VERSION
+ARG LIBCLANG_14_DEV_PACKAGE_VERSION
+ARG RUST_VERSION
 ARG SP1_VERSION
 ARG SP1_CARGO_PROVE_AMD64_SHA256
 ARG SP1_CARGO_PROVE_ARM64_SHA256
+ARG SP1_RUST_TOOLCHAIN_TAG
+ARG SP1_RUST_TOOLCHAIN_AMD64_SIZE
+ARG SP1_RUST_TOOLCHAIN_AMD64_SHA256
+ARG SP1_RUST_TOOLCHAIN_ARM64_SIZE
+ARG SP1_RUST_TOOLCHAIN_ARM64_SHA256
 ARG TARGETARCH
 
 COPY --from=node-toolchain /usr/local/ /usr/local/
 COPY --from=go-toolchain /usr/local/go/ /usr/local/go/
 COPY --from=buf-toolchain /usr/local/bin/buf /usr/local/bin/buf
 
-ENV PATH="/root/.sp1/bin:/pnpm/bin:/usr/local/go/bin:${PATH}" \
+ENV PATH="/opt/raziel/sp1/bin:/pnpm/bin:/usr/local/go/bin:${PATH}" \
+    LIBCLANG_PATH="/usr/lib/llvm-14/lib" \
     PNPM_HOME="/pnpm" \
     PNPM_STORE_DIR="/pnpm/store"
 
@@ -31,25 +39,52 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
       "protobuf-compiler=${PROTOBUF_COMPILER_PACKAGE_VERSION}" \
       "libprotobuf-dev=${LIBPROTOBUF_DEV_PACKAGE_VERSION}" \
+      "libclang-14-dev=${LIBCLANG_14_DEV_PACKAGE_VERSION}" \
     && test "$(protoc --version)" = "libprotoc ${PROTOC_VERSION}" \
     && test -f /usr/include/google/protobuf/empty.proto \
     && rm -rf /var/lib/apt/lists/* \
     && npm install --global "pnpm@${PNPM_VERSION}" \
     && mkdir -p "${PNPM_STORE_DIR}" \
     && pnpm config set store-dir "${PNPM_STORE_DIR}" --global \
-    && mkdir -p /root/.sp1/bin \
+    && mkdir -p /opt/raziel/sp1/bin \
     && case "${TARGETARCH}" in \
-      amd64) sp1_sha256="${SP1_CARGO_PROVE_AMD64_SHA256}" ;; \
-      arm64) sp1_sha256="${SP1_CARGO_PROVE_ARM64_SHA256}" ;; \
+      amd64) \
+        sp1_sha256="${SP1_CARGO_PROVE_AMD64_SHA256}"; \
+        sp1_rust_target=x86_64-unknown-linux-gnu; \
+        sp1_rust_size="${SP1_RUST_TOOLCHAIN_AMD64_SIZE}"; \
+        sp1_rust_sha256="${SP1_RUST_TOOLCHAIN_AMD64_SHA256}" \
+        ;; \
+      arm64) \
+        sp1_sha256="${SP1_CARGO_PROVE_ARM64_SHA256}"; \
+        sp1_rust_target=aarch64-unknown-linux-gnu; \
+        sp1_rust_size="${SP1_RUST_TOOLCHAIN_ARM64_SIZE}"; \
+        sp1_rust_sha256="${SP1_RUST_TOOLCHAIN_ARM64_SHA256}" \
+        ;; \
       *) echo "unsupported SP1 architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
       "https://github.com/succinctlabs/sp1/releases/download/v${SP1_VERSION}/cargo_prove_v${SP1_VERSION}_linux_${TARGETARCH}.tar.gz" \
       --output /tmp/cargo-prove.tar.gz \
     && echo "${sp1_sha256}  /tmp/cargo-prove.tar.gz" | sha256sum --check --strict - \
-    && tar -xzf /tmp/cargo-prove.tar.gz -C /root/.sp1/bin \
+    && tar -xzf /tmp/cargo-prove.tar.gz -C /opt/raziel/sp1/bin \
     && rm /tmp/cargo-prove.tar.gz \
-    && cargo prove install-toolchain \
+    && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      "https://github.com/succinctlabs/rust/releases/download/${SP1_RUST_TOOLCHAIN_TAG}/rust-toolchain-${sp1_rust_target}.tar.gz" \
+      --output /tmp/sp1-rust-toolchain.tar.gz \
+    && test "$(stat --format=%s /tmp/sp1-rust-toolchain.tar.gz)" = "${sp1_rust_size}" \
+    && echo "${sp1_rust_sha256}  /tmp/sp1-rust-toolchain.tar.gz" \
+      | sha256sum --check --strict - \
+    && mkdir -p /opt/raziel/sp1/toolchains/pinned \
+    && tar -xzf /tmp/sp1-rust-toolchain.tar.gz -C /opt/raziel/sp1/toolchains/pinned \
+    && rm /tmp/sp1-rust-toolchain.tar.gz \
+    && find \
+      /opt/raziel/sp1/toolchains/pinned/bin \
+      "/opt/raziel/sp1/toolchains/pinned/lib/rustlib/${sp1_rust_target}/bin" \
+      -type f -exec chmod 755 {} + \
+    && chmod -R a+rX /opt/raziel/sp1 \
+    && rustup component add --toolchain "${RUST_VERSION}" rustfmt clippy \
+    && rustup toolchain link succinct /opt/raziel/sp1/toolchains/pinned \
+    && test "$(rustc +succinct --version)" = "rustc 1.94.0-dev" \
     && cargo prove --version
 
 WORKDIR /workspace

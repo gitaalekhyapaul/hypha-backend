@@ -1,0 +1,309 @@
+# Shared POSIX helpers for the SP1 Plonk cluster scripts.
+
+raziel_sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+raziel_require_positive_integer() {
+  case "$2" in
+    *[!0-9]* | "" | 0)
+      echo "$1 must be a positive integer byte count" >&2
+      exit 1
+      ;;
+  esac
+}
+
+raziel_runtime_help_has_option() {
+  runtime_help=$1
+  required_option=$2
+  printf '%s\n' "$runtime_help" |
+    grep -Eq "(^|[[:space:],])${required_option}([[:space:],]|$)"
+}
+
+raziel_resolve_cluster_runtime() {
+  requested_runtime=${RAZIEL_CLUSTER_RUNTIME:-auto}
+  allow_docker=1
+  if [ "${RAZIEL_CLUSTER_NAME:-}" = nus ]; then
+    allow_docker=0
+  fi
+  case "$requested_runtime" in
+    auto)
+      if [ -n "${RAZIEL_SP1_TOOLCHAIN_SIF:-}" ] &&
+        command -v apptainer >/dev/null 2>&1
+      then
+        printf 'apptainer\n'
+      elif [ -n "${RAZIEL_SP1_TOOLCHAIN_SIF:-}" ] &&
+        command -v singularity >/dev/null 2>&1
+      then
+        printf 'singularity\n'
+      elif [ "$allow_docker" = 1 ] &&
+        command -v docker >/dev/null 2>&1
+      then
+        printf 'docker\n'
+      elif command -v apptainer >/dev/null 2>&1; then
+        printf 'apptainer\n'
+      elif command -v singularity >/dev/null 2>&1; then
+        printf 'singularity\n'
+      else
+        echo "Docker, Apptainer, or Singularity is required" >&2
+        exit 1
+      fi
+      ;;
+    docker | apptainer | singularity)
+      if [ "$requested_runtime" = docker ] && [ "$allow_docker" = 0 ]; then
+        echo "NUS cluster nodes do not support Docker" >&2
+        exit 1
+      fi
+      printf '%s\n' "$requested_runtime"
+      ;;
+    *)
+      echo "RAZIEL_CLUSTER_RUNTIME must be auto, docker, apptainer, or singularity" >&2
+      exit 1
+      ;;
+  esac
+}
+
+raziel_resolve_cluster_scheduler() {
+  if [ -n "${SLURM_JOB_ID:-}" ]; then
+    printf 'slurm\n'
+  elif [ "${RAZIEL_CLUSTER_NAME:-}" = nus ]; then
+    echo "NUS cluster work must run inside a Slurm job" >&2
+    exit 1
+  else
+    printf 'unscheduled\n'
+  fi
+}
+
+raziel_configure_cluster_proof_profile() {
+  if [ "${RAZIEL_SP1_BENCHMARK_PROFILE:-cluster-36g}" != cluster-36g ] ||
+    [ "${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-38654705664}" != 38654705664 ] ||
+    [ "${RAZIEL_SP1_MEMORY_LIMIT:-38654705664}" != 38654705664 ] ||
+    [ "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}" != 24GiB ] ||
+    [ "${RAZIEL_SP1_WORKER_THREADS:-4}" != 4 ] ||
+    [ "${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-51539607552}" != 51539607552 ] ||
+    [ "${RAZIEL_SP1_MINIMUM_DISK_BYTES:-64424509440}" != 64424509440 ]
+  then
+    echo "the approved cluster-36g proof profile cannot be overridden" >&2
+    exit 1
+  fi
+
+  RAZIEL_SP1_BENCHMARK_PROFILE=cluster-36g
+  RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES=38654705664
+  RAZIEL_SP1_MEMORY_LIMIT=38654705664
+  RAZIEL_SP1_GO_MEMORY_LIMIT=24GiB
+  RAZIEL_SP1_WORKER_THREADS=4
+  RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES=51539607552
+  RAZIEL_SP1_MINIMUM_DISK_BYTES=64424509440
+  export \
+    RAZIEL_SP1_BENCHMARK_PROFILE \
+    RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES \
+    RAZIEL_SP1_MEMORY_LIMIT \
+    RAZIEL_SP1_GO_MEMORY_LIMIT \
+    RAZIEL_SP1_WORKER_THREADS \
+    RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES \
+    RAZIEL_SP1_MINIMUM_DISK_BYTES
+}
+
+raziel_reject_container_runtime_environment() {
+  runtime_control_names=$(
+    env |
+      awk -F= '
+        $1 ~ /^(APPTAINER|SINGULARITY)(_|$)/ ||
+        $1 ~ /^(DOCKER|COMPOSE|BUILDX)(_|$)/ {
+          print $1
+        }
+      '
+  )
+  if [ -n "$runtime_control_names" ]; then
+    echo "ambient container-runtime control variables are not permitted" >&2
+    exit 1
+  fi
+}
+
+raziel_require_local_docker_endpoint() {
+  case "$1" in
+    unix://*) ;;
+    *)
+      echo "the independent Docker proof path requires a local Unix-socket daemon" >&2
+      exit 1
+      ;;
+  esac
+}
+
+raziel_prepared_test_executable_path() {
+  repo_root=$1
+  marker_path="$repo_root/target/raziel-sp1-plonk-test-executable"
+  if [ ! -f "$marker_path" ]; then
+    echo "prepared proof-test executable marker is missing" >&2
+    return 1
+  fi
+  container_path=$(cat "$marker_path")
+  case "$container_path" in
+    /workspace/target/release/deps/prove_guest-*) ;;
+    *)
+      echo "prepared proof-test executable path is invalid" >&2
+      return 1
+      ;;
+  esac
+  host_path="$repo_root/${container_path#/workspace/}"
+  if [ ! -x "$host_path" ] || [ -L "$host_path" ]; then
+    echo "prepared proof-test executable is missing, linked, or not executable" >&2
+    return 1
+  fi
+  printf '%s\n' "$host_path"
+}
+
+raziel_guest_elf_path() {
+  repo_root=$1
+  guest_elf="$repo_root/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/raziel-authorization-guest"
+  if [ ! -f "$guest_elf" ] || [ -L "$guest_elf" ]; then
+    echo "prepared authorization guest ELF is missing or linked" >&2
+    return 1
+  fi
+  printf '%s\n' "$guest_elf"
+}
+
+raziel_verify_plonk_setup() {
+  repo_root=$1
+  setup_path="$repo_root/.sp1/circuits/plonk/v6.1.0"
+  hash_manifest="$repo_root/tools/sp1-plonk-files.sha256"
+  size_manifest="$repo_root/tools/sp1-plonk-files.size"
+  if [ ! -d "$setup_path" ] ||
+    [ -L "$setup_path" ] ||
+    [ ! -f "$hash_manifest" ] ||
+    [ -L "$hash_manifest" ] ||
+    [ ! -f "$size_manifest" ] ||
+    [ -L "$size_manifest" ]
+  then
+    echo "prepared Plonk setup or its tracked manifests are missing" >&2
+    return 1
+  fi
+  (
+    cd "$setup_path"
+    sha256sum --check "$hash_manifest"
+  )
+  while read -r expected_size file_name; do
+    case "$expected_size:$file_name" in
+      *[!A-Za-z0-9:._-]* | :*)
+        echo "Plonk setup size manifest is invalid" >&2
+        return 1
+        ;;
+    esac
+    file_path="$setup_path/$file_name"
+    if [ ! -f "$file_path" ] || [ -L "$file_path" ]; then
+      echo "Plonk setup file is missing or linked: $file_name" >&2
+      return 1
+    fi
+    actual_size=$(wc -c <"$file_path" | tr -d ' ')
+    if [ "$actual_size" != "$expected_size" ]; then
+      echo "Plonk setup file has the wrong size: $file_name" >&2
+      return 1
+    fi
+  done <"$size_manifest"
+}
+
+raziel_stage_run_bundle() {
+  repo_root=$1
+  test_executable=$2
+  guest_elf=$3
+  bundle_path="$repo_root/.sp1/cluster/sp1-plonk-run-bundle"
+  staging_path="$bundle_path.tmp.$$"
+  file_list="$staging_path/.file-list"
+  test_executable_relative=${test_executable#"$repo_root/"}
+  guest_elf_relative=${guest_elf#"$repo_root/"}
+
+  if [ "$test_executable_relative" = "$test_executable" ] ||
+    [ "$guest_elf_relative" = "$guest_elf" ]
+  then
+    echo "prepared proof artifacts must be inside the repository" >&2
+    return 1
+  fi
+
+  rm -rf "$staging_path"
+  mkdir -p "$staging_path"
+  : >"$file_list"
+  for relative_path in \
+    Cargo.lock \
+    Cargo.toml \
+    crates/prover/Cargo.toml \
+    crates/prover/src/*.rs \
+    crates/prover/tests/prove_guest.rs \
+    crates/prover/tests/support/authorization_fixture.rs \
+    scripts/run-sp1-plonk-benchmark \
+    target/raziel-sp1-plonk-test-executable \
+    "$test_executable_relative" \
+    "$guest_elf_relative" \
+    tools/sp1-plonk-artifact.env \
+    tools/sp1-plonk-files.sha256 \
+    tools/toolchain-versions.env
+  do
+    source_path="$repo_root/$relative_path"
+    destination_path="$staging_path/$relative_path"
+    if [ ! -f "$source_path" ] || [ -L "$source_path" ]; then
+      echo "run-bundle input is missing or linked: $relative_path" >&2
+      rm -rf "$staging_path"
+      return 1
+    fi
+    mkdir -p "$(dirname "$destination_path")"
+    cp "$source_path" "$destination_path"
+    printf '%s\n' "$relative_path" >>"$file_list"
+  done
+
+  (
+    cd "$staging_path"
+    while read -r relative_path; do
+      sha256sum "$relative_path"
+    done <.file-list
+  ) >"$staging_path/RAZIEL-RUN-BUNDLE-SHA256"
+  rm "$file_list"
+  chmod -R go-rwx "$staging_path"
+  chmod u+x \
+    "$staging_path/scripts/run-sp1-plonk-benchmark" \
+    "$staging_path/$test_executable_relative"
+  rm -rf "$bundle_path"
+  mv "$staging_path" "$bundle_path"
+  raziel_verify_run_bundle "$bundle_path"
+  printf '%s\n' "$bundle_path"
+}
+
+raziel_verify_run_bundle() {
+  bundle_path=$1
+  if [ ! -d "$bundle_path" ] ||
+    [ -L "$bundle_path" ] ||
+    [ ! -f "$bundle_path/RAZIEL-RUN-BUNDLE-SHA256" ] ||
+    [ -L "$bundle_path/RAZIEL-RUN-BUNDLE-SHA256" ]
+  then
+    echo "prepared proof run bundle is missing or linked" >&2
+    return 1
+  fi
+
+  (
+    expected_files=$(mktemp /tmp/raziel-sp1-bundle-expected.XXXXXX)
+    actual_files=$(mktemp /tmp/raziel-sp1-bundle-actual.XXXXXX)
+    cleanup_bundle_lists() {
+      rm -f "$expected_files" "$actual_files"
+    }
+    trap cleanup_bundle_lists EXIT HUP INT TERM
+    cd "$bundle_path"
+    sha256sum --check --strict RAZIEL-RUN-BUNDLE-SHA256 >&2
+    if find . ! -type d ! -type f -print -quit | grep -q .; then
+      echo "prepared proof run bundle contains a linked or special entry" >&2
+      exit 1
+    fi
+    {
+      awk '{ print $2 }' RAZIEL-RUN-BUNDLE-SHA256
+      printf 'RAZIEL-RUN-BUNDLE-SHA256\n'
+    } | LC_ALL=C sort >"$expected_files"
+    find . -type f -print |
+      sed 's#^\./##' |
+      LC_ALL=C sort >"$actual_files"
+    if ! cmp -s "$expected_files" "$actual_files"; then
+      echo "prepared proof run bundle contains an unapproved file" >&2
+      exit 1
+    fi
+  )
+}

@@ -1,0 +1,138 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/sp1-plonk-common"
+
+repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+cd "$repo_root"
+umask 077
+. ./tools/toolchain-versions.env
+
+export RAZIEL_CLUSTER_PREFLIGHT_PHASE=prepare
+export RAZIEL_CLUSTER_NAME=${RAZIEL_CLUSTER_NAME:-nus}
+
+./scripts/cluster/check-sp1-plonk-host
+runtime=$(raziel_resolve_cluster_runtime)
+lock_parent=.sp1/locks
+operation_lock="$lock_parent/sp1-plonk-operation"
+mkdir -p "$lock_parent"
+chmod 700 .sp1 "$lock_parent"
+if ! mkdir "$operation_lock"; then
+  echo "another SP1 Plonk preparation or proof operation is active" >&2
+  exit 1
+fi
+trap 'rmdir "$operation_lock"' EXIT HUP INT TERM
+
+case "$runtime" in
+  docker)
+    export HOST_UID=$(id -u)
+    export HOST_GID=$(id -g)
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      build toolchain
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm \
+      --user "$HOST_UID:$HOST_GID" \
+      --env RAZIEL_SP1_SETUP_DOWNLOAD_ONLY=1 \
+      toolchain \
+      ./scripts/setup-sp1-plonk-artifacts
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      pnpm bootstrap:check
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      cargo fetch --locked
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm \
+      --user "$HOST_UID:$HOST_GID" \
+      toolchain \
+      ./scripts/setup-sp1-plonk-artifacts
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      ./scripts/check-sp1-features
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      cargo prove build --locked --packages raziel-authorization-guest
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      node ./scripts/prepare-sp1-plonk-benchmark.mjs
+    toolchain_image_id=$(docker image inspect --format '{{.Id}}' raziel-toolchain:m0)
+    runtime_version=$(docker version --format '{{.Client.Version}}/{{.Server.Version}}')
+    ;;
+  apptainer | singularity)
+    cache_root=.sp1/apptainer-cache
+    cargo_registry="$repo_root/$cache_root/cargo-registry"
+    cargo_git="$repo_root/$cache_root/cargo-git"
+    pnpm_store="$repo_root/$cache_root/pnpm-store"
+    mkdir -p "$cargo_registry" "$cargo_git" "$pnpm_store"
+
+    run_build_step() {
+      "$runtime" exec \
+        --cleanenv \
+        --containall \
+        --no-eval \
+        --no-mount hostfs,home,cwd \
+        --bind "$repo_root:/workspace:rw" \
+        --bind "$cargo_registry:/usr/local/cargo/registry:rw" \
+        --bind "$cargo_git:/usr/local/cargo/git:rw" \
+        --bind "$pnpm_store:/pnpm/store:rw" \
+        --pwd /workspace \
+        --env HOME=/tmp/raziel-home \
+        --env RUSTUP_TOOLCHAIN="$RUST_VERSION" \
+        "$RAZIEL_SP1_TOOLCHAIN_SIF" \
+        "$@"
+    }
+
+    run_build_step \
+      env RAZIEL_SP1_SETUP_DOWNLOAD_ONLY=1 \
+      ./scripts/setup-sp1-plonk-artifacts
+    run_build_step pnpm bootstrap:check
+    run_build_step cargo fetch --locked
+    run_build_step ./scripts/setup-sp1-plonk-artifacts
+    run_build_step ./scripts/check-sp1-features
+    run_build_step cargo prove build --locked --packages raziel-authorization-guest
+    run_build_step node ./scripts/prepare-sp1-plonk-benchmark.mjs
+    toolchain_image_id="sha256:$(raziel_sha256_file "$RAZIEL_SP1_TOOLCHAIN_SIF")"
+    runtime_version=$("$runtime" version)
+    ;;
+esac
+
+test_executable=$(raziel_prepared_test_executable_path "$repo_root")
+guest_elf=$(raziel_guest_elf_path "$repo_root")
+raziel_verify_plonk_setup "$repo_root"
+test_executable_sha256=$(raziel_sha256_file "$test_executable")
+guest_elf_sha256=$(raziel_sha256_file "$guest_elf")
+setup_manifest_sha256=$(raziel_sha256_file tools/sp1-plonk-files.sha256)
+run_bundle=$(./scripts/cluster/stage-sp1-plonk-run-bundle)
+run_bundle_manifest_sha256=$(
+  raziel_sha256_file "$run_bundle/RAZIEL-RUN-BUNDLE-SHA256"
+)
+
+prepared_directory=.sp1/cluster
+prepared_path="$prepared_directory/sp1-plonk-prepared"
+prepared_tmp="$prepared_path.tmp.$$"
+mkdir -p "$prepared_directory"
+{
+  printf 'source_git_commit=%s\n' "$(git rev-parse HEAD)"
+  printf 'source_git_tree=%s\n' "$(git rev-parse 'HEAD^{tree}')"
+  printf 'container_runtime=%s\n' "$runtime"
+  printf 'container_runtime_version=%s\n' "$runtime_version"
+  printf 'toolchain_image_id=%s\n' "$toolchain_image_id"
+  printf 'test_executable_sha256=%s\n' "$test_executable_sha256"
+  printf 'guest_elf_sha256=%s\n' "$guest_elf_sha256"
+  printf 'plonk_setup_manifest_sha256=%s\n' "$setup_manifest_sha256"
+  printf 'run_bundle_manifest_sha256=%s\n' "$run_bundle_manifest_sha256"
+  printf 'prepared_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >"$prepared_tmp"
+mv "$prepared_tmp" "$prepared_path"
+
+printf 'cluster_preparation=pass\n'
+printf 'cluster_preparation_record=%s\n' "$prepared_path"

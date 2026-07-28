@@ -1,0 +1,119 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/sp1-plonk-common"
+
+repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+cd "$repo_root"
+umask 077
+. ./tools/sp1-plonk-artifact.env
+
+if [ "$(uname -s)" != Linux ] || [ -z "${SLURM_JOB_ID:-}" ]; then
+  echo "submit this probe through Slurm on a Linux compute node" >&2
+  exit 1
+fi
+
+if command -v apptainer >/dev/null 2>&1; then
+  runtime=apptainer
+elif command -v singularity >/dev/null 2>&1; then
+  runtime=singularity
+else
+  echo "NUS Slurm node exposes neither Apptainer nor Singularity" >&2
+  exit 1
+fi
+
+runtime_help=$("$runtime" exec --help)
+for required_option in \
+  --bind \
+  --cleanenv \
+  --containall \
+  --env \
+  --memory \
+  --memory-swap \
+  --net \
+  --no-eval \
+  --no-mount \
+  --network \
+  --pwd
+do
+  if ! raziel_runtime_help_has_option "$runtime_help" "$required_option"; then
+    echo "$runtime exec does not expose required option $required_option" >&2
+    exit 1
+  fi
+done
+
+printf 'slurm_probe=pass\n'
+printf 'architecture=%s\n' "$(uname -m)"
+printf 'container_runtime=%s\n' "$runtime"
+printf 'container_runtime_version=%s\n' "$("$runtime" version)"
+
+if command -v curl >/dev/null 2>&1; then
+  if curl \
+    --proto '=https' \
+    --tlsv1.2 \
+    --head \
+    --fail \
+    --silent \
+    --show-error \
+    --location \
+    --max-time 20 \
+    "$SP1_PLONK_ARTIFACT_URL" \
+    >/dev/null
+  then
+    printf 'https_egress=pass\n'
+  else
+    printf 'https_egress=blocked\n'
+  fi
+else
+  printf 'https_egress=unavailable_no_curl\n'
+fi
+
+if [ -z "${RAZIEL_SP1_TOOLCHAIN_SIF:-}" ]; then
+  printf 'sif_isolation=skipped_no_sif\n'
+  exit 0
+fi
+case "${RAZIEL_SP1_TOOLCHAIN_SIF_SHA256:-}" in
+  [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*)
+    ;;
+  *)
+    echo "RAZIEL_SP1_TOOLCHAIN_SIF_SHA256 must pin the probe SIF" >&2
+    exit 1
+    ;;
+esac
+actual_sif_sha256=$(raziel_sha256_file "$RAZIEL_SP1_TOOLCHAIN_SIF")
+if [ "${#RAZIEL_SP1_TOOLCHAIN_SIF_SHA256}" -ne 64 ] ||
+  [ "$actual_sif_sha256" != "$RAZIEL_SP1_TOOLCHAIN_SIF_SHA256" ]
+then
+  echo "the probe SIF does not match its pinned SHA-256" >&2
+  exit 1
+fi
+
+probe_memory_max=268435456
+probe_input="$repo_root/.sp1/cluster/probe-input"
+probe_workspace="$repo_root/.sp1/cluster/probe-workspace"
+mkdir -p "$probe_input" "$probe_workspace"
+chmod 700 \
+  "$repo_root/.sp1" \
+  "$repo_root/.sp1/cluster" \
+  "$probe_input" \
+  "$probe_workspace"
+printf 'synthetic probe input\n' >"$probe_input/README"
+chmod 600 "$probe_input/README"
+cp ./scripts/cluster/probe-sp1-plonk-container "$probe_workspace/probe-sp1-plonk-container"
+chmod 700 "$probe_workspace/probe-sp1-plonk-container"
+"$runtime" exec \
+  --cleanenv \
+  --containall \
+  --net \
+  --network none \
+  --no-eval \
+  --no-mount hostfs,home,cwd \
+  --memory "$probe_memory_max" \
+  --memory-swap "$probe_memory_max" \
+  --bind "$probe_workspace:/workspace:ro" \
+  --bind "$probe_input:/opt/sp1/circuits/plonk/v6.1.0:ro" \
+  --pwd /workspace \
+  --env RAZIEL_SP1_PROBE_MEMORY_MAX_BYTES="$probe_memory_max" \
+  "$RAZIEL_SP1_TOOLCHAIN_SIF" \
+  ./probe-sp1-plonk-container

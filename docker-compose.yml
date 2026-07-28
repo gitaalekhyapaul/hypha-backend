@@ -14,10 +14,19 @@ x-toolchain-service: &toolchain-service
       PROTOC_VERSION: ${PROTOC_VERSION}
       PROTOBUF_COMPILER_PACKAGE_VERSION: ${PROTOBUF_COMPILER_PACKAGE_VERSION}
       LIBPROTOBUF_DEV_PACKAGE_VERSION: ${LIBPROTOBUF_DEV_PACKAGE_VERSION}
+      LIBCLANG_14_DEV_PACKAGE_VERSION: ${LIBCLANG_14_DEV_PACKAGE_VERSION}
+      RUST_VERSION: ${RUST_VERSION}
       SP1_VERSION: ${SP1_VERSION}
       SP1_CARGO_PROVE_AMD64_SHA256: ${SP1_CARGO_PROVE_AMD64_SHA256}
       SP1_CARGO_PROVE_ARM64_SHA256: ${SP1_CARGO_PROVE_ARM64_SHA256}
+      SP1_RUST_TOOLCHAIN_TAG: ${SP1_RUST_TOOLCHAIN_TAG}
+      SP1_RUST_TOOLCHAIN_AMD64_SIZE: ${SP1_RUST_TOOLCHAIN_AMD64_SIZE}
+      SP1_RUST_TOOLCHAIN_AMD64_SHA256: ${SP1_RUST_TOOLCHAIN_AMD64_SHA256}
+      SP1_RUST_TOOLCHAIN_ARM64_SIZE: ${SP1_RUST_TOOLCHAIN_ARM64_SIZE}
+      SP1_RUST_TOOLCHAIN_ARM64_SHA256: ${SP1_RUST_TOOLCHAIN_ARM64_SHA256}
   working_dir: /workspace
+  environment:
+    RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
   volumes:
     - .:/workspace
     - cargo-registry:/usr/local/cargo/registry
@@ -45,6 +54,43 @@ services:
     <<: *toolchain-service
     command: ["sleep", "infinity"]
     profiles: ["tools"]
+
+  sp1-plonk-benchmark:
+    <<: *toolchain-service
+    command: ["./scripts/run-sp1-plonk-benchmark"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    read_only: true
+    environment:
+      CARGO_NET_OFFLINE: "true"
+      GOMAXPROCS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      GOMEMLIMIT: "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}"
+      HOME: /tmp/raziel-home
+      RAYON_NUM_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      RAZIEL_SP1_BENCHMARK_PROFILE: "${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}"
+      RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT: "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}"
+      RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-32212254720}"
+      RAZIEL_SP1_EXPECTED_WORKER_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+      SP1_PLONK_CIRCUIT_PATH: /opt/sp1/circuits/plonk
+    mem_limit: "${RAZIEL_SP1_MEMORY_LIMIT:-30g}"
+    memswap_limit: "${RAZIEL_SP1_MEMORY_LIMIT:-30g}"
+    network_mode: none
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777
+    volumes:
+      - type: bind
+        source: ${RAZIEL_SP1_WORKSPACE_SOURCE:-.}
+        target: /workspace
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.sp1/circuits/plonk/v6.1.0
+        target: /opt/sp1/circuits/plonk/v6.1.0
+        read_only: true
+        bind:
+          create_host_path: false
+    profiles: ["benchmark"]
 
   spicedb:
     image: ${SPICEDB_IMAGE}

@@ -1,0 +1,147 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/sp1-plonk-common"
+
+repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+cd "$repo_root"
+
+memory_limit_bytes=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-38654705664}
+minimum_host_memory_bytes=${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-51539607552}
+minimum_disk_bytes=${RAZIEL_SP1_MINIMUM_DISK_BYTES:-64424509440}
+preflight_phase=${RAZIEL_CLUSTER_PREFLIGHT_PHASE:-prove}
+
+raziel_reject_container_runtime_environment
+
+raziel_require_positive_integer \
+  RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES \
+  "$memory_limit_bytes"
+raziel_require_positive_integer \
+  RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES \
+  "$minimum_host_memory_bytes"
+raziel_require_positive_integer \
+  RAZIEL_SP1_MINIMUM_DISK_BYTES \
+  "$minimum_disk_bytes"
+
+if [ "$(uname -s)" != Linux ]; then
+  echo "the cluster benchmark requires Linux" >&2
+  exit 1
+fi
+case "$(uname -m)" in
+  x86_64 | aarch64) ;;
+  *)
+    echo "the cluster benchmark requires x86_64 or aarch64" >&2
+    exit 1
+    ;;
+esac
+
+case "$preflight_phase" in
+  prepare | prove) ;;
+  *)
+    echo "RAZIEL_CLUSTER_PREFLIGHT_PHASE must be prepare or prove" >&2
+    exit 1
+    ;;
+esac
+
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+  echo "the cluster benchmark requires a clean Git worktree" >&2
+  exit 1
+fi
+
+available_cpus=$(getconf _NPROCESSORS_ONLN)
+if [ "$preflight_phase" = prove ] && [ "$available_cpus" -lt 4 ]; then
+  echo "the cluster allocation must expose at least four CPUs" >&2
+  exit 1
+fi
+
+host_memory_bytes=$(awk '/^MemTotal:/ { printf "%.0f\n", $2 * 1024 }' /proc/meminfo)
+if [ "$preflight_phase" = prove ] &&
+  [ "$host_memory_bytes" -lt "$minimum_host_memory_bytes" ]
+then
+  echo "the cluster allocation must expose at least $minimum_host_memory_bytes bytes" >&2
+  exit 1
+fi
+
+available_disk_bytes=$(
+  df -Pk "$repo_root" |
+    awk 'NR == 2 { printf "%.0f\n", $4 * 1024 }'
+)
+if [ "$available_disk_bytes" -lt "$minimum_disk_bytes" ]; then
+  echo "the cluster worktree needs at least $minimum_disk_bytes free bytes" >&2
+  exit 1
+fi
+
+runtime=$(raziel_resolve_cluster_runtime)
+case "$runtime" in
+  docker)
+    docker version >/dev/null
+    docker compose version >/dev/null
+    docker_context=$(docker context show)
+    docker_endpoint=$(
+      docker context inspect \
+        --format '{{.Endpoints.docker.Host}}' \
+        "$docker_context"
+    )
+    raziel_require_local_docker_endpoint "$docker_endpoint"
+    runtime_version=$(docker version --format '{{.Client.Version}}/{{.Server.Version}}')
+    ;;
+  apptainer | singularity)
+    if [ -z "${RAZIEL_SP1_TOOLCHAIN_SIF:-}" ] ||
+      [ ! -r "$RAZIEL_SP1_TOOLCHAIN_SIF" ] ||
+      [ -L "$RAZIEL_SP1_TOOLCHAIN_SIF" ]
+    then
+      echo "RAZIEL_SP1_TOOLCHAIN_SIF must name a readable pinned SIF image" >&2
+      exit 1
+    fi
+    case "${RAZIEL_SP1_TOOLCHAIN_SIF_SHA256:-}" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*)
+        ;;
+      *)
+        echo "RAZIEL_SP1_TOOLCHAIN_SIF_SHA256 must pin the SIF image" >&2
+        exit 1
+        ;;
+    esac
+    actual_sif_sha256=$(raziel_sha256_file "$RAZIEL_SP1_TOOLCHAIN_SIF")
+    if [ "${#RAZIEL_SP1_TOOLCHAIN_SIF_SHA256}" -ne 64 ] ||
+      [ "$actual_sif_sha256" != "$RAZIEL_SP1_TOOLCHAIN_SIF_SHA256" ]
+    then
+      echo "the SIF image does not match its pinned SHA-256" >&2
+      exit 1
+    fi
+    runtime_help=$("$runtime" exec --help)
+    for required_option in \
+      --bind \
+      --cleanenv \
+      --containall \
+      --env \
+      --memory \
+      --memory-swap \
+      --net \
+      --no-eval \
+      --no-mount \
+      --network \
+      --pwd
+    do
+      if ! raziel_runtime_help_has_option "$runtime_help" "$required_option"; then
+        echo "$runtime exec does not expose required option $required_option" >&2
+        exit 1
+      fi
+    done
+    runtime_version=$("$runtime" version)
+    printf 'toolchain_sif_sha256=%s\n' "$actual_sif_sha256"
+    ;;
+esac
+
+scheduler=$(raziel_resolve_cluster_scheduler)
+
+printf 'cluster_preflight=pass\n'
+printf 'cluster_preflight_phase=%s\n' "$preflight_phase"
+printf 'cluster_scheduler=%s\n' "$scheduler"
+printf 'cluster_runtime=%s\n' "$runtime"
+printf 'cluster_runtime_version=%s\n' "$runtime_version"
+printf 'cluster_architecture=%s\n' "$(uname -m)"
+printf 'cluster_available_cpus=%s\n' "$available_cpus"
+printf 'cluster_host_memory_bytes=%s\n' "$host_memory_bytes"
+printf 'cluster_available_disk_bytes=%s\n' "$available_disk_bytes"
+printf 'proof_memory_limit_bytes=%s\n' "$memory_limit_bytes"

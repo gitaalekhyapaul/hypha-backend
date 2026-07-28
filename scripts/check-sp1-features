@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+feature_tree=$(cargo tree --locked --offline -e features -i sp1-sdk@6.3.1)
+
+case "$feature_tree" in
+  *'sp1-sdk feature "blocking"'*) ;;
+  *)
+    echo "SP1 blocking feature is missing" >&2
+    exit 1
+    ;;
+esac
+
+case "$feature_tree" in
+  *'sp1-sdk feature "native-gnark"'*) ;;
+  *)
+    echo "SP1 native-gnark feature is missing" >&2
+    exit 1
+    ;;
+esac
+
+for forbidden_feature in network cuda experimental; do
+  case "$feature_tree" in
+    *"sp1-sdk feature \"$forbidden_feature\""*)
+      echo "forbidden SP1 feature is active: $forbidden_feature" >&2
+      exit 1
+      ;;
+  esac
+done
+
+printf '%s\n' "$feature_tree"
