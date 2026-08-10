@@ -149,6 +149,7 @@ oom_count=$(required_value container_oom_count)
 oom_kill_count=$(required_value container_oom_kill_count)
 go_max_procs=$(required_value go_max_procs)
 go_memory_limit=$(required_value go_memory_limit)
+go_debug=$(required_value go_debug)
 rayon_threads=$(required_value rayon_threads)
 rustc_version=$(required_value rustc_version)
 cargo_version=$(required_value cargo_version)
@@ -187,6 +188,7 @@ for safe_value in \
   "$cpu_model" \
   "$cpu_max" \
   "$go_memory_limit" \
+  "$go_debug" \
   "$runtime_version" \
   "$rustc_version" \
   "$cargo_version" \
@@ -266,21 +268,22 @@ for integer_value in "$prove_ms" "$artifact_bytes" "$verify_ms"; do
 done
 
 if [ "$source_status" != clean ] ||
-  [ "$benchmark_profile" != cluster-36g ] ||
-  [ "$memory_max" != 38654705664 ] ||
+  [ "$benchmark_profile" != cluster-56g ] ||
+  [ "$memory_max" != 60129542144 ] ||
   [ "$swap_max" != 0 ] ||
   [ "$swap_peak" != 0 ] ||
   [ "$oom_count" != 0 ] ||
   [ "$oom_kill_count" != 0 ] ||
   [ "$go_max_procs" != 4 ] ||
   [ "$go_memory_limit" != 24GiB ] ||
+  [ "$go_debug" != gctrace=1 ] ||
   [ "$rayon_threads" != 4 ] ||
   [ "$mutations" != pass ]
 then
-  echo "benchmark result does not meet the approved cluster-36g pass profile" >&2
+  echo "benchmark result does not meet the approved cluster-56g pass profile" >&2
   exit 1
 fi
-if [ "$available_cpus" -lt 4 ] ||
+if [ "$available_cpus" != 4 ] ||
   [ "$memory_peak" -gt "$memory_max" ] ||
   [ "$prove_ms" -gt 3600000 ] ||
   [ "$artifact_bytes" -gt 1048576 ] ||
@@ -328,6 +331,7 @@ fi
   printf '| OOM kills | `%s` |\n' "$oom_kill_count"
   printf '| Go processes | `%s` |\n' "$go_max_procs"
   printf '| Go memory target | `%s` |\n' "$go_memory_limit"
+  printf '| Go memory diagnostics | `%s` |\n' "$go_debug"
   printf '| Rayon threads | `%s` |\n\n' "$rayon_threads"
   printf '## Toolchain Evidence\n\n'
   printf '| Field | Value |\n'

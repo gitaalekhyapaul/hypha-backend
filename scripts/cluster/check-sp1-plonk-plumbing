@@ -30,6 +30,20 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+. ./tools/toolchain-versions.env
+. ./scripts/cluster/sp1-plonk-common
+raziel_reject_container_runtime_environment
+docker_context=$(docker context show)
+docker_endpoint=$(
+  docker context inspect \
+    --format '{{.Endpoints.docker.Host}}' \
+    "$docker_context"
+)
+raziel_require_local_docker_endpoint "$docker_endpoint"
+node_check_source="$repo_root/scripts/download-sp1-plonk-artifact.mjs"
+node_check_target=/workspace/download-sp1-plonk-artifact.mjs
+node_check_mount="type=bind,src=$node_check_source,dst=$node_check_target,readonly"
+
 sh -n \
   scripts/benchmark-sp1-plonk \
   scripts/run-sp1-plonk-benchmark \
@@ -44,9 +58,17 @@ sh -n \
   scripts/cluster/slurm-probe-sp1-plonk \
   scripts/cluster/slurm-prepare-sp1-plonk \
   scripts/cluster/slurm-sp1-plonk
-node --check scripts/download-sp1-plonk-artifact.mjs
+docker run --rm \
+  --cap-drop all \
+  --network none \
+  --pids-limit 64 \
+  --read-only \
+  --security-opt no-new-privileges \
+  --user 65534:65534 \
+  --mount "$node_check_mount" \
+  "$NODE_IMAGE" \
+  node --check "$node_check_target"
 
-. ./scripts/cluster/sp1-plonk-common
 if raziel_runtime_help_has_option '  --memory-swap string' --memory; then
   echo "runtime option matching confused --memory with --memory-swap" >&2
   exit 1
@@ -102,6 +124,7 @@ if (
   echo "cluster profile accepted a memory override" >&2
   exit 1
 fi
+raziel_configure_cluster_proof_profile
 if (
   export APPTAINER_BIND=/tmp:/workspace
   . ./scripts/cluster/sp1-plonk-common
@@ -119,23 +142,24 @@ if (
 fi
 raziel_require_local_docker_endpoint unix:///var/run/docker.sock
 
-RAZIEL_SP1_MEMORY_LIMIT=38654705664 \
-  RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES=38654705664 \
-  RAZIEL_SP1_BENCHMARK_PROFILE=cluster-36g \
-  docker compose \
+docker compose \
   --env-file tools/toolchain-versions.env \
   --profile benchmark \
   config >"$compose_output"
 
-grep -Fq 'mem_limit: "38654705664"' "$compose_output"
-grep -Fq 'memswap_limit: "38654705664"' "$compose_output"
+grep -Fq 'cpuset: 0-3' "$compose_output"
+grep -Fq 'mem_limit: "60129542144"' "$compose_output"
+grep -Fq 'memswap_limit: "60129542144"' "$compose_output"
 grep -Fq 'network_mode: none' "$compose_output"
-grep -Fq 'RAZIEL_SP1_BENCHMARK_PROFILE: cluster-36g' "$compose_output"
-grep -Fq 'RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "38654705664"' "$compose_output"
+grep -Fq 'GODEBUG: gctrace=1' "$compose_output"
+grep -Fq 'RAZIEL_SP1_BENCHMARK_PROFILE: cluster-56g' "$compose_output"
+grep -Fq 'RAZIEL_SP1_EXPECTED_GO_DEBUG: gctrace=1' "$compose_output"
+grep -Fq 'RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "60129542144"' "$compose_output"
+grep -Fq 'RAZIEL_SP1_EXPECTED_VISIBLE_CPUS: "4"' "$compose_output"
 
 mkdir -p .sp1/benchmarks
 {
-  printf 'benchmark_profile=cluster-36g\n'
+  printf 'benchmark_profile=cluster-56g\n'
   printf 'cluster_name=nus\n'
   printf 'cluster_scheduler=slurm\n'
   printf 'cluster_job_id=secret-job-id\n'
@@ -152,10 +176,11 @@ mkdir -p .sp1/benchmarks
   printf 'cpu_model=Test CPU\n'
   printf 'available_cpus=4\n'
   printf 'cpu_max=400000 100000\n'
-  printf 'container_memory_max_bytes=38654705664\n'
+  printf 'container_memory_max_bytes=60129542144\n'
   printf 'container_swap_max_bytes=0\n'
   printf 'go_max_procs=4\n'
   printf 'go_memory_limit=24GiB\n'
+  printf 'go_debug=gctrace=1\n'
   printf 'rayon_threads=4\n'
   printf 'rustc_version=rustc 1.97.1\n'
   printf 'cargo_version=cargo 1.97.1\n'
@@ -175,7 +200,8 @@ mkdir -p .sp1/benchmarks
 
 ./scripts/cluster/render-sp1-plonk-result "$raw_report" >/dev/null
 grep -Fq 'Status: pass' "$public_report"
-grep -Fq 'Memory limit bytes | `38654705664`' "$public_report"
+grep -Fq 'Memory limit bytes | `60129542144`' "$public_report"
+grep -Fq 'Go memory diagnostics | `gctrace=1`' "$public_report"
 if grep -Eq 'secret-job-id|secret-hostname' "$public_report"; then
   echo "public benchmark result copied a private raw-log identifier" >&2
   exit 1
@@ -188,7 +214,19 @@ sed \
 ./scripts/cluster/render-sp1-plonk-result "$independent_raw_report" >/dev/null
 grep -Fq 'Status: pass' "$independent_public_report"
 
-sed 's/^benchmark_profile=cluster-36g$/benchmark_profile=cluster-64g/' \
+sed 's/^available_cpus=4$/available_cpus=8/' \
+  "$raw_report" >"$wrong_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted CPU-affinity drift" >&2
+  exit 1
+fi
+sed 's/^go_debug=gctrace=1$/go_debug=gctrace=0/' \
+  "$raw_report" >"$wrong_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted Go diagnostic drift" >&2
+  exit 1
+fi
+sed 's/^benchmark_profile=cluster-56g$/benchmark_profile=cluster-64g/' \
   "$raw_report" >"$wrong_profile_report"
 if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
   echo "public benchmark result accepted a different resource profile" >&2

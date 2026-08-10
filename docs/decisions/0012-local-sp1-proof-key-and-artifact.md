@@ -1,10 +1,13 @@
 # ADR-0012: Local SP1 Proof, Key, and Artifact Contract
 
-- Status: accepted and amended, 30 GiB Plonk validation failed
+- Status: accepted and amended, one 56 GiB Plonk attempt approved
 - Date: 2026-07-24
 - Milestone: M3
 - Approved by maintainer: 2026-07-27
 - Plonk amendment approved by maintainer: 2026-07-27
+- One 36 GiB proof attempt approved by maintainer: 2026-08-10
+- 36 GiB validation failed: 2026-08-10
+- One 56 GiB proof attempt approved by maintainer: 2026-08-11
 - 30 GiB diagnostic approved by maintainer: 2026-07-27
 - Resolution: O-003 selects local Plonk and remains open until its proof gate passes
 
@@ -76,10 +79,22 @@ The recursive proof and authorization witness remain private prover inputs.
 
 ### Capped local Plonk proof
 
-Use SP1 Plonk for the M3 proof artifact only after one run passes all of these gates:
+The fixed direct-relationship fixture has this structural size:
 
 ```text
 fixture = direct relationship ALLOW
+policy object definitions = 4
+policy relation definitions = 8
+policy permission definitions = 7
+policy caveat definitions = 1
+snapshot relationship count = 8
+proof witness relationship count = 1
+selected authorization path depth = 1
+```
+
+Use SP1 Plonk for the M3 proof artifact only after one run passes all of these gates:
+
+```text
 measured instructions = 422138
 proof wall-clock deadline = 60 minutes
 verification wall-clock deadline = 60 seconds
@@ -120,8 +135,8 @@ bounded diagnostic on 2026-07-27. The diagnostic uses a 30 GiB container cap and
 container. A passing run amends the accepted maximum to its measured peak. A failed
 run does not approve another increase.
 
-A 36 GiB cap on a project-controlled machine with at least 48 GiB RAM remains the
-recommended next gate after a memory failure. That higher cap is not approved.
+A 36 GiB cap on a project-controlled machine with at least 48 GiB RAM was the next
+gate after the 30 GiB memory failure. Its result appears below.
 
 ### 30 GiB validation result
 
@@ -133,6 +148,102 @@ milliseconds. No proof artifact was produced.
 An earlier 30 GiB attempt exposed Docker's default extra 30 GiB swap allowance. That
 attempt was stopped before peak memory. Compose now sets equal memory and
 memory-plus-swap limits, and the runner requires zero cgroup swap.
+
+### Approved 36 GiB independent-machine attempt
+
+The maintainer approved one proof-creation attempt on 2026-08-10 with this fixed
+profile:
+
+```text
+fixture = direct relationship ALLOW
+measured instructions = 422138
+proof wall-clock deadline = 60 minutes
+verification wall-clock deadline = 60 seconds
+maximum encoded artifact = 1048576 bytes
+maximum container memory = 38654705664 bytes
+minimum host memory = 51539607552 bytes
+Go soft heap target = 24 GiB
+Rust and Go worker count = 4
+container swap = 0 bytes
+container network = none
+parallel proof jobs = 1
+runtime = independent local Docker daemon
+```
+
+The run uses only the checked-in synthetic M3 fixture. It uses the prepared
+allowlisted run bundle and read-only Plonk setup. The approval permits no automatic
+retry, cap increase, hosted prover, SP1 network prover, CUDA path, proof-mode change,
+or larger fixture.
+
+This amendment changes the resource gate only. It does not change proof semantics,
+public values, artifact encoding, verification-key identity, or privacy boundaries.
+A passing run records the measured peak and closes the M3 proof path. A failed run
+does not approve another resource increase.
+
+### 36 GiB validation result
+
+The approved independent-machine attempt failed on 2026-08-10. The direct execute
+gate passed at 422,138 instructions in 434 milliseconds. The native constraint-system
+solver then reported 27,576,375 constraints before the kernel killed the proof
+process. No proof artifact was produced, so verification and mutation gates did not
+run.
+
+The container reached its exact 38,654,705,664-byte memory limit. Its cgroup recorded
+37 maximum-memory events, one OOM event, and one OOM kill. Container swap use and its
+swap limit were both zero. The run used four Rust workers, four Go workers, and the
+approved 24 GiB Go soft heap target on a host with 67,419,770,880 bytes of RAM.
+
+The source manifest digest was
+`3bb80bf3864581090bc784bca39b360b9da8097ea3a8b106b210ed8f1e9132d3`.
+The failure report remains outside Git at
+`.sp1/benchmarks/cluster-20260810T085319Z-70121.fail.log`. This result establishes
+that the current direct-fixture Plonk path needs more than 36 GiB under the fixed
+profile. It does not authorize a retry, a larger cap, swap, or a profile change.
+
+### Approved 56 GiB dedicated-machine attempt
+
+The maintainer approved one further proof-creation attempt on 2026-08-11. The Linux
+VM is dedicated to this computation. The fixed profile is:
+
+```text
+fixture = direct relationship ALLOW
+measured instructions = 422138
+proof wall-clock deadline = 60 minutes
+verification wall-clock deadline = 60 seconds
+maximum encoded artifact = 1048576 bytes
+maximum container memory = 60129542144 bytes
+minimum host memory = 66571993088 bytes
+container CPU affinity = CPUs 0-3
+visible CPU count = 4
+Go soft heap target = 24 GiB
+Go maximum processes = 4
+Rust worker count = 4
+Go memory diagnostics = gctrace=1
+container swap = 0 bytes
+container network = none
+parallel proof jobs = 1
+runtime = independent local Docker daemon
+```
+
+The recorded VM has 67,419,770,880 bytes of RAM. The 56 GiB cap leaves
+7,290,228,736 bytes outside the proof cgroup for Linux, Docker, SSH, and filesystem
+activity. Swap remains disabled so a passing measurement reflects physical memory
+rather than disk-backed paging.
+
+CPU affinity is part of the memory boundary. `GOMAXPROCS=4` limits simultaneous Go
+execution, but it does not change `runtime.NumCPU()`. The pinned KZG path uses
+`runtime.NumCPU() * 2` as its default multi-exponentiation task count. Restricting
+the process to CPUs `0-3` makes the Go scheduler, Gnark task sizing, and Rust worker
+limit agree on four visible CPUs.
+
+`GODEBUG=gctrace=1` records Go garbage-collector timings and aggregate heap sizes in
+the ignored owner-only raw log. It does not print witness values, proof bytes, public
+journal bytes, PolicyIR, relationships, salts, caveat values, or Merkle openings.
+The public benchmark exporter records only that the diagnostic was active.
+
+The approval permits one attempt from a newly prepared immutable run bundle. It
+permits no automatic retry, larger cap, swap, hosted prover, SP1 network prover,
+CUDA path, proof-mode change, or larger fixture. A failure requires another decision.
 
 Plonk is selected over Groth16 for three reasons:
 
@@ -177,15 +288,15 @@ profile change needs new benchmark evidence. The outer container cap remains
 authoritative for total memory.
 
 On Linux, the 2 GiB `memory_limit` caps the native executor child process RSS. The
-outer Gnark process is outside this setting. The failed validation confirms that the
-outer 7 GiB cgroup limit remains the operative boundary.
+outer Gnark process is outside this setting. The 7, 30, and 36 GiB failures confirm
+that the outer cgroup limit remains the operative total-memory boundary.
 
-The diagnostic container sets `RAYON_NUM_THREADS=4`, `GOMAXPROCS=4`, and
-`GOMEMLIMIT=24GiB`. The thread limits bound per-worker scratch space. The Go soft
-heap target leaves 6 GiB for the Rust prover, mapped setup files, and native buffers.
-The Compose memory and memory-plus-swap limits both equal 30 GiB. The runner requires
-`memory.swap.max` to equal zero. The 30 GiB cgroup limit is the hard failure
-boundary.
+The approved container sets `RAYON_NUM_THREADS=4`, `GOMAXPROCS=4`,
+`GOMEMLIMIT=24GiB`, and `GODEBUG=gctrace=1`. Docker restricts the process to CPUs
+`0-3`. The Compose memory and memory-plus-swap limits both equal 56 GiB. The runner
+requires four affinity-visible CPUs, the exact Go controls, and
+`memory.swap.max=0` before witness construction. The 56 GiB cgroup limit is the hard
+failure boundary for the approved attempt.
 
 The proof request uses:
 

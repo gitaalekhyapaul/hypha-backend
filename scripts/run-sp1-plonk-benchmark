@@ -12,6 +12,8 @@ umask 077
 expected_memory_max=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-32212254720}
 expected_worker_threads=${RAZIEL_SP1_EXPECTED_WORKER_THREADS:-4}
 expected_go_memory_limit=${RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT:-24GiB}
+expected_go_debug=${RAZIEL_SP1_EXPECTED_GO_DEBUG:-gctrace=1}
+expected_visible_cpus=${RAZIEL_SP1_EXPECTED_VISIBLE_CPUS:-4}
 benchmark_profile=${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}
 cgroup_relative_path=$(awk -F: '$1 == "0" { print $3; found = 1 } END { exit found ? 0 : 1 }' /proc/self/cgroup)
 case "$cgroup_relative_path" in
@@ -34,6 +36,7 @@ memory_swap_current_path="$cgroup_path/memory.swap.current"
 memory_swap_max_path="$cgroup_path/memory.swap.max"
 memory_swap_peak_path="$cgroup_path/memory.swap.peak"
 cpu_max_path="$cgroup_path/cpu.max"
+cpuset_cpus_effective_path="$cgroup_path/cpuset.cpus.effective"
 plonk_artifact_directory="$SP1_PLONK_CIRCUIT_PATH/v6.1.0"
 test_executable=$(cat target/raziel-sp1-plonk-test-executable)
 
@@ -46,6 +49,12 @@ esac
 case "$expected_worker_threads" in
   *[!0-9]* | "" | 0)
     echo "expected worker count must be a positive integer" >&2
+    exit 1
+    ;;
+esac
+case "$expected_visible_cpus" in
+  *[!0-9]* | "" | 0)
+    echo "expected visible CPU count must be a positive integer" >&2
     exit 1
     ;;
 esac
@@ -118,9 +127,10 @@ if [ ! -r "$memory_max_path" ] ||
   [ ! -r "$memory_events_path" ] ||
   [ ! -r "$memory_swap_current_path" ] ||
   [ ! -r "$memory_swap_max_path" ] ||
-  [ ! -r "$memory_swap_peak_path" ]
+  [ ! -r "$memory_swap_peak_path" ] ||
+  [ ! -r "$cpuset_cpus_effective_path" ]
 then
-  echo "cgroup v2 memory and swap limits are required for the proof benchmark" >&2
+  echo "cgroup v2 memory, swap, and CPU affinity controls are required" >&2
   exit 1
 fi
 
@@ -136,9 +146,15 @@ if [ "$memory_swap_max" != 0 ]; then
 fi
 if [ "$GOMAXPROCS" != "$expected_worker_threads" ] ||
   [ "$RAYON_NUM_THREADS" != "$expected_worker_threads" ] ||
-  [ "$GOMEMLIMIT" != "$expected_go_memory_limit" ]
+  [ "$GOMEMLIMIT" != "$expected_go_memory_limit" ] ||
+  [ "$GODEBUG" != "$expected_go_debug" ]
 then
-  echo "proof worker and Go heap limits do not match the benchmark profile" >&2
+  echo "proof worker, Go heap, and Go diagnostic controls do not match" >&2
+  exit 1
+fi
+visible_cpus=$(nproc)
+if [ "$visible_cpus" != "$expected_visible_cpus" ]; then
+  echo "expected $expected_visible_cpus affinity CPUs, found $visible_cpus" >&2
   exit 1
 fi
 
@@ -172,7 +188,8 @@ printf 'kernel_name=%s\n' "$(uname -s)"
 printf 'kernel_release=%s\n' "$(uname -r)"
 printf 'cpu_model=%s\n' \
   "$(awk -F ': ' '/^(model name|Model|Hardware)/ { print $2; exit }' /proc/cpuinfo)"
-printf 'available_cpus=%s\n' "$(getconf _NPROCESSORS_ONLN)"
+printf 'available_cpus=%s\n' "$visible_cpus"
+printf 'cpuset_cpus_effective=%s\n' "$(cat "$cpuset_cpus_effective_path")"
 printf 'cpu_max=%s\n' "$(cat "$cpu_max_path")"
 printf 'container_memory_max_bytes=%s\n' "$memory_max"
 printf 'container_memory_idle_bytes=%s\n' "$(cat "$memory_current_path")"
@@ -180,6 +197,7 @@ printf 'container_swap_max_bytes=%s\n' "$memory_swap_max"
 printf 'container_swap_idle_bytes=%s\n' "$(cat "$memory_swap_current_path")"
 printf 'go_max_procs=%s\n' "$GOMAXPROCS"
 printf 'go_memory_limit=%s\n' "$GOMEMLIMIT"
+printf 'go_debug=%s\n' "$GODEBUG"
 printf 'rayon_threads=%s\n' "$RAYON_NUM_THREADS"
 printf 'vm_memory_total_bytes=%s\n' \
   "$(awk '/^MemTotal:/ { printf "%.0f\n", $2 * 1024 }' /proc/meminfo)"

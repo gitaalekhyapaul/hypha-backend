@@ -10,22 +10,25 @@ Do not use real transaction data, production relationships, stored caveat values
 Merkle openings, or snapshot salts on a shared cluster. That use needs a separate
 trust and data-governance decision.
 
-The proposed cluster profile uses:
+The fixed cluster profile uses:
 
 - one Linux node
 - four CPU cores
 - 64 GiB scheduler memory
-- a 36 GiB proof-process memory cap
+- a 56 GiB proof-process memory cap
 - a 24 GiB Go soft heap target
+- Go garbage-collector memory diagnostics
 - zero swap
 - no proof-process network route
 - a two-hour scheduler limit
 - a 60-minute proof deadline
 
-The 36 GiB cap is the next gate proposed by ADR-0012. The accepted 30 GiB gate
-failed. The maintainer must approve the new cap before its result closes M3.
-The proof runner fixes every listed value. Environment variables cannot raise or
-lower the approved memory, disk, heap, or worker limits.
+The 30 GiB and 36 GiB gates failed at their exact cgroup limits. The maintainer
+approved one 56 GiB attempt on the dedicated independent Docker VM on 2026-08-11.
+That approval permits no retry, cap increase, Slurm submission, or proof-profile
+change. The proof runner fixes every listed value. Environment variables cannot
+raise or lower the approved memory, disk, heap, CPU-affinity, diagnostic, or worker
+limits.
 
 ## Runtime Choice
 
@@ -42,6 +45,11 @@ Docker stays supported for a separate Linux machine. Set:
 export RAZIEL_CLUSTER_NAME=independent
 export RAZIEL_CLUSTER_RUNTIME=docker
 ```
+
+The independent machine needs Git, a local Docker Engine, and Docker Compose. The
+repository toolchain image supplies Node.js, pnpm, Rust, Go, Buf, Protobuf, libclang,
+and SP1. Do not install those tools on the host for this run. The proof preflight also
+requires at least four CPUs, 62 GiB RAM, and 60 GiB free disk.
 
 The NUS preflight rejects Docker even if a client binary appears in `PATH`. It also
 rejects an invocation without `SLURM_JOB_ID`. Preparation and proving must run inside
@@ -166,9 +174,12 @@ Run this command on a development host with Docker Compose:
 ./scripts/cluster/check-sp1-plonk-plumbing
 ```
 
-It checks shell and Node syntax, renders the 36 GiB Compose profile, exercises the
-public result exporter, and proves that raw host and scheduler identifiers stay out
-of the generated Markdown.
+It checks shell syntax, checks JavaScript syntax through the digest-pinned Node image,
+renders the 56 GiB Compose profile, verifies the four-CPU affinity and Go memory
+diagnostics, exercises the public result exporter, and proves that raw host and
+scheduler identifiers stay out of the generated Markdown. Host Node.js is not
+required. Docker pulls the pinned Node image on the first run if the image is not
+already present.
 
 ## Prepare
 
@@ -202,8 +213,9 @@ recorded clean source and toolchain.
 ## Submit
 
 The scheduled phase runs offline. It does not build an image, download setup data,
-fetch dependencies, or compile source. After the maintainer approves the 36 GiB
-gate, set:
+fetch dependencies, or compile source. The independent-machine approval does not
+authorize a Slurm submission. Approve the SIF provenance tuple and one Slurm attempt
+before setting:
 
 ```bash
 export RAZIEL_SP1_CLUSTER_GATE_APPROVED=1
@@ -232,9 +244,30 @@ export RAZIEL_SP1_CLUSTER_GATE_APPROVED=1
 ./scripts/cluster/run-sp1-plonk
 ```
 
-The same 36 GiB hard cap, zero-swap rule, network isolation, source checks, setup
-checks, proof deadline, verification gate, mutation gate, and public result exporter
-apply.
+The same 56 GiB hard cap, four-CPU affinity, Go memory diagnostics, zero-swap rule,
+network isolation, source checks, setup checks, proof deadline, verification gate,
+mutation gate, and public result exporter apply. The 2026-08-11 approval permits
+this command once against the recorded preparation state. Do not rerun it after
+success or failure without another decision.
+
+The wrapper writes proof output to an owner-only in-progress log and prints it only
+after the container exits. A healthy terminal can remain silent for about 68 minutes.
+The stage limits are two minutes for execution, 60 minutes for proving, one minute
+for verification, and five minutes for mutation checks. Small wrapper steps run
+outside those limits. Keep the SSH session open. Do not interrupt or rerun a quiet
+process.
+
+From a second SSH session, this read-only command confirms whether the proof
+container is still running:
+
+```bash
+docker ps \
+  --filter name=raziel-sp1-plonk-benchmark \
+  --format '{{.ID}} {{.Status}}'
+```
+
+An empty result means the container exited. Wait for the original command to print
+and rename its in-progress log before inspecting the result.
 
 ## Result
 
@@ -247,8 +280,8 @@ docs/benchmarks/sp1-plonk/<job>.md
 
 Git ignores the raw log. The Markdown file contains a fixed set of public fields.
 It records proof time, verification time, artifact size, instruction count,
-resource limits, peak memory, tool versions, setup hash, source hashes, and the
-allowlisted run-bundle manifest hash. It
+resource limits, CPU-affinity count, active Go memory diagnostics, peak memory, tool
+versions, setup hash, source hashes, and the allowlisted run-bundle manifest hash. It
 omits hostnames, usernames, scheduler job IDs, account names, and internal paths.
 
 Review and commit only the Markdown result. Do not commit the SIF, setup archive,

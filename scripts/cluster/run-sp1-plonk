@@ -12,7 +12,7 @@ export RAZIEL_CLUSTER_PREFLIGHT_PHASE=prove
 umask 077
 
 if [ "${RAZIEL_SP1_CLUSTER_GATE_APPROVED:-0}" != 1 ]; then
-  echo "the proposed 36 GiB ADR-0012 cluster gate needs maintainer approval" >&2
+  echo "the approved 56 GiB ADR-0012 cluster gate requires its approval flag" >&2
   exit 1
 fi
 raziel_configure_cluster_proof_profile
@@ -161,13 +161,16 @@ run_offline_benchmark() {
         --bind "$setup_path:/opt/sp1/circuits/plonk/v6.1.0:ro" \
         --pwd /workspace \
         --env CARGO_NET_OFFLINE=true \
+        --env GODEBUG=gctrace=1 \
         --env GOMAXPROCS="$RAZIEL_SP1_WORKER_THREADS" \
         --env GOMEMLIMIT="$RAZIEL_SP1_GO_MEMORY_LIMIT" \
         --env HOME=/tmp/raziel-home \
         --env RAYON_NUM_THREADS="$RAZIEL_SP1_WORKER_THREADS" \
         --env RAZIEL_SP1_BENCHMARK_PROFILE="$RAZIEL_SP1_BENCHMARK_PROFILE" \
         --env RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT="$RAZIEL_SP1_GO_MEMORY_LIMIT" \
+        --env RAZIEL_SP1_EXPECTED_GO_DEBUG=gctrace=1 \
         --env RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES="$RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES" \
+        --env RAZIEL_SP1_EXPECTED_VISIBLE_CPUS=4 \
         --env RAZIEL_SP1_EXPECTED_WORKER_THREADS="$RAZIEL_SP1_WORKER_THREADS" \
         --env SP1_PLONK_CIRCUIT_PATH=/opt/sp1/circuits/plonk \
         "$RAZIEL_SP1_TOOLCHAIN_SIF" \

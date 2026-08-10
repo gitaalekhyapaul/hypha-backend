@@ -7,8 +7,8 @@ script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 cd "$repo_root"
 
-memory_limit_bytes=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-38654705664}
-minimum_host_memory_bytes=${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-51539607552}
+memory_limit_bytes=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-60129542144}
+minimum_host_memory_bytes=${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-66571993088}
 minimum_disk_bytes=${RAZIEL_SP1_MINIMUM_DISK_BYTES:-64424509440}
 preflight_phase=${RAZIEL_CLUSTER_PREFLIGHT_PHASE:-prove}
 

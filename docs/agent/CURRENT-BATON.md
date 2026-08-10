@@ -1,20 +1,26 @@
 # Current Engineering Baton
 
 - Baton ID: B-0011
-- State: ACTIVE
+- State: BLOCKED
 - Milestone: M3, SP1 execution and proof
 - Owner: Codex
 - Started UTC: 2026-07-24T09:01:33Z
 - Resumed UTC: 2026-07-27T10:16:28Z
 - Resumed after Plonk approval UTC: 2026-07-27T19:45:18Z
 - Resumed after maintainer pause UTC: 2026-07-28T11:32:51Z
-- Last updated UTC: 2026-07-28T11:41:08Z
+- Last updated UTC: 2026-08-10T17:33:35Z
 - Branch: `main`
 - Worktree: This B-0011 implementation commit is based on `10fbc88`. It contains
   accepted ADR-0012, the local Plonk proof path, and secured Slurm plumbing. The
   approved 7 GiB gate failed three times, and the approved 30 GiB no-swap diagnostic
-  failed once. The proposed 36 GiB gate and the future x86 SIF provenance tuple
-  remain unapproved. No run produced a proof, so M3 remains open.
+  failed once. The maintainer approved one fixed 36 GiB attempt on the prepared
+  independent VM. That attempt reached the exact 36 GiB cgroup limit and recorded
+  one OOM kill. The future x86 SIF provenance tuple remains unapproved. No run has
+  produced a proof, so M3 remains open. The maintainer approved one 56 GiB attempt
+  on the dedicated VM. The local worktree implements that fixed profile, the scoped
+  cluster-prerequisite correction, and the complete 36 GiB failure record. The
+  independent VM remains on the prior immutable experiment commit until this work is
+  committed and pushed.
 
 ## Objective
 
@@ -33,7 +39,7 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - [ ] Proof, verification-key, and public-journal mutations fail closed.
 - [ ] At least one representative allowed case records proof time, proof size,
       verification time, instruction count, hardware, and tool versions.
-- [ ] Focused and affected workspace gates pass.
+- [x] Focused and affected workspace gates pass.
 
 ## Architecture Constraints
 
@@ -129,6 +135,25 @@ before `verifierd`, capability job APIs, or gateway wiring.
   independent Linux machine.
 - The approval flag fixes the complete `cluster-36g` profile. Callers cannot
   override its memory, disk, Go heap, worker count, or benchmark identity.
+- The maintainer approved one `cluster-36g` proof-creation attempt on the prepared
+  independent VM on 2026-08-10. The approval permits no retry or cap increase.
+- ADR-0012 records the approved 36 GiB profile. This resource amendment changes no
+  proof semantics, public values, artifact encoding, key identity, or privacy rule.
+- The approved 36 GiB attempt passed direct guest execution at 422,138 instructions
+  in 434 milliseconds. Proof creation reached the exact 38,654,705,664-byte cgroup
+  cap after the native solver reported 27,576,375 constraints. The cgroup recorded
+  one OOM kill and no swap use. No proof artifact was produced.
+- The pinned Gnark prover starts three L, R, and O KZG commitments after constraint
+  solving. Its default multi-exponentiation task count uses
+  `runtime.NumCPU() * 2`, which is separate from `GOMAXPROCS`. The failed 36 GiB
+  profile set `GOMAXPROCS=4` but did not pin process CPU affinity. The approved
+  56 GiB profile makes the intended four-CPU boundary visible to both controls.
+- The maintainer approved one `cluster-56g` attempt on the dedicated independent VM
+  on 2026-08-11. It fixes a 60,129,542,144-byte hard cap, a 66,571,993,088-byte
+  minimum host, CPUs `0-3`, four Go and Rust workers, a 24 GiB Go soft heap target,
+  `GODEBUG=gctrace=1`, zero swap, no network, and the existing stage deadlines.
+- The GC trace is memory-only diagnostic evidence in the owner-only ignored raw log.
+  The public exporter records only that `gctrace=1` was active.
 - NUS preparation and proving require Slurm. Ambient container-runtime controls fail
   closed. The Docker standby path accepts only a local Unix-socket daemon.
 - The maintainer approved baking the pinned Rust `1.97.1` Rustfmt and Clippy
@@ -137,6 +162,12 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - The witness-bearing process mounts an owner-only allowlisted run bundle rather than
   the repository. Preparation and proving share one operation lock, and the public
   result binds the bundle-manifest digest.
+- Cluster plumbing runs its JavaScript syntax check through the digest-pinned Node
+  image. Docker and Git remain the only software prerequisites on an independent
+  Linux proof host.
+- The syntax-check container rejects ambient Docker controls, requires a local
+  Unix-socket daemon, drops capabilities, disables networking, uses a read-only root,
+  and mounts only the checked JavaScript file.
 - M4 must decode and verify remote artifacts in a memory-capped, time-capped child
   process.
 - B-0010 measured the combined accepted ceiling at 94,608,186 instructions and the
@@ -144,32 +175,32 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 ## Open Questions and Blockers
 
+- The approved 36 GiB independent VM attempt failed at the exact cgroup memory cap.
+  It produced no proof artifact.
+- The approved 56 GiB profile is implemented locally but has not run. The VM needs
+  the new immutable commit and preparation record first. The approval permits one
+  proof attempt and no retry, cap increase, swap use, or further profile change.
 - The approved 7 GiB Plonk gate ended with exit 137 on three runs. Each
   cgroup peak reached exactly 7,516,192,768 bytes. No proof artifact was produced.
 - The fixed `2^25` Gnark Plonk domain has a source-derived live-memory floor near
   15.75 GiB before the circuit, witness, FFT, MSM, runtime, and proof buffers.
-- BLOCKED: The Docker VM exposes 33,600,331,776 bytes. The 30 GiB no-swap diagnostic
-  reached exactly 32,212,254,720 bytes and recorded one cgroup OOM kill. No proof
-  artifact was produced.
-- A 36 GiB cap on a project-controlled machine with at least 48 GiB RAM remains the
-  next recommendation. NUS cluster plumbing now supports that cap. The cap is not
-  approved, and the scheduled runner refuses to start without an approval flag.
+- The earlier Docker Desktop VM exposed 33,600,331,776 bytes. Its 30 GiB no-swap
+  diagnostic reached exactly 32,212,254,720 bytes and recorded one cgroup OOM kill.
+  No proof artifact was produced.
+- An independent NUS SoC VM exposes 67,419,770,880 bytes of RAM. It passed the Docker
+  preflight and preparation gates. Its approved 36 GiB attempt recorded one OOM kill
+  and produced no proof.
 - The maintainer confirmed that NUS uses Slurm and does not provide Docker on its
   nodes. The exact NUS SIF runtime remains unknown. Pinned Apptainer and Singularity
   paths exist. Docker remains available for a separate independent Linux machine.
-- Until an independent machine is available, all remote execution planning assumes
-  NUS Slurm plus a pinned Apptainer or Singularity SIF. The Docker path remains
-  standby only.
 - A caller-supplied SIF SHA-256 proves handoff consistency but not approved-image
-  provenance. Before proof submission, record and approve the x86 Docker image ID,
-  Docker archive SHA-256, and resulting SIF SHA-256. SIF signing remains a separate
-  dependency and key-management decision.
+  provenance. This applies only if the experiment returns to the NUS Slurm path.
+  SIF signing remains a separate dependency and key-management decision.
 - The toolchain definition now includes Rustfmt and Clippy for pinned Rust `1.97.1`.
-  The local Docker daemon is stopped, so the updated image build and component
-  version checks remain pending on the x86 build machine.
+  The independent VM built the pinned x86_64 image during successful preparation.
 - NUS compute-node outbound HTTPS remains unknown. The witness-free Slurm
   preparation job needs HTTPS for Cargo dependencies and the pinned setup archive.
-  If egress is blocked, run the complete gate on the independent Docker machine.
+  This no longer blocks the independent Docker path.
 - Hosted or SP1 network proving remains disallowed. It would move the private witness
   outside Raziel's local trust boundary.
 - SP1's transitive `proc-macro-error2 v2.0.1` emits a Rust future-compatibility
@@ -319,6 +350,42 @@ before `verifierd`, capability job APIs, or gateway wiring.
   remain.
 - Rebuilt the release proof test after hardening and restaged its complete run-bundle
   manifest.
+- Prepared the independent `amd64` Docker VM at source commit `810f4de`. That commit
+  differs from the M3 implementation commit only by one progress-report document.
+- The VM built image
+  `sha256:7adfa8b55c31d686f133e94cad6a68a1a03950ef5389a6493d8673a631a952f7`,
+  verified the pinned Plonk setup, compiled the guest and proof test, and staged the
+  allowlisted run bundle. No witness or proof was created.
+- Rebuilt the pinned local ARM64 toolchain after Docker resumed. Exact Rustfmt and
+  Clippy components are present, and the full format and lint gates pass.
+- Re-ran bootstrap, deterministic generation, typecheck, and full non-guest
+  workspace tests in the rebuilt image. Every active gate passed. The four real
+  proof tests remain isolated to the approved VM run.
+- Re-ran all five prepared-guest execute cases in the rebuilt image. Host and guest
+  results match, invalid private inputs fail, cycle limits hold, and both accepted
+  boundary fixtures remain below the operating ceiling.
+- Audited ADR-0012 and the M3 specification against the baton. The remaining exit
+  evidence is the real Plonk proof, `LightProver` verification, mutation rejection,
+  and the public benchmark record.
+- Updated the cluster runbook to scope the approval to one independent Docker
+  attempt. Slurm still needs its SIF provenance tuple and a separate execution
+  approval.
+- Recorded the fixed benchmark workload dimensions in ADR-0012. The direct fixture
+  has four object definitions, eight relations, seven permissions, one caveat, eight
+  snapshot relationships, one witness relationship, and path depth one.
+- Documented the proof runner's buffered output and bounded quiet period. The runbook
+  gives one read-only Docker status command and prohibits interruption or rerun.
+- Reviewed the complete independent VM result. Direct guest execution passed at
+  422,138 instructions in 434 milliseconds. The Plonk proof process then reached the
+  exact 36 GiB cgroup cap and was OOM-killed. No proof, verification result, mutation
+  result, or public benchmark report was produced.
+- Implemented the approved `cluster-56g` profile with equal 56 GiB memory and
+  memory-plus-swap limits, CPUs `0-3`, four affinity-visible CPUs, four Go and Rust
+  workers, a 24 GiB Go soft heap target, and `GODEBUG=gctrace=1`.
+- Added pre-witness runtime rejection for memory, swap, affinity-visible CPU count,
+  worker count, Go heap target, and Go diagnostic drift.
+- Updated the public result exporter and plumbing fixtures to require the 56 GiB
+  profile, four visible CPUs, and active memory diagnostics.
 
 ## Validation Plan
 
@@ -404,6 +471,36 @@ before `verifierd`, capability job APIs, or gateway wiring.
 | Focused host Clippy rerun | NOT AVAILABLE | The native Gnark build reached `sp1-recursion-gnark-ffi` and stopped because the host has no Go binary. No Clippy diagnostic was emitted | 2026-07-28T11:38:56Z |
 | Pinned-container Biome, Buf, Gofmt, and Clippy rerun | NOT AVAILABLE | Docker daemon socket is absent after the maintainer pause. No container validation process started | 2026-07-28T11:38:56Z |
 | Pinned Rustfmt and Clippy toolchain amendment | PASS | Maintainer approval recorded; Compose passes `RUST_VERSION` into the image build; Dockerfile installs only Rustfmt and Clippy for exact Rust `1.97.1`; Compose, plumbing, formatting, syntax, and diff checks pass | 2026-07-28T11:41:08Z |
+| Independent-host prerequisite review | PASS | README and ADR-0003 require a container-first toolchain. Removed the accidental host Node call from cluster plumbing and documented the Docker-host requirements | 2026-08-10T08:28:08Z |
+| Revised plumbing static checks | PASS | Shell syntax, scoped diff review, and `git diff --check` pass without a host Node invocation | 2026-08-10T08:28:08Z |
+| Revised plumbing live Docker check | PASS | Docker `29.6.2` pulled the digest-pinned Node `24.18.0` image and completed `check-sp1-plonk-plumbing` without host Node | 2026-08-10T08:33:01Z |
+| Independent VM preparation | PASS | `amd64` Docker `29.7.2`, source `810f4de`, pinned image, setup, guest ELF, proof test, and run-bundle hashes recorded. No proof created | 2026-08-10T08:26:40Z |
+| Maintainer proof-run approval | PASS | One synthetic `cluster-36g` attempt with a 36 GiB hard cap, zero swap, four workers, no network, and no automatic retry or cap increase | 2026-08-10T08:42:29Z |
+| Pinned ARM64 toolchain rebuild | PASS | Image `sha256:be87a5a2364b2bdd3f6841653e48de4a832cdb3bcbcfac919e8fa248e8b59624` contains Node `24.18.0`, Rustfmt `1.9.0`, and Clippy `0.1.97` | 2026-08-10T08:55:09Z |
+| `pnpm format:check` in rebuilt image | PASS | Biome, Rustfmt, and Gofmt pass | 2026-08-10T08:55:09Z |
+| `pnpm lint` in rebuilt image | PASS | Biome, full non-guest workspace Clippy with warnings denied, Go vet, and Buf lint pass | 2026-08-10T08:55:09Z |
+| `pnpm bootstrap:check` in rebuilt image | PASS | Exact Node, pnpm, Rust, Cargo, Go, Buf, Protobuf, SP1, well-known type, and ARM64 pins | 2026-08-10T08:59:28Z |
+| `pnpm generate:check` in rebuilt image | PASS | Two Buf generations match byte for byte | 2026-08-10T08:59:28Z |
+| `pnpm typecheck` in rebuilt image | PASS | Four TypeScript packages, all non-guest Rust targets, and every Go package compile | 2026-08-10T08:59:28Z |
+| `pnpm test` in rebuilt image | PASS | 20 TypeScript tests, 130 active Rust tests, and all Go tests pass. Nine Rust tests are ignored by design, including four VM proof gates | 2026-08-10T08:59:28Z |
+| Hardened Docker-only plumbing check | PASS | Local Docker path completes with a pinned unprivileged Node container. Injected `DOCKER_CONTEXT` fails closed with exit 1 | 2026-08-10T09:01:00Z |
+| Prepared-guest execute suite | PASS, 3 tests | Host and guest equality, invalid private input, and cycle-limit behavior | 2026-08-10T09:05:14Z |
+| Prepared-guest boundary suite | PASS, 2 tests | Accepted input ceiling and maximum snapshot depth remain below the execution-cycle limit | 2026-08-10T09:05:14Z |
+| M3 closure and ADR consistency audit | PASS | ADR-0012 records the approved fixed 36 GiB attempt. The specification and baton agree on the four remaining VM proof gates | 2026-08-10T09:07:34Z |
+| Cluster approval-boundary review | PASS | Runbook permits one prepared independent Docker attempt and does not reuse that approval for Slurm, retries, cap increases, or profile changes | 2026-08-10T09:10:07Z |
+| M3 benchmark-context audit | PASS | ADR-0012 states the fixed policy structure, relationship counts, witness count, path depth, proof mode, and instruction count | 2026-08-10T09:11:54Z |
+| Final scoped diff and privacy review | PASS | Plumbing self-test passes, injected Docker controls exit 1, `git diff --check` passes, and no private or generated proof artifact is tracked | 2026-08-10T09:13:13Z |
+| Proof timeout and cleanup review | PASS | Execute, prove, verify, and mutation stages have 2, 60, 1, and 5 minute limits. Output is buffered, and success or failure renames the in-progress log | 2026-08-10T09:14:25Z |
+| External-result blocked audit | BLOCKED | Local M3 gates are exhausted. Review requires the complete output from the one approved independent VM run | 2026-08-10T09:15:27Z |
+| Approved 36 GiB independent VM proof attempt | FAIL, cgroup OOM kill | Execute passed at 422,138 instructions in 434 ms; solver reported 27,576,375 constraints; memory peaked at 38,654,705,664 bytes with zero swap; no proof artifact | 2026-08-10T09:09:15Z |
+| Pinned post-solver memory source audit | PASS | Gnark retains solved L/R/O polynomials and starts three KZG commitments; default multi-exponentiation sizing uses `runtime.NumCPU() * 2`, not `GOMAXPROCS` | 2026-08-10T09:29:52Z |
+| Local Docker CPU-affinity check | PASS | `GOMAXPROCS=4` alone exposed 11 CPUs through `nproc`; a four-CPU cpuset exposed four | 2026-08-10T09:29:52Z |
+| Approved 56 GiB profile implementation | PASS | Compose renders exact 60,129,542,144-byte memory and memory-plus-swap limits, CPUs `0-3`, `GODEBUG=gctrace=1`, four workers, and no network | 2026-08-10T17:32:05Z |
+| Revised cluster plumbing self-test | PASS | Profile overrides, CPU-affinity drift, Go diagnostic drift, mismatched keys, duplicate fields, unsafe runtime controls, and private result fields fail closed | 2026-08-10T17:32:05Z |
+| Live Compose CPU-affinity check | PASS | The approved benchmark service reports four CPUs through `nproc` | 2026-08-10T17:32:05Z |
+| Pinned-container `pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt pass after the profile amendment | 2026-08-10T17:32:05Z |
+| Scoped diff check | PASS | `git diff --check` reports no whitespace errors | 2026-08-10T17:32:05Z |
+| Pinned-container `pnpm lint` | PASS | Biome, Clippy with warnings denied, Go vet, and Buf lint pass; the existing `proc-macro-error2` future-compatibility warning remains | 2026-08-10T17:33:35Z |
 
 ## Privacy Checks
 
@@ -416,8 +513,8 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - PENDING: The independent `LightProver` path compiles and its failure checks pass.
   The approved memory cap prevented creation of a real proof.
 - PASS: Core remains excluded from agent-facing and verifier-facing capabilities.
-- BLOCKED: The approved Plonk path needs a real proof and mutation run on a machine
-  that can satisfy a revised memory decision.
+- PENDING: The approved Plonk path still needs a real proof and mutation run. The
+  36 GiB attempt produced no artifact and exposed no private witness output.
 - PASS: Real transaction data and private runtime artifacts remain outside Git.
 - PASS: The cluster result exporter copies only public aggregate fields and source
   identities. Raw scheduler and proof logs remain ignored.
@@ -441,13 +538,6 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 ## Exact Next Action
 
-Push or transfer this immutable implementation commit to a clean NUS clone, then
-submit
-`scripts/cluster/slurm-probe-sp1-plonk` to identify the container runtime,
-compute-node HTTPS, and SIF isolation support. Build the clean x86_64 image and SIF,
-then record the Docker image ID, source archive SHA-256, and SIF SHA-256 for
-maintainer review. Obtain approval for the SIF provenance tuple and the proposed
-36 GiB Plonk cap. Then submit the proof-only job inside a 64 GiB Slurm allocation.
-Keep the independent Docker machine as the standby path. A later commit adds only
-the generated public Markdown result and baton closure. Do not use real data, hosted
-proving, or Core as a capability gate.
+On the dedicated VM, fast-forward the clean clone to the pushed `cluster-56g`
+handoff commit and run preparation again. Return the new preparation record for
+review before using the approval flag for the single proof attempt.
