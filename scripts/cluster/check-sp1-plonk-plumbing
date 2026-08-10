@@ -14,6 +14,8 @@ wrong_profile_report=".sp1/benchmarks/$test_id-wrong-profile.pass.log"
 wrong_profile_public_report="docs/benchmarks/sp1-plonk/$test_id-wrong-profile.md"
 wrong_key_report=".sp1/benchmarks/$test_id-wrong-key.pass.log"
 wrong_key_public_report="docs/benchmarks/sp1-plonk/$test_id-wrong-key.md"
+duplicate_profile_report=".sp1/benchmarks/$test_id-duplicate-profile.pass.log"
+duplicate_profile_public_report="docs/benchmarks/sp1-plonk/$test_id-duplicate-profile.md"
 compose_output=$(mktemp /tmp/raziel-sp1-cluster-compose.XXXXXX)
 
 cleanup() {
@@ -26,6 +28,8 @@ cleanup() {
     "$wrong_profile_public_report" \
     "$wrong_key_report" \
     "$wrong_key_public_report" \
+    "$duplicate_profile_report" \
+    "$duplicate_profile_public_report" \
     "$compose_output"
 }
 trap cleanup EXIT HUP INT TERM
@@ -156,6 +160,10 @@ grep -Fq 'RAZIEL_SP1_BENCHMARK_PROFILE: cluster-56g' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_GO_DEBUG: gctrace=1' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "60129542144"' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_VISIBLE_CPUS: "4"' "$compose_output"
+if grep -Fq "printf 'benchmark_profile=%s" scripts/cluster/run-sp1-plonk; then
+  echo "cluster wrapper duplicates the in-container benchmark profile field" >&2
+  exit 1
+fi
 
 mkdir -p .sp1/benchmarks
 {
@@ -213,6 +221,33 @@ sed \
   "$raw_report" >"$independent_raw_report"
 ./scripts/cluster/render-sp1-plonk-result "$independent_raw_report" >/dev/null
 grep -Fq 'Status: pass' "$independent_public_report"
+
+awk '
+  /^benchmark_profile=/ { print }
+  { print }
+' "$raw_report" >"$duplicate_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result \
+  "$duplicate_profile_report" >/dev/null 2>&1
+then
+  echo "public benchmark result accepted a duplicate profile by default" >&2
+  exit 1
+fi
+./scripts/cluster/render-sp1-plonk-result \
+  --recover-duplicate-profile \
+  "$duplicate_profile_report" >/dev/null
+grep -Fq 'Status: pass' "$duplicate_profile_public_report"
+rm "$duplicate_profile_public_report"
+awk '
+  /^benchmark_profile=/ { print "benchmark_profile=cluster-64g" }
+  { print }
+' "$raw_report" >"$duplicate_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result \
+  --recover-duplicate-profile \
+  "$duplicate_profile_report" >/dev/null 2>&1
+then
+  echo "public benchmark recovery accepted conflicting profile values" >&2
+  exit 1
+fi
 
 sed 's/^available_cpus=4$/available_cpus=8/' \
   "$raw_report" >"$wrong_profile_report"

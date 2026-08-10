@@ -8,19 +8,19 @@
 - Resumed UTC: 2026-07-27T10:16:28Z
 - Resumed after Plonk approval UTC: 2026-07-27T19:45:18Z
 - Resumed after maintainer pause UTC: 2026-07-28T11:32:51Z
-- Last updated UTC: 2026-08-10T17:33:35Z
+- Last updated UTC: 2026-08-10T18:23:24Z
 - Branch: `main`
 - Worktree: This B-0011 implementation commit is based on `10fbc88`. It contains
   accepted ADR-0012, the local Plonk proof path, and secured Slurm plumbing. The
   approved 7 GiB gate failed three times, and the approved 30 GiB no-swap diagnostic
   failed once. The maintainer approved one fixed 36 GiB attempt on the prepared
   independent VM. That attempt reached the exact 36 GiB cgroup limit and recorded
-  one OOM kill. The future x86 SIF provenance tuple remains unapproved. No run has
-  produced a proof, so M3 remains open. The maintainer approved one 56 GiB attempt
-  on the dedicated VM. The local worktree implements that fixed profile, the scoped
-  cluster-prerequisite correction, and the complete 36 GiB failure record. The
-  independent VM remains on the prior immutable experiment commit until this work is
-  committed and pushed.
+  one OOM kill. The future x86 SIF provenance tuple remains unapproved. The single
+  approved 56 GiB attempt at commit `44d58c7` created and verified a real Plonk
+  proof, then passed all mutation checks. Its public exporter rejected one duplicated
+  profile field written by the wrapper and container. The proof remains valid and
+  must not run again. The local worktree adds a narrow exporter recovery path for
+  that saved successful log and removes the duplicate from future runs.
 
 ## Objective
 
@@ -32,12 +32,12 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 - [x] One accepted decision record fixes the local proof mode, verification-key ID,
       proof artifact encoding, public-journal handling, and failure rules.
-- [ ] A concrete local `CpuProver` creates a proof without selecting an SP1 network
+- [x] A concrete local `CpuProver` creates a proof without selecting an SP1 network
       prover.
-- [ ] The pinned local verifier accepts the proof, exact verification key, and exact
+- [x] The pinned local verifier accepts the proof, exact verification key, and exact
       public journal.
-- [ ] Proof, verification-key, and public-journal mutations fail closed.
-- [ ] At least one representative allowed case records proof time, proof size,
+- [x] Proof, verification-key, and public-journal mutations fail closed.
+- [x] At least one representative allowed case records proof time, proof size,
       verification time, instruction count, hardware, and tool versions.
 - [x] Focused and affected workspace gates pass.
 
@@ -154,6 +154,11 @@ before `verifierd`, capability job APIs, or gateway wiring.
   `GODEBUG=gctrace=1`, zero swap, no network, and the existing stage deadlines.
 - The GC trace is memory-only diagnostic evidence in the owner-only ignored raw log.
   The public exporter records only that `gctrace=1` was active.
+- The successful `44d58c7` log contains two identical
+  `benchmark_profile=cluster-56g` fields. Default export still rejects duplicates.
+  An explicit recovery mode accepts exactly two identical profile fields for this
+  saved log and applies every other result check unchanged. Future runs write the
+  field only inside the proof container.
 - NUS preparation and proving require Slurm. Ambient container-runtime controls fail
   closed. The Docker standby path accepts only a local Unix-socket daemon.
 - The maintainer approved baking the pinned Rust `1.97.1` Rustfmt and Clippy
@@ -177,9 +182,9 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 - The approved 36 GiB independent VM attempt failed at the exact cgroup memory cap.
   It produced no proof artifact.
-- The approved 56 GiB profile is implemented locally but has not run. The VM needs
-  the new immutable commit and preparation record first. The approval permits one
-  proof attempt and no retry, cap increase, swap use, or further profile change.
+- The approved 56 GiB attempt succeeded. It must not run again. The saved pass log
+  still needs export through the narrow duplicate-profile recovery mode before the
+  public benchmark result can be committed.
 - The approved 7 GiB Plonk gate ended with exit 137 on three runs. Each
   cgroup peak reached exactly 7,516,192,768 bytes. No proof artifact was produced.
 - The fixed `2^25` Gnark Plonk domain has a source-derived live-memory floor near
@@ -386,6 +391,23 @@ before `verifierd`, capability job APIs, or gateway wiring.
   worker count, Go heap target, and Go diagnostic drift.
 - Updated the public result exporter and plumbing fixtures to require the 56 GiB
   profile, four visible CPUs, and active memory diagnostics.
+- Prepared the independent `amd64` Docker VM at source commit `44d58c7`. The host
+  exposed 67,419,770,880 bytes of RAM and passed the 60,129,542,144-byte proof-limit
+  check. The VM built image
+  `sha256:9083e064208e7e024177b6728e66171605cd012dc209c705e0ef270c6c2d23d0`,
+  verified the pinned setup, compiled the guest and proof test, and staged run-bundle
+  manifest
+  `4ad456c05da5befdaeb17c7173f4ba5c88ddd1b5e96fffef693652cc24238026`.
+- Created a real SP1 Plonk proof on the independent VM. The direct fixture executed
+  422,138 instructions in 424 milliseconds. Proof generation took 1,742,106
+  milliseconds and produced a 2,537-byte artifact. `LightProver` verification took
+  479 milliseconds. Proof, key, and journal mutation checks failed closed.
+- The proof container peaked at 46,301,016,064 bytes with zero swap, zero OOM events,
+  and four affinity-visible CPUs. The proof and temporary verification files were
+  deleted inside the isolated process after the gates completed.
+- Traced the failed public export to one duplicate profile field. The wrapper and
+  in-container benchmark each wrote the same value. Removed the wrapper copy and
+  added an explicit recovery mode for the saved successful log.
 
 ## Validation Plan
 
@@ -501,6 +523,12 @@ before `verifierd`, capability job APIs, or gateway wiring.
 | Pinned-container `pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt pass after the profile amendment | 2026-08-10T17:32:05Z |
 | Scoped diff check | PASS | `git diff --check` reports no whitespace errors | 2026-08-10T17:32:05Z |
 | Pinned-container `pnpm lint` | PASS | Biome, Clippy with warnings denied, Go vet, and Buf lint pass; the existing `proc-macro-error2` future-compatibility warning remains | 2026-08-10T17:33:35Z |
+| Independent VM 56 GiB preparation | PASS | `amd64` Docker `29.7.2`, source `44d58c7`, exact 56 GiB limit, pinned image, setup, guest ELF, proof test, and run-bundle hashes recorded. No proof created | 2026-08-10T17:38:09Z |
+| Approved 56 GiB independent VM proof attempt | PASS | Execute, real Plonk generation, `LightProver` verification, and mutation gates passed; 46,301,016,064-byte peak, zero swap, and zero OOM events | 2026-08-10T18:16:44Z |
+| Commit-safe public result export | FAIL | The saved pass log contains two identical `benchmark_profile` fields; all proof gates completed before this post-proof parser failure | 2026-08-10T18:16:44Z |
+| Duplicate-profile exporter recovery tests | PASS | Default duplicate rejection, exact matching-value recovery, conflicting-value rejection, future wrapper output, Compose profile, and result redaction checks pass | 2026-08-10T18:23:24Z |
+| `./scripts/dev pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt checks after the exporter repair | 2026-08-10T18:23:24Z |
+| Recovery repair diff check | PASS | Shell syntax and `git diff --check` pass | 2026-08-10T18:23:24Z |
 
 ## Privacy Checks
 
@@ -510,11 +538,11 @@ before `verifierd`, capability job APIs, or gateway wiring.
   data.
 - PASS: B-0010 public values contain only ADR-0011 fields.
 - PASS: The verifier policy source remains its trusted local registry.
-- PENDING: The independent `LightProver` path compiles and its failure checks pass.
-  The approved memory cap prevented creation of a real proof.
+- PASS: The independent `LightProver` accepted the real proof, exact trusted key, and
+  exact public journal.
 - PASS: Core remains excluded from agent-facing and verifier-facing capabilities.
-- PENDING: The approved Plonk path still needs a real proof and mutation run. The
-  36 GiB attempt produced no artifact and exposed no private witness output.
+- PASS: The approved Plonk path created a real proof and passed its mutation run.
+  The raw log exposed no private witness output.
 - PASS: Real transaction data and private runtime artifacts remain outside Git.
 - PASS: The cluster result exporter copies only public aggregate fields and source
   identities. Raw scheduler and proof logs remain ignored.
@@ -538,6 +566,14 @@ before `verifierd`, capability job APIs, or gateway wiring.
 
 ## Exact Next Action
 
-On the dedicated VM, fast-forward the clean clone to the pushed `cluster-56g`
-handoff commit and run preparation again. Return the new preparation record for
-review before using the approval flag for the single proof attempt.
+On the VM, pull the pushed duplicate-profile exporter repair. Then recover the saved
+public result without rerunning the proof:
+
+```bash
+git pull --ff-only origin main
+./scripts/cluster/render-sp1-plonk-result \
+  --recover-duplicate-profile \
+  .sp1/benchmarks/cluster-20260810T174732Z-76324.pass.log
+```
+
+Return the generated public Markdown result. Do not rerun the proof.

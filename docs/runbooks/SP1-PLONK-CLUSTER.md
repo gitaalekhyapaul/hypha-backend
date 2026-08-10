@@ -290,3 +290,19 @@ proof artifact, public-journal file, or scheduler log.
 The exporter rejects duplicate required fields, unknown execution-path combinations,
 profile drift, malformed digests, unsafe Markdown values, mismatched proof and
 verification keys, and any timing or resource value outside ADR-0012.
+
+The `44d58c7` cluster wrapper wrote the same `benchmark_profile=cluster-56g` field
+once outside the container and once inside it. Its successful proof log remains
+valid, but the default exporter rejects that duplicate. Preserve the raw log and use
+the narrow recovery mode once:
+
+```bash
+./scripts/cluster/render-sp1-plonk-result \
+  --recover-duplicate-profile \
+  .sp1/benchmarks/<job>.pass.log
+```
+
+Recovery requires exactly two identical profile values. It still rejects every
+other duplicate, conflicting profile values, failed proof gates, resource drift, and
+unsafe public fields. New cluster runs write the profile only inside the container
+and do not need recovery mode.

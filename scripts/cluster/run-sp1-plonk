@@ -121,7 +121,6 @@ mkdir -p "$report_directory"
 chmod 700 "$report_directory"
 
 run_offline_benchmark() {
-  printf 'benchmark_profile=%s\n' "$RAZIEL_SP1_BENCHMARK_PROFILE"
   printf 'cluster_name=%s\n' "$RAZIEL_CLUSTER_NAME"
   printf 'cluster_scheduler=%s\n' "$RAZIEL_CLUSTER_SCHEDULER"
   printf 'source_git_commit=%s\n' "$prepared_commit"

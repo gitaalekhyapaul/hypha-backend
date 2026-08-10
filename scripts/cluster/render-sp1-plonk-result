@@ -4,8 +4,13 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
 
+recover_duplicate_profile=0
+if [ "$#" -eq 2 ] && [ "$1" = --recover-duplicate-profile ]; then
+  recover_duplicate_profile=1
+  shift
+fi
 if [ "$#" -ne 1 ]; then
-  echo "usage: $0 .sp1/benchmarks/<id>.pass.log" >&2
+  echo "usage: $0 [--recover-duplicate-profile] .sp1/benchmarks/<id>.pass.log" >&2
   exit 1
 fi
 report_path=$1
@@ -23,21 +28,30 @@ fi
 
 required_value() {
   key=$1
+  expected_count=1
+  if [ "$recover_duplicate_profile" -eq 1 ] && [ "$key" = benchmark_profile ]; then
+    expected_count=2
+  fi
   value=$(
-    awk -v prefix="$key=" '
+    awk -v expected_count="$expected_count" -v prefix="$key=" '
       index($0, prefix) == 1 {
-        value = substr($0, length(prefix) + 1)
+        current = substr($0, length(prefix) + 1)
+        if (count == 0) {
+          value = current
+        } else if (current != value) {
+          conflict = 1
+        }
         count += 1
       }
       END {
-        if (count != 1 || value == "") {
+        if (count != expected_count || conflict || value == "") {
           exit 1
         }
         print value
       }
     ' "$report_path"
   ) || {
-    echo "benchmark log has no $key value" >&2
+    echo "benchmark log has a missing, empty, conflicting, or duplicated $key value" >&2
     exit 1
   }
   printf '%s\n' "$value"
