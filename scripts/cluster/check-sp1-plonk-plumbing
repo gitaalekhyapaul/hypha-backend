@@ -198,7 +198,7 @@ mkdir -p .sp1/benchmarks
   printf 'run_bundle_manifest_sha256=1111111111111111111111111111111111111111111111111111111111111111\n'
   printf 'adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=422138, execute_ms=306\n'
   printf 'adr_0012_prove: proof_mode=plonk, prove_ms=120000, artifact_bytes=4096, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
-  printf 'adr_0012_verify: proof_mode=plonk, verify_ms=300, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
+  printf 'test local_plonk_verification_passes_the_adr_0012_gate ... adr_0012_verify: proof_mode=plonk, verify_ms=300, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
   printf 'adr_0012_mutations=pass\n'
   printf 'container_memory_peak_bytes=34359738368\n'
   printf 'container_swap_peak_bytes=0\n'
@@ -267,8 +267,15 @@ if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 
   echo "public benchmark result accepted a different resource profile" >&2
   exit 1
 fi
+sed \
+  's/^test local_plonk_verification_passes_the_adr_0012_gate \.\.\. /unexpected test prefix /' \
+  "$raw_report" >"$wrong_key_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_key_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted an unknown test-harness prefix" >&2
+  exit 1
+fi
 awk '
-  /^adr_0012_verify:/ {
+  /adr_0012_verify:/ {
     sub(/f+$/, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
   }
   { print }

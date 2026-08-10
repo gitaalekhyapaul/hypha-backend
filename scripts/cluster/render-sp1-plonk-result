@@ -59,10 +59,16 @@ required_value() {
 
 required_line() {
   prefix=$1
+  test_name=$2
+  test_harness_prefix="test $test_name ... "
   line=$(
-    awk -v prefix="$prefix" '
+    awk -v prefix="$prefix" -v test_harness_prefix="$test_harness_prefix" '
       index($0, prefix) == 1 {
         value = $0
+        count += 1
+      }
+      index($0, test_harness_prefix prefix) == 1 {
+        value = substr($0, length(test_harness_prefix) + 1)
         count += 1
       }
       END {
@@ -73,7 +79,7 @@ required_line() {
       }
     ' "$report_path"
   ) || {
-    echo "benchmark log has no $prefix gate line" >&2
+    echo "benchmark log has a missing or duplicated $prefix gate line" >&2
     exit 1
   }
   printf '%s\n' "$line"
@@ -171,9 +177,15 @@ cargo_prove_version=$(required_value cargo_prove_version)
 setup_sha256=$(required_value sp1_plonk_setup_archive_sha256)
 source_manifest_sha256=$(required_value source_manifest_sha256)
 run_bundle_manifest_sha256=$(required_value run_bundle_manifest_sha256)
-execute_gate=$(required_line adr_0012_execute:)
-prove_gate=$(required_line adr_0012_prove:)
-verify_gate=$(required_line adr_0012_verify:)
+execute_gate=$(required_line \
+  adr_0012_execute: \
+  local_plonk_execute_records_the_adr_0012_fixture_metrics)
+prove_gate=$(required_line \
+  adr_0012_prove: \
+  local_plonk_proof_passes_the_adr_0012_generation_gate)
+verify_gate=$(required_line \
+  adr_0012_verify: \
+  local_plonk_verification_passes_the_adr_0012_gate)
 mutations=$(required_value adr_0012_mutations)
 
 require_git_oid source_git_commit "$source_commit"

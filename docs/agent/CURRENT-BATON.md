@@ -8,7 +8,7 @@
 - Resumed UTC: 2026-07-27T10:16:28Z
 - Resumed after Plonk approval UTC: 2026-07-27T19:45:18Z
 - Resumed after maintainer pause UTC: 2026-07-28T11:32:51Z
-- Last updated UTC: 2026-08-10T18:23:24Z
+- Last updated UTC: 2026-08-10T18:30:38Z
 - Branch: `main`
 - Worktree: This B-0011 implementation commit is based on `10fbc88`. It contains
   accepted ADR-0012, the local Plonk proof path, and secured Slurm plumbing. The
@@ -18,9 +18,10 @@
   one OOM kill. The future x86 SIF provenance tuple remains unapproved. The single
   approved 56 GiB attempt at commit `44d58c7` created and verified a real Plonk
   proof, then passed all mutation checks. Its public exporter rejected one duplicated
-  profile field written by the wrapper and container. The proof remains valid and
-  must not run again. The local worktree adds a narrow exporter recovery path for
-  that saved successful log and removes the duplicate from future runs.
+  profile field written by the wrapper and container. Its first recovery pass found
+  the verification metric after an exact Rust test-harness prefix on the same line.
+  The proof remains valid and must not run again. The local worktree adds narrow
+  handling for both saved-log formats and removes the duplicate from future runs.
 
 ## Objective
 
@@ -159,6 +160,9 @@ before `verifierd`, capability job APIs, or gateway wiring.
   An explicit recovery mode accepts exactly two identical profile fields for this
   saved log and applies every other result check unchanged. Future runs write the
   field only inside the proof container.
+- Merged standard output and standard error placed the verification metric directly
+  after its Rust test-harness prefix. The exporter strips only the exact expected
+  test name before applying the complete ADR-0012 gate pattern.
 - NUS preparation and proving require Slurm. Ambient container-runtime controls fail
   closed. The Docker standby path accepts only a local Unix-socket daemon.
 - The maintainer approved baking the pinned Rust `1.97.1` Rustfmt and Clippy
@@ -183,8 +187,8 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - The approved 36 GiB independent VM attempt failed at the exact cgroup memory cap.
   It produced no proof artifact.
 - The approved 56 GiB attempt succeeded. It must not run again. The saved pass log
-  still needs export through the narrow duplicate-profile recovery mode before the
-  public benchmark result can be committed.
+  still needs export through the narrow duplicate-profile and test-prefix recovery
+  before the public benchmark result can be committed.
 - The approved 7 GiB Plonk gate ended with exit 137 on three runs. Each
   cgroup peak reached exactly 7,516,192,768 bytes. No proof artifact was produced.
 - The fixed `2^25` Gnark Plonk domain has a source-derived live-memory floor near
@@ -408,6 +412,9 @@ before `verifierd`, capability job APIs, or gateway wiring.
 - Traced the failed public export to one duplicate profile field. The wrapper and
   in-container benchmark each wrote the same value. Removed the wrapper copy and
   added an explicit recovery mode for the saved successful log.
+- The first recovery attempt exposed the saved verification metric after the exact
+  Rust test-harness prefix on the same line. Added exact test-name extraction and
+  rejection coverage for unknown prefixes.
 
 ## Validation Plan
 
@@ -529,6 +536,9 @@ before `verifierd`, capability job APIs, or gateway wiring.
 | Duplicate-profile exporter recovery tests | PASS | Default duplicate rejection, exact matching-value recovery, conflicting-value rejection, future wrapper output, Compose profile, and result redaction checks pass | 2026-08-10T18:23:24Z |
 | `./scripts/dev pnpm format:check` | PASS | Biome, Rustfmt, and Gofmt checks after the exporter repair | 2026-08-10T18:23:24Z |
 | Recovery repair diff check | PASS | Shell syntax and `git diff --check` pass | 2026-08-10T18:23:24Z |
+| First saved-log recovery attempt | FAIL | The verification metric follows its exact Rust test-harness prefix on the same line; no public Markdown file was written | 2026-08-10T18:30:38Z |
+| Test-harness gate extraction regression | PASS | Exact verification-test prefix is accepted; unknown prefix, duplicate profile conflict, and all prior result mutations fail closed | 2026-08-10T18:30:38Z |
+| Latest recovery format and diff checks | PASS | Pinned-container format checks, shell syntax, and `git diff --check` pass after exact test-prefix handling | 2026-08-10T18:30:38Z |
 
 ## Privacy Checks
 

@@ -304,5 +304,8 @@ the narrow recovery mode once:
 
 Recovery requires exactly two identical profile values. It still rejects every
 other duplicate, conflicting profile values, failed proof gates, resource drift, and
-unsafe public fields. New cluster runs write the profile only inside the container
-and do not need recovery mode.
+unsafe public fields. The exporter accepts a gate after its exact Rust test-harness
+prefix, which can occur when standard output and standard error merge. It strips
+only the three expected test names and still validates the complete gate format.
+New cluster runs write the profile only inside the container and do not need
+recovery mode.
