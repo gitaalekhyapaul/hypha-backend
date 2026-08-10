@@ -1,6 +1,6 @@
 # ADR-0012: Local SP1 Proof, Key, and Artifact Contract
 
-- Status: accepted and amended, one 56 GiB Plonk attempt approved
+- Status: accepted, amended, and validated
 - Date: 2026-07-24
 - Milestone: M3
 - Approved by maintainer: 2026-07-27
@@ -8,8 +8,10 @@
 - One 36 GiB proof attempt approved by maintainer: 2026-08-10
 - 36 GiB validation failed: 2026-08-10
 - One 56 GiB proof attempt approved by maintainer: 2026-08-11
+- 56 GiB validation passed: 2026-08-11
 - 30 GiB diagnostic approved by maintainer: 2026-07-27
-- Resolution: O-003 selects local Plonk and remains open until its proof gate passes
+- Resolution: O-003 is closed. D-019 selects local Plonk for final demo proof
+  artifacts.
 
 ## Context
 
@@ -244,6 +246,26 @@ The public benchmark exporter records only that the diagnostic was active.
 The approval permits one attempt from a newly prepared immutable run bundle. It
 permits no automatic retry, larger cap, swap, hosted prover, SP1 network prover,
 CUDA path, proof-mode change, or larger fixture. A failure requires another decision.
+
+### 56 GiB validation result
+
+The approved independent-machine attempt passed on 2026-08-11. The synthetic direct
+fixture executed 422,138 instructions in 424 milliseconds. Local Plonk proof
+generation took 1,742,106 milliseconds and produced a 2,537-byte encoded artifact.
+The independent `LightProver` path verified the exact proof, trusted program key, and
+public journal in 479 milliseconds. Proof, key, and public-journal mutation checks
+failed closed.
+
+The container peaked at 46,301,016,064 bytes under the 60,129,542,144-byte hard
+limit. It exposed four affinity-bound CPUs, used no swap, and recorded no OOM event
+or OOM kill. The proof process had no network route. Temporary proof and journal
+files were deleted inside the isolated process after all gates completed.
+
+The commit-safe public record is
+[`cluster-20260810T174732Z-76324.md`](../benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
+The raw owner-only log remains ignored. Its exporter used the documented narrow
+recovery for duplicate profile output and an exact Rust test-harness prefix. The
+recovery changed no proof, public value, metric, or resource result.
 
 Plonk is selected over Groth16 for three reasons:
 
@@ -536,7 +558,7 @@ M3 tests must cover:
 
 ## Consequences
 
-- A successful Plonk prove and verify gate closes the M3 proof-path part of O-003.
+- The successful Plonk prove and verify gate closes M3 and O-003.
 - Core remains suspended for agent-facing and verifier-facing capability artifacts.
 - M4 must configure service message-size and job limits from the measured proof size.
 - M4 must decode and verify remote artifacts in a memory-capped, time-capped child

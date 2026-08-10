@@ -75,6 +75,7 @@ fixtures remain required for tests.
 | D-016 | A data-owner policy authority approves PolicyIR; `razield` cannot approve its own policy |
 | D-017 | Use the container-first pinned toolchain in ADR-0003 for M0 and CI |
 | D-018 | Use strict Ed25519 with separate policy and snapshot keys, canonical signed claims, deployment trust-domain binding, and verifier-local registries as defined by ADR-0010 |
+| D-019 | Use local SP1 Plonk for final demo proof artifacts under the validated ADR-0012 profile |
 
 ## Open decisions
 
@@ -83,7 +84,6 @@ The following decisions must be closed before their milestone begins:
 | ID | Decision | Deadline |
 | --- | --- | --- |
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
-| O-003 | Select the SP1 proof mode used for the final demo | After the first proving benchmark |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
 | O-007 | Approve the protected-request signature envelope in ADR-0002 | Before gateway integration |
 
@@ -1056,6 +1056,9 @@ Exit gate:
 - snapshot can be reproduced from fixed input and salt
 
 ### M3: SP1 execution and proof
+
+Status: complete on 2026-08-11. The public proof benchmark is recorded at
+[`cluster-20260810T174732Z-76324.md`](../benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
 Deliver:
 
