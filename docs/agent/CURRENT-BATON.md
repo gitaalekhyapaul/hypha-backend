@@ -1,15 +1,16 @@
 # Current Engineering Baton
 
 - Baton ID: B-0017
-- State: READY
+- State: BLOCKED
 - Milestone: M4, capability issuance pre-queue admission
-- Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-08-12T08:18:16Z
+- Owner: Codex
+- Started UTC: 2026-08-12T08:20:09Z
+- Last updated UTC: 2026-08-12T08:27:00Z
 - Branch: `main`
 - Worktree: B-0016 is archived at
-  `docs/agent/history/B-0016-capability-window-doc-consistency.md`. It reconciles the
-  accepted 75-minute Plonk window and closes the stale O-008 documentation conflict.
+  `docs/agent/history/B-0016-capability-window-doc-consistency.md` and commit
+  `8fa490b`. It reconciles the accepted 75-minute Plonk window and closes the stale
+  O-008 documentation conflict.
 
 ## Objective
 
@@ -56,6 +57,7 @@ identifier. Stop before storing private data or contacting Redis.
 - `services/razield/tests/` only for admission boundary coverage
 - Existing canonical or authorization-core tests only if a missing exported helper is
   required without changing semantics
+- `docs/decisions/0014-agent-key-thumbprint-and-issuance-identity.md`
 - Current-status documentation only for behavior proven by this slice
 - `docs/agent/CURRENT-BATON.md`
 
@@ -83,7 +85,21 @@ identifier. Stop before storing private data or contacting Redis.
 
 ## Open Questions and Blockers
 
-- None block the pure admission boundary.
+- BLOCKED: ADR-0011 and ADR-0013 do not define how the API derives the 32-byte agent
+  key thumbprint from the supplied Ed25519 public key. This key-binding rule needs
+  explicit maintainer approval before implementation.
+- BLOCKED: ADR-0011 calls the issuance nullifier the duplicate key, but ADR-0013 uses
+  the request commitment as BullMQ's custom job ID. Proposed ADR-0014 retains the
+  later queue rule and keeps the nullifier as a separate proof-bound value.
+- BLOCKED: ADR-0013's mutation test wording includes every request field, but
+  `agent_id` is intentionally absent from the signed ADR-0011 commitment. Proposed
+  ADR-0014 treats it as unsigned, non-authoritative display metadata.
+- Fallback: DER, JWK, or a new domain-separated thumbprint can replace the proposal
+  after explicit selection. Each option needs different cross-language canonical
+  vectors and produces different PolicyIR subjects.
+- Higher-cost fallback: binding `agent_id` changes ADR-0011 commitment bytes, the
+  guest ELF, verification-key ID, M3 vectors, and proof artifacts. It requires an
+  ADR-0011 amendment and a new M3 proof gate.
 - The proof worker must repeat time-window validation at its trusted start time.
 - ADR-0002 and O-007 remain open before protected-request gateway integration.
 - A later positive isolated-verifier gate still needs explicit proof-run approval.
@@ -94,6 +110,13 @@ identifier. Stop before storing private data or contacting Redis.
 - B-0016 reconciled the accepted capability-window documentation.
 - Existing ADR-0011 canonical request and thumbprint helpers remain to be inspected
   before selecting the smallest adapter surface.
+- B-0017 claimed at commit `8fa490b` with a clean worktree.
+- Confirmed that no current code, vector, or accepted decision defines the key-to-
+  thumbprint derivation.
+- Drafted ADR-0014 with a fixed RFC 8032 vector and explicit signature, job-ID,
+  metadata, and timestamp rules. No service code changed.
+- Recorded migration and fallback costs. The proposed rule leaves M3 proof semantics
+  and artifacts unchanged.
 
 ## Validation Plan
 
@@ -108,6 +131,10 @@ identifier. Stop before storing private data or contacting Redis.
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
 | B-0016 archive | PASS | Capability-window documentation consistency | 2026-08-12T08:18:16Z |
+| `git status --short` | PASS, empty | B-0017 start state | 2026-08-12T08:20:09Z |
+| Active key-binding source search | BLOCKED | No thumbprint derivation formula exists | 2026-08-12T08:24:26Z |
+| RFC 8032 key-vector SHA-256 | PASS | Proposed raw-key thumbprint vector | 2026-08-12T08:24:26Z |
+| ADR-0014 completeness review | PASS | Trust, privacy, migration, tests, and rejected options recorded | 2026-08-12T08:27:00Z |
 
 ## Privacy Checks
 
@@ -125,6 +152,6 @@ identifier. Stop before storing private data or contacting Redis.
 
 ## Exact Next Action
 
-After the B-0016 documentation commit, claim B-0017. Inspect ADR-0011 request types,
-canonical encoders, and existing Ed25519 verification helpers before editing service
-code.
+Wait for explicit maintainer approval of ADR-0014. After approval, return B-0017 to
+ACTIVE, record the approval, and implement the admission adapter against those exact
+rules.
