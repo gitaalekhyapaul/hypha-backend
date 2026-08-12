@@ -1103,7 +1103,10 @@ Status: active implementation. The maintainer accepted
 [ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) on 2026-08-12. The
 BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Service RPCs, capability
 admission, private envelopes, proof execution, and independent verifier behavior
-remain pending.
+remain pending. The verification-only Rust feature and dependency-tree gate pass.
+That build uses direct `sp1-verifier` `6.3.1` Plonk verification and excludes SDK
+proving, core execution, native Gnark, JIT, and outbound SP1 client packages. This
+build result does not replace the later retained-real-proof worker gate.
 
 Deliver:
 

@@ -1,9 +1,11 @@
 use std::fmt::{self, Display, Formatter};
 
+#[cfg(feature = "proving")]
 use raziel_authorization_core::AuthorizationError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProverError {
+    #[cfg(feature = "proving")]
     InvalidInput(AuthorizationError),
     InvalidCycleLimit,
     UnsafeSp1Environment,
@@ -27,6 +29,7 @@ pub enum ProverError {
 impl Display for ProverError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
+            #[cfg(feature = "proving")]
             Self::InvalidInput(_) => "authorization guest input is invalid",
             Self::InvalidCycleLimit => "authorization guest cycle limit is invalid",
             Self::UnsafeSp1Environment => "an unsafe SP1 environment setting is not permitted",
@@ -55,6 +58,7 @@ impl Display for ProverError {
 
 impl std::error::Error for ProverError {}
 
+#[cfg(feature = "proving")]
 impl From<AuthorizationError> for ProverError {
     fn from(value: AuthorizationError) -> Self {
         Self::InvalidInput(value)

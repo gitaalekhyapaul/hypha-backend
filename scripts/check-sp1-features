@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 
-feature_tree=$(cargo tree --locked --offline -e features -i sp1-sdk@6.3.1)
+proving_feature_tree=$(cargo tree --locked --offline -e features -i sp1-sdk@6.3.1)
 
-case "$feature_tree" in
+case "$proving_feature_tree" in
   *'sp1-sdk feature "blocking"'*) ;;
   *)
     echo "SP1 blocking feature is missing" >&2
@@ -11,7 +11,7 @@ case "$feature_tree" in
     ;;
 esac
 
-case "$feature_tree" in
+case "$proving_feature_tree" in
   *'sp1-sdk feature "native-gnark"'*) ;;
   *)
     echo "SP1 native-gnark feature is missing" >&2
@@ -20,7 +20,7 @@ case "$feature_tree" in
 esac
 
 for forbidden_feature in network cuda experimental; do
-  case "$feature_tree" in
+  case "$proving_feature_tree" in
     *"sp1-sdk feature \"$forbidden_feature\""*)
       echo "forbidden SP1 feature is active: $forbidden_feature" >&2
       exit 1
@@ -28,4 +28,45 @@ for forbidden_feature in network cuda experimental; do
   esac
 done
 
-printf '%s\n' "$feature_tree"
+verifier_tree=$(cargo tree --locked --offline -p verifierd --prefix none --format '{p}')
+
+case "
+$verifier_tree
+" in
+  *"
+sp1-verifier v6.3.1
+"*) ;;
+  *)
+    echo "SP1 direct verifier is missing from verifierd" >&2
+    exit 1
+    ;;
+esac
+
+for forbidden_package in \
+  "sp1-sdk" \
+  "sp1-prover" \
+  "sp1-prover-types" \
+  "sp1-core-executor" \
+  "sp1-core-executor-runner" \
+  "sp1-core-machine" \
+  "sp1-jit" \
+  "sp1-recursion-gnark-ffi" \
+  "aws-config" \
+  "aws-sdk-kms" \
+  "reqwest" \
+  "reqwest-middleware" \
+  "twirp-rs"
+do
+  case "
+$verifier_tree
+" in
+    *"
+$forbidden_package "*)
+      echo "forbidden package is active in verifierd: $forbidden_package" >&2
+      exit 1
+      ;;
+  esac
+done
+
+printf '%s\n' "$proving_feature_tree"
+echo "verifier_feature_tree=pass"

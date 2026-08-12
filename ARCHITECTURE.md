@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md) and passing BullMQ and Redis conformance gate |
+| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md), passing queue conformance, and isolated verifier dependency graph |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -163,7 +163,11 @@ deduplication, one-job concurrency, lock renewal, zero proof retries, cancellati
 progress, bounded retention, and authenticated Redis restart recovery. The split keeps
 a 43 GiB proof operation away from the responsive API and queue supervisor. All roles
 remain inside the data-owner trust boundary. The one-shot prover has no hosted-prover
-or SP1-network path.
+or SP1-network path. The verification-only `raziel-prover` feature uses direct
+`sp1-verifier` Plonk verification against a trusted paired program-key record. Its
+checked dependency graph excludes the SDK, prover, core executor, native Gnark, JIT,
+and outbound SP1 clients. A retained real proof must still pass through the isolated
+worker before M4 can claim verifier behavior.
 
 ## Main components
 

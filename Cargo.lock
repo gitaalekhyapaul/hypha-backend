@@ -3436,9 +3436,11 @@ dependencies = [
  "raziel-canonical",
  "raziel-policy-ir",
  "raziel-snapshot",
+ "serde",
  "sha2 0.10.9",
  "sp1-core-executor",
  "sp1-sdk",
+ "sp1-verifier",
 ]
 
 [[package]]
@@ -5918,6 +5920,9 @@ dependencies = [
 [[package]]
 name = "verifierd"
 version = "0.0.0"
+dependencies = [
+ "raziel-prover",
+]
 
 [[package]]
 name = "version_check"

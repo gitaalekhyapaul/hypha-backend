@@ -10,6 +10,8 @@
   defer NestJS for the PoC
 - Maintainer direction on 2026-08-12: use a maintained job queue and do not implement
   queue semantics through a filesystem spool
+- Maintainer amendment on 2026-08-12: use direct `sp1-verifier` Plonk verification
+  instead of SDK `LightProver` in the isolated verifier build
 
 ## Context
 
@@ -59,7 +61,7 @@ one owner-only Redis service:
 | `razield-proof-worker` | Run the BullMQ worker, maintain the job lock, launch one executor, bridge cancellation, and publish the result | Bounded private request envelope in memory | Redis and a local executor channel only |
 | `razield-prover` | Resolve trusted state, build the witness, execute, prove, and return a bounded result | Relationships, path, caveats, openings, prepared guest input | None |
 | `verifierd` API | Bound ingress, resolve verifier-owned registries, reconstruct expected public values, map failures | Exact approved PolicyIR from its own registry | Gateway RPC only |
-| `verifier-worker` | Decode one artifact and run `LightProver` against its mounted trusted guest program | No witness data | None; local Unix socket only |
+| `verifier-worker` | Decode one artifact and run the direct SP1 Plonk verifier against a registry-pinned program key | No witness data | None; local Unix socket only |
 
 `razield`, `razield-proof-worker`, and `razield-prover` use separate processes. The
 one-shot prover runs in the 60 GiB proof cgroup. A proof OOM or abort must not
@@ -245,16 +247,23 @@ response, receipt, or standard log.
 4. Resolve the exact policy, accepted snapshot root, authority keys, and configured
    program-key identity from verifier-owned local state.
 5. Validate signatures, status, trust domain, expiry, agent-key thumbprint, request
-   envelope, and replay inputs.
+   envelope, replay inputs, and the paired program-key record.
 6. Reconstruct the complete expected ADR-0011 public-value bytes.
 7. Send only the proof artifact, expected public values, and trusted key identity to
    the local verifier worker.
 
 The worker runs under a provisional 2 GiB cgroup limit, zero swap, a read-only root,
-a bounded tmpfs, no network, and a 60-second deadline. It loads the authorization
-guest ELF from a read-only configured path, derives the key identifier itself,
-strictly decodes the artifact, compares the complete public journal, and runs
-`LightProver` verification.
+a bounded tmpfs, no network, and a 60-second deadline. It strictly decodes the
+artifact, compares the complete public journal, and runs `sp1-verifier`'s direct
+Plonk verification against the registry-pinned SP1 BN254 program-key hash and the
+SP1 release's embedded Plonk verification key.
+
+The verifier-owned program registry stores one atomic key record. Registration
+derives both the Raziel `sp1-vk-v1:` identifier and SP1 BN254 program-key hash from
+the same approved `SP1VerifyingKey`. The isolated worker receives that trusted pair.
+Request data cannot provide or select either representation. This replaces runtime
+ELF setup in the verifier worker and does not change the guest program, proof bytes,
+public values, or Raziel key identifier.
 
 Protected-request signature canonicalization remains governed by proposed ADR-0002
 and O-007. The proof-only worker contract does not depend on HTTP target
@@ -321,9 +330,11 @@ The maintainer separately approved these implementation changes on 2026-08-12:
 2. Replace the review-tested `bullmq-official = 1.2.0` pin with
    `bullmq-official = 1.2.3`, imported as `bullmq`. Use the pinned Redis runtime:
    `redis:8.2.8-bookworm@sha256:2f7462b9e93e0a7ae2edf3a0a0babc8a4d29f8bfc50849b906b7caaef925edc1`.
-3. A `raziel-prover` Cargo feature split. Verification builds keep `blocking` and
-   exclude `native-gnark`, `sp1-core-executor`, `CpuProver`, execution, and proving
-   modules. The proof-worker build explicitly activates those paths.
+3. A `raziel-prover` Cargo feature split. Verification builds use
+   `sp1-verifier = { version = "=6.3.1", default-features = false }` and exclude
+   `sp1-sdk`, `native-gnark`, `sp1-core-executor`, `sp1-prover`, `CpuProver`, guest
+   execution, and proving modules. The proof-worker build explicitly activates the
+   SDK, executor, and native-Gnark paths.
 
 No other crate or system facility is approved. A later need for Linux process-limit
 support beyond the Compose cgroup boundary requires a new dependency request.
@@ -333,8 +344,10 @@ Plonk rerun and retention of its 2.5 KiB public zero-knowledge artifact as a tes
 fixture. The run must use the approved VM profile and contain no witness or debug
 trace.
 
-The feature split adds no proof mode or package version. It narrows the standalone
-verifier build and preserves the approved proving build for `razield-proof-worker`.
+The feature split adds no proof mode or SP1 package version. `sp1-verifier` `6.3.1`
+already exists in the locked SDK graph. The direct dependency lets Cargo build the
+standalone verifier without SDK proving and execution crates. The approved proving
+build remains available to `razield-proof-worker`.
 
 ## Test Requirements
 
@@ -450,5 +463,7 @@ The maintainer accepted this decision on 2026-08-12, including:
 
 The maintainer separately approved BullMQ `1.2.3`, Tonic `0.14.6`, Tokio `1.53.1`,
 `tonic-prost` `0.14.6`, the pinned Redis `8.2.8` runtime, and the `raziel-prover`
-feature split on the same date. ADR-0002 and a later synthetic Plonk fixture run remain
-separate decisions.
+feature split on the same date. The maintainer amended the split to use direct
+`sp1-verifier` `6.3.1` after source inspection showed that SDK `LightProver` always
+links `sp1-prover` and `sp1-core-executor`. ADR-0002 and a later synthetic Plonk
+fixture run remain separate decisions.

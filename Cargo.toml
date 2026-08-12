@@ -34,12 +34,14 @@ raziel-authority = { path = "crates/authority" }
 raziel-authorization-core = { path = "crates/authorization-core" }
 raziel-canonical = { path = "crates/canonical" }
 raziel-policy-ir = { path = "crates/policy-ir", default-features = false }
+raziel-prover = { path = "crates/prover", default-features = false }
 raziel-proto = { path = "crates/proto" }
 raziel-snapshot = { path = "crates/snapshot" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = { version = "=0.10.9", default-features = false }
-sp1-sdk = { version = "=6.3.1", default-features = false, features = ["blocking", "native-gnark"] }
+sp1-sdk = { version = "=6.3.1", default-features = false }
 sp1-core-executor = { version = "=6.3.1", default-features = false }
+sp1-verifier = { version = "=6.3.1", default-features = false }
 sp1-zkvm = { version = "=6.3.1", default-features = false, features = ["lib"] }
 tokio = { version = "=1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
