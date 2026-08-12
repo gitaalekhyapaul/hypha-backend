@@ -86,7 +86,6 @@ The following decisions must be closed before their milestone begins:
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
 | O-007 | Approve the protected-request signature envelope in ADR-0002 | Before gateway integration |
-| O-008 | Select a proof-bound capability lifetime that remains usable after the measured Plonk deadline | Before capability service implementation |
 
 ## Actors and entities
 
@@ -194,7 +193,9 @@ The following decisions must be closed before their milestone begins:
 - **FR-060**: The agent shall authenticate `CreateCapability` using an Ed25519 request signature in the baseline.
 - **FR-061**: The service shall bind capability claims to the agent-key thumbprint.
 - **FR-062**: The capability shall cover one task, purpose, action, resource type, and resource scope.
-- **FR-063**: The baseline capability lifetime shall default to 15 minutes.
+- **FR-063**: The local Plonk profile shall use a maximum 75-minute proof-bound
+  capability window and preserve at least 15 minutes of usable time after a successful
+  proof.
 - **FR-064**: The service shall cap requested expiry at the snapshot, policy, and delegation expiry.
 - **FR-065**: The service shall calculate a deterministic issuance nullifier for conflicting-issuance control.
 - **FR-066**: Proof generation shall use an asynchronous job API.

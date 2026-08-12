@@ -5,7 +5,7 @@
 - Accepted: 2026-08-12
 - Milestone: M4
 - Related decisions: ADR-0002, ADR-0010, ADR-0011, ADR-0012
-- Related open decisions: O-007, O-008
+- Related open decision: O-007
 - Maintainer direction on 2026-08-12: retain the Rust API-job server topology and
   defer NestJS for the PoC
 - Maintainer direction on 2026-08-12: use a maintained job queue and do not implement
@@ -392,8 +392,9 @@ M4 must cover:
 - The Rust binding reached stable `1.0` in July 2026. Its exact queue behavior remains
   an M4 conformance gate rather than an assumption.
 - Plonk capabilities become practical for a visual demo, but creation remains slow.
-- The proposed 75-minute proof-bound lifetime expands the exposure window relative to
-  FR-063 and needs explicit maintainer approval.
+- The accepted 75-minute proof-bound lifetime expands the exposure window relative to
+  the earlier 15-minute default. Its subordinate expiry bounds and revocation checks
+  remain mandatory.
 - M5 can render true job progress and completed capabilities. It must not fake a
   successful proof or substitute a Core artifact.
 
