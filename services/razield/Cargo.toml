@@ -7,3 +7,5 @@ license.workspace = true
 publish = false
 
 [dependencies]
+bullmq.workspace = true
+tokio.workspace = true

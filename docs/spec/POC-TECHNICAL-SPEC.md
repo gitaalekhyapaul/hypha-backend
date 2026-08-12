@@ -1101,7 +1101,9 @@ Exit gate:
 
 Status: active implementation. The maintainer accepted
 [ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) on 2026-08-12. The
-first source slice is the BullMQ and Redis conformance gate.
+BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Service RPCs, capability
+admission, private envelopes, proof execution, and independent verifier behavior
+remain pending.
 
 Deliver:
 

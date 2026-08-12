@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: active baseline; M0 through M3 validated; M4 under design
+Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-11
+Last updated: 2026-08-12
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | [Accepted service and verifier execution contract](docs/decisions/0013-m4-service-and-verifier-execution.md) |
+| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md) and passing BullMQ and Redis conformance gate |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -158,10 +158,12 @@ verification separate from issuer trust.
 The API, BullMQ queue, private envelope store, supervisor, and one-shot prover are the
 accepted M4 target in
 [ADR-0013](docs/decisions/0013-m4-service-and-verifier-execution.md). Implementation
-has started with the queue conformance gate. The split keeps a 43 GiB proof operation
-away from the responsive API and queue supervisor. All roles remain inside the
-data-owner trust boundary. The one-shot prover has no hosted-prover or SP1-network
-path.
+started with a passing queue conformance gate. The gate covers request-ID
+deduplication, one-job concurrency, lock renewal, zero proof retries, cancellation,
+progress, bounded retention, and authenticated Redis restart recovery. The split keeps
+a 43 GiB proof operation away from the responsive API and queue supervisor. All roles
+remain inside the data-owner trust boundary. The one-shot prover has no hosted-prover
+or SP1-network path.
 
 ## Main components
 

@@ -1,143 +1,133 @@
 # Current Engineering Baton
 
-- Baton ID: B-0013
+- Baton ID: B-0014
 - State: READY
-- Milestone: M4, BullMQ and Redis conformance gate
+- Milestone: M4, verification-only prover feature split
 - Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-08-12T06:01:56Z
+- Started UTC: None
+- Last updated UTC: 2026-08-12T06:49:12Z
 - Branch: `main`
-- Worktree: B-0012 is archived at
-  `docs/agent/history/B-0012-m4-service-execution-contract.md`. ADR-0013 and its
-  dependency and feature decisions are accepted. The documentation checkpoint still
-  needs validation and commit before this baton is claimed.
+- Worktree: B-0013 is archived at
+  `docs/agent/history/B-0013-bullmq-redis-conformance.md`. Its BullMQ `1.2.3` and
+  Redis `8.2.8` conformance gate passes. M4 remains active.
 
 ## Objective
 
-Add a reproducible BullMQ `1.2.3` and Redis `8.2.8` conformance gate for the exact M4
-queue behaviors accepted in ADR-0013. Stop before implementing capability admission,
-private envelopes, proof execution, RPC endpoints, or verifier behavior.
+Implement the approved `raziel-prover` Cargo feature split. A verification-only build
+must keep the artifact codec, key identifier, and `LightProver` verification path. It
+must exclude native Gnark proving, `sp1-core-executor`, `CpuProver`, guest execution,
+local proving, and proving-profile code. Preserve the existing proving build and all M3
+behavior. Do not run another proof.
 
 ## Acceptance Criteria
 
-- [ ] BullMQ `1.2.3` and the required Tokio runtime are workspace-pinned and locked.
-- [ ] Docker Compose defines the digest-pinned Redis `8.2.8` service with owner-only
-      networking, authentication, bounded memory, `noeviction`, and persistent state.
-- [ ] The live gate proves custom-ID deduplication and queued-job removal.
-- [ ] The live gate proves worker and queue-global concurrency both limit processor
-      execution to one job.
-- [ ] The live gate proves lock renewal and terminal failure without a second
-      processor invocation after lock loss.
-- [ ] The live gate proves active cancellation-token delivery and progress events.
-- [ ] The live gate proves age-and-count terminal retention and Redis restart
-      recovery.
-- [ ] The gate uses no raw Redis commands for queue lifecycle behavior.
-- [ ] Focused tests, affected workspace checks, formatting, and diff checks pass.
+- [ ] `raziel-prover` declares explicit verification and proving feature sets.
+- [ ] The normal proving build preserves current execution, proving, and test APIs.
+- [ ] A verification-only build compiles the artifact and `LightProver` path.
+- [ ] The verification-only dependency tree excludes `sp1-core-executor`,
+      `sp1-prover`, native Gnark, `CpuProver`, execution, proving, and profile modules.
+- [ ] `verifierd` selects the verification-only feature set without adding service
+      behavior.
+- [ ] Focused tests, affected workspace tests, Clippy, formatting, and diff checks
+      pass.
 
 ## Architecture Constraints
 
 - `verifierd` never calls `razield`.
-- The agent never receives PolicyIR, relationships, satisfying paths, Merkle openings,
-  salts, stored caveat values, or witness traces.
-- Redis stores queue state, opaque private-blob references, safe progress, and public
-  terminal results only.
-- The filesystem is not a queue.
-- Worker concurrency and queue-global concurrency are one.
-- A crash, lost lock, OOM, or deadline cannot invoke proof processor code twice.
+- Request data cannot select the guest ELF, verification key, or proof mode.
+- The verifier resolves `policy_hash` through its trusted local policy registry.
+- The agent never receives PolicyIR, relationships, paths, openings, salts, caveat
+  values, or witness traces.
 - No hosted prover or SP1 network path receives private witness data.
+- Plonk remains the only public capability proof mode.
+- Core proofs remain barred from capabilities.
 - Raw Protobuf bytes are never commitment inputs.
 - Policy authorization and dataset relevance remain separate systems.
-- A second scenario cannot start until the reconciliation acceptance gate passes.
 
 ## File Scope
 
 - `Cargo.toml`
-- `Cargo.lock`
-- `services/razield/Cargo.toml`
-- `services/razield/src/` for queue configuration and reusable conformance helpers
-- `services/razield/tests/` for the live queue gate
-- `docker-compose.yml`
-- `scripts/` only for a reproducible queue-test entry point
-- `package.json` only if the new gate joins the planned command surface
-- `README.md`, `ARCHITECTURE.md`, and `docs/spec/POC-TECHNICAL-SPEC.md` for behavior
-  that the gate proves
+- `Cargo.lock` only if Cargo changes feature-resolution metadata
+- `crates/prover/Cargo.toml`
+- `crates/prover/src/lib.rs`
+- `crates/prover/src/` only for feature-boundary fixes
+- `crates/prover/tests/` only for feature-gate coverage
+- `services/verifierd/Cargo.toml`
 - `docs/agent/CURRENT-BATON.md`
+- Current-state documentation only if the proven feature boundary changes its status
 
 ## Out of Scope
 
-- Capability admission, job-status RPCs, private-envelope storage, or proof execution
-- Tonic service implementation
-- `raziel-prover` feature separation
-- `verifierd` ingress or worker implementation
+- Tonic or Tokio service implementation
+- Capability admission, private envelopes, proof jobs, or worker supervision
+- `verifierd` RPC ingress or child-process behavior
+- Changes to proof bytes, public values, commitments, keys, or verification semantics
+- Another SP1 proof run or retained proof fixture
 - ADR-0002 protected-request signatures
 - Next.js gateway, SDK, or console behavior
-- Another SP1 proof run or retained proof fixture
-- Real transaction data or M6 acceptance
-- A second scenario
+- Real transaction data, M6 acceptance, or another scenario
 
 ## Decisions
 
 - Inherited: ADR-0001 and ADR-0003 through ADR-0013 are accepted.
-- Inherited: ADR-0013 selects BullMQ `1.2.3`, digest-pinned Redis `8.2.8`, one proof
-  job, no proof retries, bounded terminal retention, and owner-only Redis access.
-- Inherited: Tonic `0.14.6`, `tonic-prost` `0.14.6`, Tokio `1.53.1`, and the
-  `raziel-prover` feature split are approved for their later M4 slices.
+- Inherited: ADR-0012 permits Plonk for public capabilities and limits Core to
+  non-sensitive internal measurements.
+- Inherited: ADR-0013 approves the `raziel-prover` feature split. Verification builds
+  keep SP1 blocking verification and exclude native proving and execution paths.
+- Inherited: No other crate or system dependency is approved for this baton.
 - Made: None.
 
 ## Open Questions and Blockers
 
-- None for the conformance gate.
-- ADR-0002 and O-007 remain open before the stolen-capability M4 exit gate can close.
-- A later positive isolated-verifier gate needs approval for one synthetic Plonk rerun
-  and retention of its public proof artifact.
-- No extra crate or system facility for Linux process limits is approved.
+- None block this feature-only slice.
+- A later positive isolated-verifier gate still needs approval for one synthetic Plonk
+  rerun and retention of its public proof artifact.
+- ADR-0002 and O-007 remain open before the M4 stolen-capability exit gate can close.
 
 ## Work Completed
 
-- B-0012 accepted the M4 service topology and dependency boundaries.
-- An isolated BullMQ `1.2.0` baseline passed 49 bundled unit tests and nine live Redis
-  behaviors. The in-repository gate must rerun those behaviors against `1.2.3`.
-- The pinned Redis image is present locally and passed the isolated authenticated
-  restart probe.
+- B-0013 pinned and validated BullMQ `1.2.3`, Tokio `1.53.1`, and Redis `8.2.8`.
+- The current `raziel-prover` package has one combined dependency surface. It imports
+  `sp1-core-executor` and enables the workspace `sp1-sdk` native-Gnark feature for
+  every consumer.
+- Existing M3 proof and verification behavior passes the full non-guest workspace
+  gate.
 
 ## Validation Plan
 
-- Run the focused BullMQ and Redis live gate from one documented command.
-- Run `cargo test -p razield` through the pinned toolchain.
-- Run affected workspace tests after dependency resolution.
-- Run `./scripts/dev pnpm format:check`.
-- Run `git diff --check`.
-- Inspect logs and Redis payload fields for private-data violations.
+- Compile and test the normal proving feature set without running ignored SP1 proof
+  gates.
+- Compile and test `raziel-prover` with verification features only.
+- Inspect Cargo feature trees for native proving, executor, and network paths.
+- Run the affected non-guest workspace tests.
+- Run focused Clippy, repository formatting, and `git diff --check`.
+- Confirm that no proof, witness, key, registry, or private artifact changed.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0012 archive | PASS | Accepted M4 contract and dependency approvals | 2026-08-12T06:00:38Z |
-| `./scripts/dev pnpm format:check`, stale-state scan, link targets, and `git diff --check` | PASS | Accepted documentation checkpoint | 2026-08-12T06:01:56Z |
+| B-0013 archive | PASS | BullMQ and Redis conformance gate | 2026-08-12T06:49:12Z |
+| `./scripts/dev cargo test --locked --offline --workspace --exclude raziel-authorization-guest` | PASS | Pre-split non-guest workspace baseline | 2026-08-12T06:49:12Z |
 
 ## Privacy Checks
 
-- PENDING: Test payloads contain synthetic identifiers only.
-- PENDING: Redis values contain no PolicyIR, relationship, path, caveat, opening,
-  witness, or proof bytes.
-- PENDING: Test and service logs contain no private queue payload.
-- NOT APPLICABLE: This baton does not implement verifier registry access.
-- NOT APPLICABLE: This baton does not use real transaction data.
+- NOT STARTED: No witness, relationship, caveat, opening, or proof data enters this
+  feature-only slice.
+- NOT STARTED: Verification-only dependency inspection must show no proving path.
+- NOT APPLICABLE: This baton does not process real transaction data.
 
 ## Risks and Private-Data Notes
 
-- The official Rust binding is new. Passing its bundled tests does not replace live
-  conformance against the exact pinned Redis image.
-- BullMQ may perform a second internal claim after a stalled job. The gate must prove
-  that `max_started_attempts = 1` blocks a second processor invocation.
-- Redis persistence can retain unsafe payloads. The test fixture must model only the
-  accepted public queue record and opaque reference boundary.
-- The test entry point must remove its container, network, volume, and credentials on
-  success and failure.
+- Cargo features are additive. A workspace-level `native-gnark` feature can silently
+  defeat a member crate's verification-only selection.
+- Default-feature changes can break M3 test builds or remove required verification
+  codecs. Test both feature sets.
+- A verification-only crate that still links executor or prover code weakens the M4
+  verifier isolation claim even if that code is never called.
 
 ## Exact Next Action
 
-Commit the accepted B-0012 documentation checkpoint. Then claim B-0013, inspect the
-current Compose and workspace command patterns, and add the smallest reusable BullMQ
-`1.2.3` conformance surface before implementing any service endpoint.
+After the B-0013 checkpoint commit, claim B-0014 and inspect the exact module and
+dependency feature closure before editing Cargo manifests. No new approval is needed
+for the accepted feature split.

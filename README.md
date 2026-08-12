@@ -17,8 +17,9 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 [`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
 M4 is in active implementation under accepted ADR-0013. The `razield` and `verifierd`
-binaries remain process shells. The current baton starts with the approved BullMQ and
-Redis conformance gate before service behavior is added.
+binaries remain process shells. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate
+passes. Capability admission, private envelopes, proof execution, RPCs, and verifier
+behavior remain pending.
 
 ## Read first
 
@@ -72,6 +73,7 @@ Use the same toolchain for repository commands:
 ./scripts/dev pnpm test
 ./scripts/dev pnpm test:e2e
 ./scripts/dev pnpm generate:check
+./scripts/test-bullmq-conformance
 ```
 
 Start the local application and service shells with:

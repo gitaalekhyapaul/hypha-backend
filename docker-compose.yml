@@ -115,6 +115,60 @@ services:
       - --telemetry-endpoint=
     profiles: ["equivalence"]
 
+  redis:
+    image: redis:8.2.8-bookworm@sha256:2f7462b9e93e0a7ae2edf3a0a0babc8a4d29f8bfc50849b906b7caaef925edc1
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d -o redis -g redis -m 0700 /run/redis
+        default_password=$$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+        test "$${#default_password}" -eq 48
+        # Redis replays AOF transactions as the default user. Its password stays
+        # boot-local, so network clients still authenticate as the named service user.
+        printf 'user default on >%s ~* &* +@all\nuser %s on >%s ~* &* +@all\n' \
+          "$$default_password" \
+          "$$RAZIEL_REDIS_USERNAME" "$$RAZIEL_REDIS_PASSWORD" \
+          > /run/redis/users.acl
+        unset default_password
+        chown redis:redis /run/redis/users.acl
+        chown -R redis:redis /data
+        exec /usr/bin/setpriv \
+          --reuid redis --regid redis --clear-groups --nnp \
+          --inh-caps=-all --ambient-caps=-all --bounding-set=-all \
+          redis-server \
+          --aclfile /run/redis/users.acl \
+          --appendonly yes \
+          --appendfsync always \
+          --dir /data \
+          --maxmemory 128mb \
+          --maxmemory-policy noeviction
+    environment:
+      RAZIEL_REDIS_PASSWORD: ${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}
+      RAZIEL_REDIS_USERNAME: ${RAZIEL_REDIS_USERNAME:-raziel}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          redis-cli --no-auth-warning
+          --user "$$RAZIEL_REDIS_USERNAME"
+          --pass "$$RAZIEL_REDIS_PASSWORD"
+          ping | grep -qx PONG
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+    mem_limit: 256m
+    memswap_limit: 256m
+    networks:
+      - owner-internal
+    tmpfs:
+      - /run/redis:rw,nosuid,nodev,mode=0700
+    volumes:
+      - redis-data:/data
+    profiles: ["services", "queue-conformance"]
+
   razield:
     <<: *secure-rust-service
     command: ["cargo", "run", "--locked", "--offline", "-p", "razield"]
@@ -124,6 +178,7 @@ services:
       CARGO_TARGET_DIR: /tmp/raziel-target
       HOME: /tmp/raziel-home
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
       RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
       RUSTUP_TOOLCHAIN: "1.97.1"
@@ -133,7 +188,51 @@ services:
       - cargo-git:/usr/local/cargo/git:ro
       - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
       - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+      - owner-internal
     profiles: ["services"]
+
+  bullmq-conformance:
+    <<: *secure-rust-service
+    cap_drop:
+      - ALL
+    command:
+      - cargo
+      - test
+      - --locked
+      - --offline
+      - -p
+      - razield
+      - --test
+      - bullmq_conformance
+      - --
+      - --ignored
+    user: "0:0"
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /var/cache/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_QUEUE_TEST_PREFIX: raziel-conformance
+      RAZIEL_QUEUE_TEST_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git:ro
+      - queue-conformance-target:/var/cache/raziel-target
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - owner-internal
+    security_opt:
+      - no-new-privileges:true
+    profiles: ["queue-conformance"]
 
   verifierd:
     <<: *secure-rust-service
@@ -205,3 +304,9 @@ volumes:
   cargo-git:
   cargo-registry:
   pnpm-store:
+  queue-conformance-target:
+  redis-data:
+
+networks:
+  owner-internal:
+    internal: true
