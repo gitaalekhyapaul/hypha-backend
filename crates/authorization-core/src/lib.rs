@@ -21,4 +21,5 @@ pub use public_values::{
 pub use statement::{
     CAPABILITY_REQUEST_DOMAIN, CAPABILITY_SCOPE_DOMAIN, ISSUANCE_NULLIFIER_DOMAIN, agent_subject,
     authorize, capability_request_commitment, capability_scope_hash, issuance_nullifier,
+    validate_capability_request_binding,
 };

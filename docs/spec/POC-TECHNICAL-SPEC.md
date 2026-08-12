@@ -1101,16 +1101,19 @@ Exit gate:
 ### M4: Capability service and independent verifier
 
 Status: active implementation. The maintainer accepted
-[ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) on 2026-08-12. The
-BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated Tonic `0.14.6`
-Snapshot, Capability, and Verification clients and servers compile behind an explicit
-service feature selected by `razield` and `verifierd`. The default message crate and
-authorization guest graphs exclude RPC runtime packages. Service handlers, listeners,
-capability admission, private envelopes, proof execution, and independent verifier
-behavior remain pending. The verification-only Rust feature and dependency-tree gate
-pass. That build uses direct `sp1-verifier` `6.3.1` Plonk verification and excludes SDK
-proving, core execution, native Gnark, JIT, and outbound SP1 client packages. This
-build result does not replace the later retained-real-proof worker gate.
+[ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) and
+[ADR-0014](../decisions/0014-agent-key-thumbprint-and-issuance-identity.md) on
+2026-08-12. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
+Tonic `0.14.6` service contracts compile behind an explicit feature. The pure
+`razield` admission boundary now performs typed request conversion, raw-key Ed25519
+thumbprint derivation, exact commitment signature verification, deterministic job-ID
+derivation, and 75-minute window admission. It has no Redis, filesystem, network, or
+proof access. Service handlers, listeners, private envelopes, queue publication,
+proof execution, and independent verifier behavior remain pending. The
+verification-only Rust feature and dependency-tree gate pass. That build uses direct
+`sp1-verifier` `6.3.1` Plonk verification and excludes SDK proving, core execution,
+native Gnark, JIT, and outbound SP1 client packages. This build result does not
+replace the later retained-real-proof worker gate.
 
 Deliver:
 

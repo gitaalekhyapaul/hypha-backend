@@ -267,7 +267,9 @@ payload = bytes(capability_request_commitment)
 issuance_nullifier = SHA-256(framed(domain, payload))
 ```
 
-The service uses this digest as the duplicate or conflict key. It does not consume it
+The service retains this digest as a proof-bound issuance conflict identifier and SP1
+proof nonce input. ADR-0014 assigns BullMQ duplicate identity to the exact request
+commitment, so this digest is not the queue job ID. The service does not consume it
 after one protected request. Per-request replay control uses the protected-request
 nonce from ADR-0002.
 

@@ -1,6 +1,6 @@
 # ADR-0014: Agent Key Thumbprint and Issuance Identity
 
-- Status: proposed for maintainer review
+- Status: accepted
 - Date: 2026-08-12
 - Milestone: M4
 - Related decisions: ADR-0011, ADR-0013
@@ -26,7 +26,7 @@ ADR-0013 also requires changed request fields to fail before queue publication.
 `agent_id` is intentionally absent from the ADR-0011 commitment and remains
 presentation metadata.
 
-## Proposed Decision
+## Decision
 
 ### Version 1 Ed25519 key input
 
@@ -144,7 +144,7 @@ snapshot, delegation, or key bounds.
 
 ## Migration and Compatibility Cost
 
-The proposed raw-key hash does not change ADR-0011 request commitment bytes, M3 public
+The approved raw-key hash does not change ADR-0011 request commitment bytes, M3 public
 values, the guest ELF, or existing proof vectors. It adds a new key-derivation vector
 and service admission tests. Snapshot relationships used by the product must name the
 derived key subject before capability issuance.
@@ -189,9 +189,9 @@ changing deduplication behavior.
 This changes ADR-0011 canonical bytes, checked-in vectors, and proof public values.
 Version 1 does not trust this display label.
 
-## Approval Needed
+## Approval
 
-Maintainer approval is required before implementation. Approval accepts:
+The maintainer approved this decision on 2026-08-12. The approval accepts:
 
 1. SHA-256 over validated raw 32-byte Ed25519 public-key bytes as the version 1
    thumbprint.

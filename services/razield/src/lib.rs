@@ -2,4 +2,5 @@
 
 #![forbid(unsafe_code)]
 
+pub mod admission;
 pub mod queue;

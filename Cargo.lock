@@ -3479,6 +3479,11 @@ name = "razield"
 version = "0.0.0"
 dependencies = [
  "bullmq-official",
+ "ed25519-dalek",
+ "prost-types 0.14.4",
+ "raziel-authority",
+ "raziel-authorization-core",
+ "raziel-policy-ir",
  "raziel-proto",
  "tokio",
 ]

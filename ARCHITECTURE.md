@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md), passing queue conformance, compiled generated Tonic contracts, and isolated verifier dependency graph |
+| M4 | Active implementation | Accepted service and issuance-identity contracts, passing pure admission and queue conformance, compiled generated Tonic contracts, and isolated verifier dependency graph |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -175,6 +175,14 @@ feature. The default message-only crate and authorization guest dependency graph
 exclude Tonic, Tokio, HTTP, Hyper, Tower, and the Prost service codec. This compiles
 wire contracts only. It does not add handlers, listeners, transport policy, or service
 behavior.
+
+The pure `razield` admission boundary implements
+[ADR-0014](docs/decisions/0014-agent-key-thumbprint-and-issuance-identity.md). It maps
+generated request values into the ADR-0011 canonical model, derives the agent identity
+from validated raw Ed25519 key bytes, verifies the signature over the exact request
+commitment, derives the 64-character BullMQ job ID, and checks the accepted 75-minute
+window. Its API has no queue, filesystem, network, witness, or proof access. The later
+RPC handler must call this boundary before private-envelope storage or publication.
 
 ## Main components
 
@@ -563,8 +571,9 @@ envelope to `verifierd`. Cache hits verify the envelope in the gateway and skip 
 proof verification. [ADR-0002](docs/decisions/0002-protected-request-signature-envelope.md)
 defines the proposed canonical rules.
 
-The issuance nullifier controls duplicate or conflicting capability issuance. It is
-not consumed on first use. The request nonce prevents replay of individual calls.
+The exact request commitment identifies duplicate BullMQ jobs. The issuance nullifier
+remains a proof-bound conflicting-issuance identifier and is not consumed on first
+use. The request nonce prevents replay of individual calls.
 
 ## Repository layout target
 

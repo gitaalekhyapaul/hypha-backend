@@ -8,5 +8,10 @@ publish = false
 
 [dependencies]
 bullmq.workspace = true
+ed25519-dalek.workspace = true
+prost-types.workspace = true
+raziel-authority.workspace = true
+raziel-authorization-core.workspace = true
+raziel-policy-ir.workspace = true
 raziel-proto = { workspace = true, features = ["services"] }
 tokio.workspace = true

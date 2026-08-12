@@ -134,8 +134,8 @@ Rules:
   `max_stalled_count = 0`. A crash, lost lock, OOM, or deadline fails the job and
   never starts a second proof.
 - A terminal state is immutable.
-- The exact request commitment becomes a BullMQ custom job ID. Repeating the exact
-  signed issuance request returns its retained job.
+- The lowercase hexadecimal exact request commitment becomes the 64-character BullMQ
+  custom job ID. Repeating the exact signed issuance request returns its retained job.
 - The API never reports CANCELED until executor termination and private-file deletion
   are confirmed.
 - Canceling a queued job removes it through BullMQ, deletes its private envelope, and
@@ -355,8 +355,10 @@ M4 must cover:
 
 - Create returns QUEUED without waiting for proof work.
 - exact duplicate requests return one job
-- changed request field, context entry, public key, commitment, or signature fails
-  prior to queue publication
+- changed authorization-bound request field, context entry, public key, commitment,
+  or signature fails prior to queue publication
+- changed `agent_id` alone retains the same signed job identity and remains
+  non-authoritative display metadata
 - duplicate publication returns the retained BullMQ job
 - worker and global queue concurrency remain one
 - queued, executing, and proving cancellation removes private blobs

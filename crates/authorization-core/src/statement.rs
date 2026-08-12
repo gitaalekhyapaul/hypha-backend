@@ -153,7 +153,22 @@ fn validate_input_header(input: &AuthorizationGuestInputV1) -> Result<(), Author
     if input.format_version != AUTHORIZATION_GUEST_INPUT_VERSION {
         return Err(AuthorizationError::UnsupportedInputVersion);
     }
+    validate_capability_request_binding(&input.request)?;
+
     let request = &input.request;
+    if input.issued_at_unix_seconds < 0
+        || input.issued_at_unix_seconds >= input.expires_at_unix_seconds
+        || input.expires_at_unix_seconds > request.requested_expires_at_unix_seconds
+    {
+        return Err(AuthorizationError::InvalidTimestamp);
+    }
+    Ok(())
+}
+
+/// Validates the proof-critical fields shared by service admission and the guest.
+pub fn validate_capability_request_binding(
+    request: &CapabilityRequestBindingV1,
+) -> Result<(), AuthorizationError> {
     if request.format_version != AUTHORIZATION_GUEST_INPUT_VERSION {
         return Err(AuthorizationError::UnsupportedRequestVersion);
     }
@@ -166,15 +181,7 @@ fn validate_input_header(input: &AuthorizationGuestInputV1) -> Result<(), Author
     validate_identifier(&request.resource_type)?;
     validate_nonempty_string(&request.resource_scope)?;
     validate_nonempty_string(&request.snapshot_id)?;
-    validate_context(&request.request_context)?;
-
-    if input.issued_at_unix_seconds < 0
-        || input.issued_at_unix_seconds >= input.expires_at_unix_seconds
-        || input.expires_at_unix_seconds > request.requested_expires_at_unix_seconds
-    {
-        return Err(AuthorizationError::InvalidTimestamp);
-    }
-    Ok(())
+    validate_context(&request.request_context)
 }
 
 fn evaluation_request(

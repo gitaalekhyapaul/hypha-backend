@@ -16,14 +16,14 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 46,301,016,064-byte memory peak. See the
 [`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
-M4 is in active implementation under accepted ADR-0013. The `razield` and `verifierd`
-binaries remain process shells. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate
-passes. The verification-only Rust build now uses direct `sp1-verifier` Plonk checks
-and excludes the SDK, prover, core executor, native Gnark, and SP1 network clients. The
-generated Tonic `0.14.6` clients and servers now compile behind an explicit
-`raziel-proto` service feature selected by both service crates. The default message
-crate and authorization guest graphs remain free from RPC runtime packages. Capability
-admission, handlers, listeners, private envelopes, proof execution, and the
+M4 is in active implementation under accepted ADR-0013 and ADR-0014. The `razield`
+and `verifierd` binaries remain process shells. The BullMQ `1.2.3` and Redis `8.2.8`
+conformance gate passes. The pure `razield` admission boundary now validates generated
+request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
+request commitment, derives the deterministic job ID, and enforces the 75-minute
+request window. It performs no Redis, filesystem, or proof operation. The generated
+Tonic contracts and isolated verification-only build pass their existing gates. RPC
+handlers, listeners, private envelopes, queue publication, proof execution, and the
 retained-proof verifier gate remain pending.
 
 ## Read first
