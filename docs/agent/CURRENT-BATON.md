@@ -5,12 +5,12 @@
 - Milestone: M4, capability issuance pre-queue admission
 - Owner: Codex
 - Started UTC: 2026-08-12T08:20:09Z
-- Last updated UTC: 2026-08-12T08:27:00Z
+- Last updated UTC: 2026-08-12T08:30:25Z
 - Branch: `main`
-- Worktree: B-0016 is archived at
+- Worktree: Proposed ADR-0014 and this blocked baton are checkpointed in commit
+  `a7a8f37`. B-0016 is archived at
   `docs/agent/history/B-0016-capability-window-doc-consistency.md` and commit
-  `8fa490b`. It reconciles the accepted 75-minute Plonk window and closes the stale
-  O-008 documentation conflict.
+  `8fa490b`.
 
 ## Objective
 
@@ -117,6 +117,10 @@ identifier. Stop before storing private data or contacting Redis.
   metadata, and timestamp rules. No service code changed.
 - Recorded migration and fallback costs. The proposed rule leaves M3 proof semantics
   and artifacts unchanged.
+- Committed proposed ADR-0014 as `a7a8f37`. Its status remains proposed and no source
+  code or dependency changed.
+- The same explicit-approval blocker persisted across the initiating goal turn and
+  two automatic continuation turns. No independent in-scope implementation remains.
 
 ## Validation Plan
 
@@ -135,6 +139,7 @@ identifier. Stop before storing private data or contacting Redis.
 | Active key-binding source search | BLOCKED | No thumbprint derivation formula exists | 2026-08-12T08:24:26Z |
 | RFC 8032 key-vector SHA-256 | PASS | Proposed raw-key thumbprint vector | 2026-08-12T08:24:26Z |
 | ADR-0014 completeness review | PASS | Trust, privacy, migration, tests, and rejected options recorded | 2026-08-12T08:27:00Z |
+| `git status --short` after `a7a8f37` | PASS, empty | Proposed-decision checkpoint | 2026-08-12T08:30:25Z |
 
 ## Privacy Checks
 
