@@ -1,10 +1,10 @@
 # Raziel Payment-Reconciliation PoC Technical Specification
 
-Status: draft for implementation handoff
+Status: active implementation contract
 
-Version: 0.1.0
+Version: 0.1.1
 
-Date: 2026-07-16
+Date: 2026-08-11
 
 Owners: project maintainers
 
@@ -86,6 +86,7 @@ The following decisions must be closed before their milestone begins:
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
 | O-007 | Approve the protected-request signature envelope in ADR-0002 | Before gateway integration |
+| O-008 | Select a proof-bound capability lifetime that remains usable after the measured Plonk deadline | Before capability service implementation |
 
 ## Actors and entities
 
@@ -113,13 +114,16 @@ The following decisions must be closed before their milestone begins:
 7. `razield` loads the approved policy record, builds the relationship commitment, and
    signs the snapshot descriptor.
 8. The agent SDK requests a capability for the task, purpose, action, and dataset.
-9. `razield` builds a private witness and generates an SP1 proof of `ALLOW`.
-10. The agent sends a protected query and proof capability to the Next.js gateway.
-11. The gateway asks local `verifierd` to verify the proof and signed request.
-12. `verifierd` resolves the approved PolicyIR locally and returns verified claims.
-13. The gateway enforces scope and sends the query to the transaction adapter.
-14. Later requests reuse cached verified claims until expiry.
-15. The gateway emits an audit receipt without private authorization data.
+9. `razield` validates the request, queues a private proof job, and returns its ID.
+10. A local proof worker builds the private witness and generates an SP1 proof of
+    `ALLOW`.
+11. The SDK polls the job API and receives the completed proof capability.
+12. The agent sends a protected query and proof capability to the Next.js gateway.
+13. The gateway asks local `verifierd` to verify the proof and signed request.
+14. `verifierd` resolves the approved PolicyIR locally and returns verified claims.
+15. The gateway enforces scope and sends the query to the transaction adapter.
+16. Later requests reuse cached verified claims until expiry.
+17. The gateway emits an audit receipt without private authorization data.
 
 ## Functional requirements
 
@@ -772,6 +776,19 @@ The console shall expose operational screens, not a marketing landing page:
 No screen may render private relationship paths, caveat witness values, salts, or
 Merkle openings.
 
+The first connected M5 checkpoint exposes service state, job progress, public proof
+fields, verification, cache behavior, denials, and receipts. The portal shall let the
+operator create, edit, review, and finalize a bounded synthetic transaction dataset
+for the existing reconciliation scenario. Finalization records a local source label,
+checksum, schema fingerprint, and row count. Every related screen and receipt shall
+display `SYNTHETIC`. This data cannot produce M6 acceptance evidence.
+
+Transaction rows belong to the reconciliation data adapter. They are not SpiceDB
+relationships and do not enter the authorization Merkle tree. Dataset finalization is
+an operator workflow and audit event. It is not a policy-authority or
+snapshot-authority signature. Policy approval, relationship changes, signed snapshot
+publication, and capability issuance remain separate explicit actions.
+
 ### Gateway
 
 The gateway shall use Next.js route handlers for the PoC. Keep authorization middleware
@@ -1008,6 +1025,8 @@ relationship count, path depth, and proof mode.
 
 ### M0: Repository and contract scaffold
 
+Status: complete.
+
 Deliver:
 
 - pnpm and Cargo workspaces
@@ -1027,6 +1046,8 @@ Exit gate:
 
 ### M1: PolicyIR and SpiceDB compiler adapter
 
+Status: complete.
+
 Deliver:
 
 - baseline PolicyIR Protobuf
@@ -1041,6 +1062,8 @@ Exit gate:
 - every unsupported fixture fails closed
 
 ### M2: Canonical commitments and snapshots
+
+Status: complete.
 
 Deliver:
 
@@ -1076,6 +1099,10 @@ Exit gate:
 
 ### M4: Capability service and independent verifier
 
+Status: active implementation. The maintainer accepted
+[ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) on 2026-08-12. The
+first source slice is the BullMQ and Redis conformance gate.
+
 Deliver:
 
 - asynchronous capability job API
@@ -1091,9 +1118,13 @@ Exit gate:
 
 ### M5: Next.js gateway and console
 
+Status: process and application shells only.
+
 Deliver:
 
 - operational demo screens
+- bounded local synthetic transaction editor and store
+- synthetic dataset review, finalization, checksum, schema fingerprint, and row count
 - gateway enforcement middleware
 - verifier client
 - capability cache
@@ -1106,6 +1137,8 @@ Exit gate:
 - out-of-scope and replayed requests fail
 
 ### M6: Real-data reconciliation
+
+Status: pending. O-001 remains open.
 
 Deliver:
 
@@ -1122,6 +1155,8 @@ Exit gate:
 - evidence bundle records provenance and measurements
 
 ### M7: Scenario-extension proof
+
+Status: pending until M6 passes.
 
 Deliver:
 

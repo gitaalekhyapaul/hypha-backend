@@ -21,7 +21,9 @@ the prover.
 
 Run the payment-reconciliation workflow end to end against non-mocked transaction
 data. The acceptance run must record source provenance, usage basis, checksum, schema
-mapping, and row count. Small synthetic fixtures are allowed only in automated tests.
+mapping, and row count. Small synthetic fixtures are allowed in automated tests and
+the clearly labeled local M5 development walkthrough. Synthetic data never satisfies
+the M6 acceptance gate.
 
 Do not start another scenario until the reconciliation acceptance gate passes.
 

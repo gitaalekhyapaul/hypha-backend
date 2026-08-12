@@ -1,139 +1,143 @@
 # Current Engineering Baton
 
-- Baton ID: B-0012
+- Baton ID: B-0013
 - State: READY
-- Milestone: M4, capability service and independent verifier
+- Milestone: M4, BullMQ and Redis conformance gate
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-08-10T18:34:56Z
+- Last updated UTC: 2026-08-12T06:01:56Z
 - Branch: `main`
-- Worktree: M0 through M3 are complete. B-0011 is archived at
-  `docs/agent/history/B-0011-local-sp1-plonk-proof.md`. The validated public Plonk
-  benchmark is recorded at
-  `docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md`. M4 implementation
-  has not started.
+- Worktree: B-0012 is archived at
+  `docs/agent/history/B-0012-m4-service-execution-contract.md`. ADR-0013 and its
+  dependency and feature decisions are accepted. The documentation checkpoint still
+  needs validation and commit before this baton is claimed.
 
 ## Objective
 
-Define and implement the first M4 slice: independent proof-capability verification
-through verifier-owned registries, bounded artifact ingress, local `LightProver`, and
-process isolation. Stop before asynchronous capability jobs, protected-request
-signatures, gateway caching, or product UI work.
+Add a reproducible BullMQ `1.2.3` and Redis `8.2.8` conformance gate for the exact M4
+queue behaviors accepted in ADR-0013. Stop before implementing capability admission,
+private envelopes, proof execution, RPC endpoints, or verifier behavior.
 
 ## Acceptance Criteria
 
-- [ ] One accepted decision record fixes verifier ingress limits, child-process
-      isolation, trusted key selection, registry lookups, timeout behavior, and
-      public versus audit errors.
-- [ ] Verification resolves the exact approved policy, snapshot descriptor, and
-      program key from verifier-owned local state.
-- [ ] A memory-capped and time-capped child decodes and verifies the strict ADR-0012
-      artifact without access to `razield` or any proving path.
-- [ ] Altered proof bytes, public values, key identity, policy status, snapshot
-      status, scope, and expiry fail closed.
-- [ ] The verifier completes its focused integration gate with `razield` stopped.
-- [ ] Focused and affected workspace gates pass.
+- [ ] BullMQ `1.2.3` and the required Tokio runtime are workspace-pinned and locked.
+- [ ] Docker Compose defines the digest-pinned Redis `8.2.8` service with owner-only
+      networking, authentication, bounded memory, `noeviction`, and persistent state.
+- [ ] The live gate proves custom-ID deduplication and queued-job removal.
+- [ ] The live gate proves worker and queue-global concurrency both limit processor
+      execution to one job.
+- [ ] The live gate proves lock renewal and terminal failure without a second
+      processor invocation after lock loss.
+- [ ] The live gate proves active cancellation-token delivery and progress events.
+- [ ] The live gate proves age-and-count terminal retention and Redis restart
+      recovery.
+- [ ] The gate uses no raw Redis commands for queue lifecycle behavior.
+- [ ] Focused tests, affected workspace checks, formatting, and diff checks pass.
 
 ## Architecture Constraints
 
 - `verifierd` never calls `razield`.
-- The verifier resolves `policy_hash` through its trusted local policy registry.
-- The agent never receives PolicyIR, relationships, paths, openings, salts, stored
-  caveat values, or witness traces.
-- Request data cannot select the authorization guest ELF or verification key.
+- The agent never receives PolicyIR, relationships, satisfying paths, Merkle openings,
+  salts, stored caveat values, or witness traces.
+- Redis stores queue state, opaque private-blob references, safe progress, and public
+  terminal results only.
+- The filesystem is not a queue.
+- Worker concurrency and queue-global concurrency are one.
+- A crash, lost lock, OOM, or deadline cannot invoke proof processor code twice.
+- No hosted prover or SP1 network path receives private witness data.
 - Raw Protobuf bytes are never commitment inputs.
-- The baseline guest proves `ALLOW` only.
-- No hosted prover or SP1 network client receives private witness data.
 - Policy authorization and dataset relevance remain separate systems.
+- A second scenario cannot start until the reconciliation acceptance gate passes.
 
 ## File Scope
 
-- `docs/decisions/0013-*.md` for the M4 verifier execution contract
-- `crates/verifier/`
-- `services/verifierd/`
-- `crates/prover/` only for an approved verification-only boundary split
-- Existing capability and verifier Protobuf contracts after explicit review
-- Focused verifier fixtures, mutation tests, and baton records
+- `Cargo.toml`
+- `Cargo.lock`
+- `services/razield/Cargo.toml`
+- `services/razield/src/` for queue configuration and reusable conformance helpers
+- `services/razield/tests/` for the live queue gate
+- `docker-compose.yml`
+- `scripts/` only for a reproducible queue-test entry point
+- `package.json` only if the new gate joins the planned command surface
+- `README.md`, `ARCHITECTURE.md`, and `docs/spec/POC-TECHNICAL-SPEC.md` for behavior
+  that the gate proves
+- `docs/agent/CURRENT-BATON.md`
 
 ## Out of Scope
 
-- `razield` asynchronous capability-job implementation
-- Protected-request signature implementation and gateway cache behavior
-- Next.js gateway, SDK, and console work
-- Real transaction data and reconciliation acceptance
-- Hosted proving, SP1 network proving, CUDA, or a new proof mode
-- Hypha dataset relevance attestation
+- Capability admission, job-status RPCs, private-envelope storage, or proof execution
+- Tonic service implementation
+- `raziel-prover` feature separation
+- `verifierd` ingress or worker implementation
+- ADR-0002 protected-request signatures
+- Next.js gateway, SDK, or console behavior
+- Another SP1 proof run or retained proof fixture
+- Real transaction data or M6 acceptance
+- A second scenario
 
 ## Decisions
 
-- Inherited: D-001 through D-019 in `docs/spec/POC-TECHNICAL-SPEC.md`.
-- Inherited: ADR-0001 through ADR-0012.
-- ADR-0012 requires M4 to decode and verify remote artifacts in a memory-capped,
-  time-capped child process.
-- ADR-0002 remains proposed. Its protected-request envelope needs explicit maintainer
-  approval before the later request-signature slice.
+- Inherited: ADR-0001 and ADR-0003 through ADR-0013 are accepted.
+- Inherited: ADR-0013 selects BullMQ `1.2.3`, digest-pinned Redis `8.2.8`, one proof
+  job, no proof retries, bounded terminal retention, and owner-only Redis access.
+- Inherited: Tonic `0.14.6`, `tonic-prost` `0.14.6`, Tokio `1.53.1`, and the
+  `raziel-prover` feature split are approved for their later M4 slices.
 - Made: None.
 
 ## Open Questions and Blockers
 
-- The child-process protocol, memory ceiling, timeout, and crash mapping need an
-  accepted M4 decision before implementation.
-- The existing `raziel-verifier` crate owns authority and registry validation. Its
-  boundary with ADR-0012 artifact decoding and `LightProver` needs source review.
-- O-005 and O-007 remain open before gateway integration. They do not block the first
-  verifier-only slice.
-- No new dependency, package, CLI, runtime, or toolchain change is approved.
-- Deferred follow-up: after the M7 exit gate passes and the PoC meets its definition
-  of done, remind the maintainer about Hypha relevance attestation, the Obsidian
-  `Current Implementation Discussion Post`, and the TEE-backed local-authorization
-  experiment.
+- None for the conformance gate.
+- ADR-0002 and O-007 remain open before the stolen-capability M4 exit gate can close.
+- A later positive isolated-verifier gate needs approval for one synthetic Plonk rerun
+  and retention of its public proof artifact.
+- No extra crate or system facility for Linux process limits is approved.
 
 ## Work Completed
 
-- M0 established the repository, pinned toolchain, contracts, and service shells.
-- M1 delivered strict SpiceDB compilation, PolicyIR semantics, and live equivalence.
-- M2 delivered canonical commitments, blinded snapshots, authority signatures, and
-  verifier-local registries.
-- M3 delivered the bounded authorization guest, real local Plonk proof generation,
-  independent `LightProver` verification, mutation rejection, and public benchmark.
+- B-0012 accepted the M4 service topology and dependency boundaries.
+- An isolated BullMQ `1.2.0` baseline passed 49 bundled unit tests and nine live Redis
+  behaviors. The in-repository gate must rerun those behaviors against `1.2.3`.
+- The pinned Redis image is present locally and passed the isolated authenticated
+  restart probe.
 
 ## Validation Plan
 
-- Strict artifact ingress and malformed-length tests
-- Trusted registry and verification-key selection tests
-- Proof, journal, policy, snapshot, scope, status, and expiry mutations
-- Child timeout, memory exhaustion, crash, and output-bound tests
-- Verifier completion with `razield` stopped
-- SP1 feature-tree exclusion of proving and network paths where the crate boundary
-  permits it
-- Focused Rust tests, affected workspace tests, formatting, lint, and diff checks
-- Private-data and log-output review
+- Run the focused BullMQ and Redis live gate from one documented command.
+- Run `cargo test -p razield` through the pinned toolchain.
+- Run affected workspace tests after dependency resolution.
+- Run `./scripts/dev pnpm format:check`.
+- Run `git diff --check`.
+- Inspect logs and Redis payload fields for private-data violations.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0011 archive | PASS | M3 guest, local Plonk proof, independent verification, mutation gates, and benchmark evidence | 2026-08-10T18:34:56Z |
+| B-0012 archive | PASS | Accepted M4 contract and dependency approvals | 2026-08-12T06:00:38Z |
+| `./scripts/dev pnpm format:check`, stale-state scan, link targets, and `git diff --check` | PASS | Accepted documentation checkpoint | 2026-08-12T06:01:56Z |
 
 ## Privacy Checks
 
-- PASS: M3 public output contains only approved public fields and aggregate metrics.
-- PASS: Raw proof logs, proof bytes, public-journal files, and witness data remain
-  outside Git.
-- PENDING: M4 verifier ingress and child-process logs need review before service use.
-- PENDING: M4 must prove verifier independence with `razield` stopped.
+- PENDING: Test payloads contain synthetic identifiers only.
+- PENDING: Redis values contain no PolicyIR, relationship, path, caveat, opening,
+  witness, or proof bytes.
+- PENDING: Test and service logs contain no private queue payload.
+- NOT APPLICABLE: This baton does not implement verifier registry access.
+- NOT APPLICABLE: This baton does not use real transaction data.
 
 ## Risks and Private-Data Notes
 
-- A remote artifact can trigger large allocations or verifier panics before
-  cryptographic rejection. Bound bytes before decode and isolate the verifier.
-- A caller-selected key or policy record can turn valid cryptography into invalid
-  authorization. Resolve all trusted material from verifier-owned registries.
-- Generic client failures must not expose policy structure, registry state, or proof
-  internals. Detailed codes belong only in access-controlled audit records.
+- The official Rust binding is new. Passing its bundled tests does not replace live
+  conformance against the exact pinned Redis image.
+- BullMQ may perform a second internal claim after a stalled job. The gate must prove
+  that `max_started_attempts = 1` blocks a second processor invocation.
+- Redis persistence can retain unsafe payloads. The test fixture must model only the
+  accepted public queue record and opaque reference boundary.
+- The test entry point must remove its container, network, volume, and credentials on
+  success and failure.
 
 ## Exact Next Action
 
-Claim B-0012, inspect the existing verifier crate, service shell, Protobuf contracts,
-and ADR-0002, then draft ADR-0013 for maintainer review before adding dependencies or
-changing verifier behavior.
+Commit the accepted B-0012 documentation checkpoint. Then claim B-0013, inspect the
+current Compose and workspace command patterns, and add the smallest reusable BullMQ
+`1.2.3` conformance surface before implementing any service endpoint.

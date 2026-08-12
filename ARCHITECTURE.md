@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: proposed baseline for implementation
+Status: active baseline; M0 through M3 validated; M4 under design
 
-Last updated: 2026-07-16
+Last updated: 2026-08-11
 
 ## Human-readable overview
 
@@ -28,7 +28,34 @@ The first working scenario is payment reconciliation:
 
 The end-to-end demo must process a real, provenance-recorded transaction dataset.
 Hand-written or generated transaction rows do not satisfy the demo acceptance gate.
-Small fixtures remain valid for unit, adversarial, and equivalence tests.
+Small fixtures remain valid for unit, adversarial, and equivalence tests. M5 can use
+portal-created synthetic transaction records for its clearly labeled local
+development walkthrough. M6 remains the real-data acceptance run.
+
+### Current implementation status
+
+| Milestone | Current state | Durable evidence |
+| --- | --- | --- |
+| M0 | Complete | Repository, pinned toolchain, contracts, and process shells |
+| M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
+| M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
+| M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
+| M4 | Active implementation | [Accepted service and verifier execution contract](docs/decisions/0013-m4-service-and-verifier-execution.md) |
+| M5 | Shells only | Next.js console and gateway have no service wiring |
+| M6 | Pending | No approved real transaction source or acceptance run |
+| M7 | Pending | Starts only after the M6 reconciliation gate |
+
+The validated M3 run used the synthetic direct fixture. It produced a 2,537-byte
+Plonk artifact in 1,742,106 milliseconds, used 46,301,016,064 bytes at peak, and
+verified in 479 milliseconds. This closes the cryptographic M3 gate. It does not
+claim real-data acceptance.
+
+M5 can produce the first connected visual checkpoint once M4 services exist. The
+portal can create and review synthetic transaction records in the existing
+reconciliation scenario. It labels the dataset `SYNTHETIC`, records the local source,
+checksum, schema fingerprint, and row count, then sends protected queries through the
+gateway. This is a development demonstration, not the M6 acceptance run. It does not
+create a second scenario.
 
 ### The key distinction from a signed token
 
@@ -95,17 +122,27 @@ flowchart LR
         S["SpiceDB"]
         C["SpiceDB compiler adapter\nGo build-time tool"]
         PA["Policy authority\nreview and signature"]
-        R["razield\nRust snapshot and prover service"]
+        R["razield API\nRust job controller"]
+        Q["BullMQ and Redis\nowner-only queue state"]
+        B["Private envelope store\nbounded owner-only blobs"]
+        W["Rust proof supervisor\nBullMQ worker"]
+        E["One-shot prover\nnetworkless CpuProver"]
         PR["Policy registry\napproved PolicyIR records"]
         S --> C
         C --> PA
         PA --> PR
         S --> R
         PR --> R
+        R -->|"publish and query"| Q
+        R -->|"write private envelope"| B
+        Q <-->|"claim, renew, finish"| W
+        B -->|"bounded private input"| W
+        W -->|"spawn in proof cgroup"| E
+        E -->|"bounded public result"| W
     end
 
-    A["AI agent\nTypeScript SDK"] -->|"capability request"| R
-    R -->|"proof-backed capability"| A
+    A["AI agent\nTypeScript SDK"] -->|"Create, Get, Cancel"| R
+    R -->|"job state or capability"| A
     A -->|"scoped API request"| G["Next.js gateway / PEP"]
     G -->|"local verification"| V["verifierd\nindependent Rust sidecar"]
     PR --> V
@@ -118,6 +155,14 @@ flowchart LR
 The `verifierd` process must never call `razield`. That invariant keeps proof
 verification separate from issuer trust.
 
+The API, BullMQ queue, private envelope store, supervisor, and one-shot prover are the
+accepted M4 target in
+[ADR-0013](docs/decisions/0013-m4-service-and-verifier-execution.md). Implementation
+has started with the queue conformance gate. The split keeps a 43 GiB proof operation
+away from the responsive API and queue supervisor. All roles remain inside the
+data-owner trust boundary. The one-shot prover has no hosted-prover or SP1-network
+path.
+
 ## Main components
 
 | Component | Language | Responsibility | Must not do |
@@ -125,7 +170,7 @@ verification separate from issuer trust.
 | `apps/demo-console` | Next.js and TypeScript | Human workflow, task creation, snapshot status, proof inspection, audit view | Evaluate authorization or hold graph secrets |
 | `apps/demo-gateway` | Next.js route handlers and TypeScript | PEP, agent request authentication, scope checks, capability cache, payments API facade | Trust an unsigned `ALLOW` response |
 | `packages/sdk-ts` | TypeScript | Agent key handling, capability request, proof-capability transport, request signing | Receive PolicyIR or graph data |
-| `services/razield` | Rust | Snapshot orchestration, witness construction, SP1 proving, capability issuance | Act as the independent verifier |
+| `services/razield` | Rust | Snapshot orchestration, asynchronous job control, private witness construction, local SP1 proving, capability issuance | Act as the independent verifier |
 | `services/verifierd` | Rust | Policy-registry lookup, proof verification, snapshot checks, claim validation | Call `razield` or read private graph data |
 | `programs/authorization-guest` | Rust and SP1 | Check commitments, Merkle membership, PolicyIR evaluation, caveats, capability claims | Perform network or filesystem I/O |
 | `crates/proto` | Rust | Compile generated Protobuf message contracts for Rust components | Define canonical commitment bytes |
@@ -163,6 +208,21 @@ clients.
 Proof-critical semantics live in Rust. The host evaluator and SP1 guest share the
 same PolicyIR types and pure evaluation code where the target permits it. This
 reduces host-versus-guest semantic drift.
+
+Plonk is the only approved proof mode for an agent-facing capability. The validated
+profile provides computational zero knowledge, a small public artifact, and fast
+independent verification. Its measured cost is about 29 minutes and 43.12 GiB for the
+direct fixture on the four-CPU VM profile.
+
+Core remains useful for execute-mode checks and non-sensitive internal measurements.
+The pinned SP1 6.3.1 Core artifact carries witness-derived trace openings and has no
+approved witness-hiding claim. It cannot enter `ProofCapability.zk_proof`, reach an
+agent, or replace Plonk in a product demonstration.
+
+This cost profile makes capability creation an asynchronous control-plane operation.
+It does not run inside an HTTP request or a protected data query. One completed
+capability supports many fast requests through independent verification and the M5
+gateway cache.
 
 ### A small Go compiler adapter
 
@@ -227,18 +287,36 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor A as AI agent and SDK
-    participant R as razield
+    participant R as razield API
+    participant B as private envelope store
+    participant Q as BullMQ on Redis
+    participant W as proof supervisor
+    participant E as one-shot prover
     participant G as Next.js gateway
     participant V as verifierd
     participant P as Payments adapter
 
     A->>A: Build and sign capability request
     A->>R: CreateCapability
-    R->>R: Load approved snapshot
-    R->>R: Find satisfying relationship path
-    R->>R: Build private Merkle witness
-    R->>R: Execute and prove SP1 guest
-    R-->>A: Capability claims, proof, attestation
+    R->>R: Validate envelope and admission limits
+    R->>B: Persist bounded private envelope
+    R->>Q: Publish job with deterministic ID
+    R-->>A: Job ID and QUEUED state
+    W->>Q: Claim one job and renew its lock
+    W->>Q: Record EXECUTING
+    W->>E: Launch with bounded private envelope
+    E->>E: Resolve snapshot and build private witness
+    W->>Q: Record PROVING
+    E->>E: Execute and prove SP1 guest
+    E-->>W: Return bounded public result
+    W->>B: Delete private envelope
+    W->>Q: Record SUCCEEDED and public capability
+
+    loop Poll until terminal state
+        A->>R: GetCapability
+        R->>Q: Read public job state
+        R-->>A: State, metrics, or capability
+    end
 
     A->>G: Query, capability, nonce, signature
     G->>V: VerifyCapability
@@ -266,6 +344,12 @@ sequenceDiagram
         P-->>A: Result through gateway
     end
 ```
+
+`CreateCapability` returns after admission and durable queueing. It does not wait for
+proof generation. BullMQ enforces one active proof job. A separate networkless child
+runs the validated M3 profile. The exact queue format, cancellation rules, process
+caps, and capability time window are accepted in
+[ADR-0013](docs/decisions/0013-m4-service-and-verifier-execution.md).
 
 ## Core data commitments
 
@@ -417,8 +501,9 @@ operation.
 
 ## Capability token model
 
-The capability is a Protobuf artifact transported as binary gRPC data or a base64url
-HTTP value. It is not a JWT in the baseline.
+The capability is a Protobuf artifact on internal RPC boundaries. O-005 still governs
+its HTTP representation, so the baseline does not yet select base64url or another
+browser-facing encoding. It is not a JWT.
 
 ```text
 ProofCapability {

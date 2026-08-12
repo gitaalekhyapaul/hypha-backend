@@ -10,10 +10,15 @@ acceptance run.
 
 ## Current status
 
-M0, M1, and M2 are complete. M2 delivered canonical commitments, the blinded
-relationship tree, authority signatures, and verifier-local registry libraries. M3
-adds SP1 guest execution and proof generation. The Rust service processes remain
-shells until their M4 wiring work.
+M0 through M3 are complete. M3 produced and independently verified a real local SP1
+Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
+1,742,106-millisecond proving time, 479-millisecond verification time, and a
+46,301,016,064-byte memory peak. See the
+[`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
+
+M4 is in active implementation under accepted ADR-0013. The `razield` and `verifierd`
+binaries remain process shells. The current baton starts with the approved BullMQ and
+Redis conformance gate before service behavior is added.
 
 ## Read first
 

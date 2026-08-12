@@ -21,6 +21,30 @@ The baton must let a new agent answer these questions in five minutes:
 - What is the next command or edit?
 - Which privacy and proof boundaries apply?
 
+## Current-state hygiene
+
+The repository separates current engineering state from dated evidence.
+
+Current-state documents are:
+
+- `docs/agent/CURRENT-BATON.md`
+- `ARCHITECTURE.md`
+- `docs/spec/POC-TECHNICAL-SPEC.md`
+- the status section in `README.md`
+- accepted decision records under `docs/decisions/`
+
+Historical evidence is:
+
+- archived batons under `docs/agent/history/`
+- dated reports under `docs/reports/`
+- benchmark records under `docs/benchmarks/`
+- raw or ignored run logs
+
+Do not rewrite a historical result to resemble the present. Keep its date and result
+intact. Do not use a historical file as the source for current milestone status. A
+current-state claim must agree with Git, accepted decisions, and durable validation
+evidence.
+
 ## Baton states
 
 | State | Meaning | Allowed transition |
@@ -253,6 +277,21 @@ Rewrite `CURRENT-BATON.md` with:
 
 Do not leave the active baton describing completed work as if it remains active.
 
+### Reconcile milestone status
+
+A milestone close is incomplete until all current-state documents agree. The
+coordinating owner must:
+
+1. Link the durable exit-gate evidence from the archived baton.
+2. Mark the milestone status in `docs/spec/POC-TECHNICAL-SPEC.md`.
+3. Update the status and diagrams in `ARCHITECTURE.md`.
+4. Update the status section in `README.md`.
+5. Reset `CURRENT-BATON.md` to the next bounded objective.
+6. Search current-state and undated documentation for superseded milestone claims.
+
+Exclude dated reports, archived batons, and benchmark records from the stale-claim
+search. They preserve the state that existed at their recorded time.
+
 ## Parallel work
 
 Use parallel agents for independent reads, audits, or separate file groups. The active
@@ -278,7 +317,11 @@ When code and baton disagree:
 5. Update the baton with corrected facts.
 6. Record any protocol or acceptance ambiguity as an open question.
 
-Do not delete stale information that affects risk. Move it to a correction note.
+Remove superseded claims from current-state documents after recording the correction.
+Preserve durable rationale, failed experiments, and risk evidence in an archived baton
+or decision record. Add a correction note only when the stale claim affected a risk,
+approval, or acceptance decision. Do not retain obsolete planning or abandoned
+thought process in the active baton.
 
 ## Privacy checks for every handoff
 
