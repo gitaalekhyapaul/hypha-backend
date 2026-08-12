@@ -3425,6 +3425,8 @@ version = "0.0.0"
 dependencies = [
  "prost 0.14.4",
  "prost-types 0.14.4",
+ "tonic 0.14.6",
+ "tonic-prost",
 ]
 
 [[package]]
@@ -3477,6 +3479,7 @@ name = "razield"
 version = "0.0.0"
 dependencies = [
  "bullmq-official",
+ "raziel-proto",
  "tokio",
 ]
 
@@ -4888,7 +4891,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tonic",
+ "tonic 0.12.3",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -4913,7 +4916,7 @@ dependencies = [
  "sp1-hypercube",
  "sp1-primitives",
  "tokio",
- "tonic",
+ "tonic 0.12.3",
  "tonic-build",
  "tracing",
 ]
@@ -5626,6 +5629,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac2a5518c70fa84342385732db33fb3f44bc4cc748936eb5833d2df34d6445ef"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "h2",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-timeout",
+ "hyper-util",
+ "percent-encoding",
+ "pin-project",
+ "socket2 0.6.5",
+ "sync_wrapper",
+ "tokio",
+ "tokio-stream",
+ "tower 0.5.3",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
 name = "tonic-build"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5637,6 +5668,17 @@ dependencies = [
  "prost-types 0.13.5",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "tonic-prost"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50849f68853be452acf590cde0b146665b8d507b3b8af17261df47e02c209ea0"
+dependencies = [
+ "bytes",
+ "prost 0.14.4",
+ "tonic 0.14.6",
 ]
 
 [[package]]
@@ -5667,11 +5709,15 @@ checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
 dependencies = [
  "futures-core",
  "futures-util",
+ "indexmap 2.14.0",
  "pin-project-lite",
+ "slab",
  "sync_wrapper",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -5921,6 +5967,7 @@ dependencies = [
 name = "verifierd"
 version = "0.0.0"
 dependencies = [
+ "raziel-proto",
  "raziel-prover",
 ]
 

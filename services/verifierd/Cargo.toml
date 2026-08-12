@@ -7,4 +7,5 @@ license.workspace = true
 publish = false
 
 [dependencies]
+raziel-proto = { workspace = true, features = ["services"] }
 raziel-prover = { workspace = true, features = ["verification"] }

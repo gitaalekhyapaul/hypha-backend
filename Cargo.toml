@@ -35,7 +35,7 @@ raziel-authorization-core = { path = "crates/authorization-core" }
 raziel-canonical = { path = "crates/canonical" }
 raziel-policy-ir = { path = "crates/policy-ir", default-features = false }
 raziel-prover = { path = "crates/prover", default-features = false }
-raziel-proto = { path = "crates/proto" }
+raziel-proto = { path = "crates/proto", default-features = false }
 raziel-snapshot = { path = "crates/snapshot" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
@@ -45,3 +45,5 @@ sp1-core-executor = { version = "=6.3.1", default-features = false }
 sp1-verifier = { version = "=6.3.1", default-features = false }
 sp1-zkvm = { version = "=6.3.1", default-features = false, features = ["lib"] }
 tokio = { version = "=1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tonic = { version = "=0.14.6", default-features = false, features = ["codegen", "transport"] }
+tonic-prost = { version = "=0.14.6", default-features = false }

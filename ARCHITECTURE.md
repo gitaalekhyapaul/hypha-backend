@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md), passing queue conformance, and isolated verifier dependency graph |
+| M4 | Active implementation | [Accepted service contract](docs/decisions/0013-m4-service-and-verifier-execution.md), passing queue conformance, compiled generated Tonic contracts, and isolated verifier dependency graph |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -169,6 +169,13 @@ checked dependency graph excludes the SDK, prover, core executor, native Gnark, 
 and outbound SP1 clients. A retained real proof must still pass through the isolated
 worker before M4 can claim verifier behavior.
 
+Generated Snapshot, Capability, and Verification clients and servers compile through
+the opt-in `raziel-proto` `services` feature. Both Rust service crates select that
+feature. The default message-only crate and authorization guest dependency graphs
+exclude Tonic, Tokio, HTTP, Hyper, Tower, and the Prost service codec. This compiles
+wire contracts only. It does not add handlers, listeners, transport policy, or service
+behavior.
+
 ## Main components
 
 | Component | Language | Responsibility | Must not do |
@@ -179,7 +186,7 @@ worker before M4 can claim verifier behavior.
 | `services/razield` | Rust | Snapshot orchestration, asynchronous job control, private witness construction, local SP1 proving, capability issuance | Act as the independent verifier |
 | `services/verifierd` | Rust | Policy-registry lookup, proof verification, snapshot checks, claim validation | Call `razield` or read private graph data |
 | `programs/authorization-guest` | Rust and SP1 | Check commitments, Merkle membership, PolicyIR evaluation, caveats, capability claims | Perform network or filesystem I/O |
-| `crates/proto` | Rust | Compile generated Protobuf message contracts for Rust components | Define canonical commitment bytes |
+| `crates/proto` | Rust | Compile generated Protobuf messages by default and generated Tonic contracts behind an explicit service feature | Define canonical commitment bytes or add service behavior |
 | `crates/authorization-core` | Rust | Shared guest statement, request binding, witness usage, and public journal bytes | Read files, clocks, registries, keys, or networks |
 | `crates/policy-ir` | Rust | PolicyIR types, validation, bounded evaluator | Parse arbitrary SpiceDB text |
 | `crates/canonical` | Rust | Domain-separated canonical encodings and commitments | Hash raw Protobuf serialization |

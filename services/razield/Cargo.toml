@@ -8,4 +8,5 @@ publish = false
 
 [dependencies]
 bullmq.workspace = true
+raziel-proto = { workspace = true, features = ["services"] }
 tokio.workspace = true

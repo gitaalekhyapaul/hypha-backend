@@ -6,6 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+default = []
+services = ["dep:tonic", "dep:tonic-prost"]
+
 [dependencies]
 prost.workspace = true
 prost-types.workspace = true
+tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }

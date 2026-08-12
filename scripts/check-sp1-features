@@ -29,6 +29,15 @@ for forbidden_feature in network cuda experimental; do
 done
 
 verifier_tree=$(cargo tree --locked --offline -p verifierd --prefix none --format '{p}')
+service_contract_tree=$(
+  cargo tree --locked --offline -p raziel-proto --features services --prefix none --format '{p}'
+)
+message_tree=$(
+  cargo tree --locked --offline -p raziel-proto --no-default-features --prefix none --format '{p}'
+)
+guest_tree=$(
+  cargo tree --locked --offline -p raziel-authorization-guest --prefix none --format '{p}'
+)
 
 case "
 $verifier_tree
@@ -68,5 +77,57 @@ $forbidden_package "*)
   esac
 done
 
+for required_package in "tonic v0.14.6" "tonic-prost v0.14.6"; do
+  case "
+$service_contract_tree
+" in
+    *"
+$required_package
+"*) ;;
+    *)
+      echo "required service contract package is missing: $required_package" >&2
+      exit 1
+      ;;
+  esac
+done
+
+check_rpc_free() {
+  graph_name=$1
+  graph=$2
+
+  for forbidden_package in \
+    "tonic" \
+    "tonic-prost" \
+    "tokio" \
+    "tokio-stream" \
+    "http" \
+    "http-body" \
+    "http-body-util" \
+    "h2" \
+    "hyper" \
+    "hyper-timeout" \
+    "hyper-util" \
+    "tower" \
+    "tower-layer" \
+    "tower-service" \
+    "axum"
+  do
+    case "
+$graph
+" in
+      *"
+$forbidden_package "*)
+        echo "forbidden RPC package is active in $graph_name: $forbidden_package" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+check_rpc_free "message-only raziel-proto" "$message_tree"
+check_rpc_free "authorization guest" "$guest_tree"
+
 printf '%s\n' "$proving_feature_tree"
 echo "verifier_feature_tree=pass"
+echo "service_contract_feature_tree=pass"
+echo "message_and_guest_rpc_exclusion=pass"
