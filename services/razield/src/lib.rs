@@ -3,4 +3,5 @@
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod private_envelope;
 pub mod queue;

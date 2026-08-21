@@ -1108,12 +1108,16 @@ Tonic `0.14.6` service contracts compile behind an explicit feature. The pure
 `razield` admission boundary now performs typed request conversion, raw-key Ed25519
 thumbprint derivation, exact commitment signature verification, deterministic job-ID
 derivation, and 75-minute window admission. It has no Redis, filesystem, network, or
-proof access. Service handlers, listeners, private envelopes, queue publication,
-proof execution, and independent verifier behavior remain pending. The
-verification-only Rust feature and dependency-tree gate pass. That build uses direct
-`sp1-verifier` `6.3.1` Plonk verification and excludes SDK proving, core execution,
-native Gnark, JIT, and outbound SP1 client packages. This build result does not
-replace the later retained-real-proof worker gate.
+proof access. The separate private-envelope boundary stores only admitted
+proof-worker fields in a strict, versioned Rust-only Protobuf message capped at 16
+KiB. Its owner-only store uses atomic no-replacement publication, strict mode and link
+checks, commitment-bound reads, idempotent deletion, and grace-based orphan cleanup.
+Service handlers, listeners, store-to-queue wiring, queue publication, proof
+execution, and independent verifier behavior remain pending. The verification-only
+Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
+`6.3.1` Plonk verification and excludes SDK proving, core execution, native Gnark,
+JIT, and outbound SP1 client packages. This build result does not replace the later
+retained-real-proof worker gate.
 
 Deliver:
 

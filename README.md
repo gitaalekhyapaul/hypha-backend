@@ -22,9 +22,12 @@ conformance gate passes. The pure `razield` admission boundary now validates gen
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
 request commitment, derives the deterministic job ID, and enforces the 75-minute
 request window. It performs no Redis, filesystem, or proof operation. The generated
-Tonic contracts and isolated verification-only build pass their existing gates. RPC
-handlers, listeners, private envelopes, queue publication, proof execution, and the
-retained-proof verifier gate remain pending.
+Tonic contracts and isolated verification-only build pass their existing gates. A
+separate private-envelope boundary now writes only admitted proof-worker fields into a
+versioned 16 KiB Protobuf envelope. It uses a `0700` store, `0600` files,
+no-replacement atomic publication, strict reads, deletion, and grace-based orphan
+cleanup. RPC handlers, listeners, store-to-queue wiring, queue publication, proof
+execution, and the retained-proof verifier gate remain pending.
 
 ## Read first
 

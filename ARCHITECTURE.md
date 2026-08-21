@@ -2,7 +2,7 @@
 
 Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-12
+Last updated: 2026-08-21
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and issuance-identity contracts, passing pure admission and queue conformance, compiled generated Tonic contracts, and isolated verifier dependency graph |
+| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -183,6 +183,15 @@ from validated raw Ed25519 key bytes, verifies the signature over the exact requ
 commitment, derives the 64-character BullMQ job ID, and checks the accepted 75-minute
 window. Its API has no queue, filesystem, network, witness, or proof access. The later
 RPC handler must call this boundary before private-envelope storage or publication.
+
+The service-private envelope boundary accepts only that admitted type. It writes a
+versioned Rust-only Prost message with a 16 KiB ceiling into a dedicated `0700`
+directory and publishes a `0600` file without replacing an existing job envelope.
+Reads reject links, non-regular files, wrong modes, oversized or non-canonical bytes,
+wrong versions, invalid request fields, and commitment or reference mismatches. The
+store supports idempotent deletion and grace-based orphan cleanup. Redis sees only the
+opaque reference after later API and publisher wiring. This boundary has no queue,
+network, witness, guest, or proof API.
 
 ## Main components
 

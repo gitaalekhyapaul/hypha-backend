@@ -20,7 +20,7 @@ pub const LOCAL_PLONK_ADMISSION_WINDOW_SECONDS: i64 = 75 * 60;
 const ED25519_PUBLIC_KEY_BYTES: usize = 32;
 const ED25519_SIGNATURE_BYTES: usize = 64;
 const ISSUANCE_NONCE_BYTES: usize = 32;
-const MAX_PROTOBUF_TIMESTAMP_SECONDS: i64 = 253_402_300_799;
+pub(crate) const MAX_PROTOBUF_TIMESTAMP_SECONDS: i64 = 253_402_300_799;
 
 /// A request that is safe to pass to the later private-envelope boundary.
 pub struct AdmittedCapabilityRequest {

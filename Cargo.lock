@@ -3480,6 +3480,7 @@ version = "0.0.0"
 dependencies = [
  "bullmq-official",
  "ed25519-dalek",
+ "prost 0.14.4",
  "prost-types 0.14.4",
  "raziel-authority",
  "raziel-authorization-core",
