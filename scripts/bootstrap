@@ -14,6 +14,14 @@ done
 
 pnpm install --frozen-lockfile
 cargo fetch --locked
+if [ "$(id -u)" -eq 0 ]; then
+  cargo_home=${CARGO_HOME:-"$HOME/.cargo"}
+  for public_cache in "$cargo_home/registry" "$cargo_home/git"; do
+    if [ -e "$public_cache" ]; then
+      chmod -R a+rX "$public_cache"
+    fi
+  done
+fi
 (
   cd tools/spicedb-ir-compiler
   go mod download

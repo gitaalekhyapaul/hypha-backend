@@ -1,163 +1,146 @@
 # Current Engineering Baton
 
-- Baton ID: B-0020
+- Baton ID: B-0021
 - State: READY
-- Milestone: M4, `CreateCapability` RPC and service ingress
+- Milestone: M4, BullMQ proof-supervisor claim and private-envelope handoff
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-08-22T05:24:38Z
+- Last updated UTC: 2026-08-22T07:33:26Z
 - Branch: `main`
-- Worktree: B-0019 is archived at
-  `docs/agent/history/B-0019-atomic-capability-job-publication.md`. Its implementation,
-  current-status updates, archive, and this B-0020 reset are ready to commit after
-  `1bf85d4`. Verify Git status and HEAD before claiming B-0020.
+- Worktree: B-0020 service ingress and its archive are ready to commit after
+  `0a011c0`. The branch was two commits ahead of `origin/main` before that commit.
 
 ## Objective
 
-Implement the bounded Tonic `CreateCapability` service boundary and runnable
-`razield` ingress path. Apply the accepted request ceiling, use a trusted server
-clock, run B-0017 admission, publish through B-0019, and return an authoritative
-queued `ProofJob` without starting witness or proof work.
+Implement the bounded proof-supervisor claim boundary. Use the official BullMQ worker
+to claim one job, validate its public payload, read its private envelope only after
+the claim, and pass a validated private request to an injectable one-shot executor
+contract. Do not run a real proof or publish a terminal capability in this baton.
 
 ## Acceptance Criteria
 
-- [ ] Service configuration validates the owner-controlled bind address, Redis
-      connection, queue prefix, and private-envelope root without logging credentials
-      or private paths.
-- [ ] Startup reconciles stale private envelopes against an authoritative BullMQ live
-      reference set before accepting requests.
-- [ ] The generated Tonic service applies a 2 MiB decoding ceiling before handler
-      work and rejects malformed requests without queue or filesystem side effects.
-- [ ] `CreateCapability` derives whole-second UTC time from an injectable trusted
-      server clock, then calls B-0017 admission before B-0019 publication.
-- [ ] A valid request returns an authoritative `QUEUED` `ProofJob` immediately with
-      its deterministic ID and public timestamps. It does not wait for worker or
-      proof execution.
-- [ ] Exact duplicates return the retained public job. Authorization-bound mutations
-      fail before publication, and `agent_id` alone remains non-authoritative.
-- [ ] Admission, queue, storage, and cleanup failures map to stable generic Tonic
-      statuses and public error codes without private values or internal paths.
-- [ ] `GetCapability` and `CancelCapability` fail closed as unimplemented until their
-      own baton supplies lifecycle behavior.
-- [ ] Focused handler tests, a live loopback and Redis test, affected workspace tests,
-      strict Clippy, formatting, privacy scans, and diff checks pass.
+- [ ] Supervisor configuration validates Redis, queue prefix, private-envelope root,
+      and worker timing values without exposing credentials or private paths.
+- [ ] The official BullMQ worker owns claims, locks, lock renewal, one-job
+      concurrency, stalled failure, and terminal retention.
+- [ ] The supervisor validates the strict public payload before private storage access.
+- [ ] The supervisor reads and commitment-checks the private envelope only after a
+      successful BullMQ claim.
+- [ ] An injectable one-shot executor contract receives only validated private input
+      and bounded owner configuration.
+- [ ] Invalid payloads, missing or corrupt envelopes, cancellation, and executor
+      failures produce generic public state and typed private failure classes.
+- [ ] Progress contains safe phase values only. It contains no request context,
+      policy branch, relationship, witness, path, opening, or proof bytes.
+- [ ] Focused unit tests, live Redis worker tests, affected workspace tests, strict
+      Clippy, formatting, privacy scans, and diff checks pass.
 
 ## Architecture Constraints
 
-- `CreateCapability` returns after validation and durable queue publication. It never
-  runs witness construction, guest execution, proving, verification, or capability
-  packaging.
-- Admission remains the only request-to-canonical-binding conversion boundary.
-- The handler cannot derive authorization identity from `agent_id`.
-- Redis stores only public queue state and opaque private-envelope references.
-- The filesystem remains the sole owner of private request bytes.
-- BullMQ remains authoritative for public job state and timestamps.
-- Public errors stay generic. Detailed diagnostics require a later access-controlled
-  audit boundary.
+- The supervisor remains a process separate from the responsive `razield` API.
+- BullMQ remains the sole owner of claims, locks, lock renewal, stalled jobs, and
+  terminal retention.
+- The private filesystem remains a bounded data handoff. It is not a queue.
+- The worker cannot use request data to select an ELF, setup archive, proof mode,
+  resource profile, registry generation, or external endpoint.
+- A worker claim cannot expose the private envelope through Redis, Tonic, progress,
+  standard logs, or debug output.
+- No hosted prover or SP1 network client receives private input.
 - No architecture invariant, public proof value, capability format, or PolicyIR
-  semantic changes inside this baton.
+  semantic changes occur inside this baton.
 
 ## File Scope
 
-- `services/razield/src/main.rs`
-- New service configuration and RPC modules under `services/razield/src/`
-- `services/razield/src/publication/` only for a narrow public-job read model
-- `services/razield/src/private_envelope/` only for startup reconciliation wiring
-- `services/razield/src/queue.rs` only for official BullMQ read helpers
+- `services/razield/src/worker/`
+- `services/razield/src/bin/` for the proof-supervisor process
+- `services/razield/src/queue.rs` only for shared worker policy
+- `services/razield/src/private_envelope/` only for the post-claim handoff
+- `services/razield/src/publication/` only for shared payload and public state types
 - `services/razield/src/lib.rs`
 - `services/razield/Cargo.toml`
-- `Cargo.lock` only for already approved workspace selections
-- Focused `razield` service tests
-- Service Compose configuration only if required by the inspected listener path
+- `Cargo.lock` only for approved workspace selections
+- `services/razield/tests/` for focused and live worker checks
+- `scripts/test-bullmq-conformance`
+- `docker-compose.yml`
 - Current-status documentation only for behavior proven by this slice
 - `docs/agent/CURRENT-BATON.md`
 
 ## Out of Scope
 
-- Implemented `GetCapability` or `CancelCapability` lifecycle behavior
-- Active-worker cancellation, progress transitions, or terminal result packaging
-- Witness construction, guest execution, proof generation, or proof verification
-- Snapshot service handlers or registry resolution
-- TLS termination, public internet exposure, browser routes, or gateway behavior
-- `verifierd`, ADR-0002, O-007, M5, M6, M7, or another scenario
+- Real SP1 execution or Plonk proof generation
+- Witness construction and registry-backed authorization input assembly
+- Final capability packaging or terminal success publication
+- `GetCapability` and `CancelCapability` RPC behavior
+- Active child-process cancellation and proof cgroup implementation
+- `verifierd`, verifier worker, ADR-0002, O-007, M5, M6, or M7
 - New packages, versions, toolchains, or proof runs without explicit approval
 
 ## Decisions
 
-- Inherited: ADR-0013 fixes the Rust API and job-server split, asynchronous create
-  behavior, private storage, BullMQ ownership, and generic public failures.
-- Inherited: ADR-0014 fixes request identity, signature, timestamp, and deterministic
-  job-ID rules.
-- Inherited: B-0017 supplies pure signed request admission.
-- Inherited: B-0018 supplies the strict owner-only private envelope and cleanup API.
-- Inherited: B-0019 supplies stage-before-add publication, exact duplicate handling,
-  bounded queue metadata, and conservative uncertain-outcome handling.
-- Inherited: Tonic `0.14.6`, Tokio `1.53.1`, BullMQ `1.2.3`, Redis `8.2.8`, and current
-  workspace pins are approved. No new package or version is approved.
+- Inherited: ADR-0013 fixes the separate Rust API and proof-supervisor processes,
+  official BullMQ ownership, one attempt, one-job concurrency, zero stalled retries,
+  and generic public errors.
+- Inherited: B-0018 supplies the strict owner-only private envelope.
+- Inherited: B-0019 supplies the strict public payload and atomic publication.
+- Inherited: B-0020 supplies runnable Create ingress and startup reconciliation.
+- Inherited: BullMQ `1.2.3`, Redis `8.2.8`, Tokio `1.53.1`, Tonic `0.14.6`, and current
+  workspace pins are approved.
 - Made: None.
 
 ## Open Questions and Blockers
 
-- No blocker is recorded before inspection.
-- Inspect the generated `CapabilityService` trait and official BullMQ job-query APIs
-  before fixing the handler and startup-reconciliation interfaces.
-- Confirm the existing Compose service network and bind-address pattern before
-  changing listener configuration.
-- The later lifecycle baton owns `GetCapability`, queued cancellation, active
-  cancellation, progress, and terminal transitions.
-- ADR-0002 and O-007 remain open before protected-request gateway integration.
+- No blocker prevents inspection and claim.
+- Source inspection must fix the exact BullMQ processor, cancellation-token, progress,
+  and completion APIs before edits begin.
+- Source inspection must fix the narrow executor handoff type before the supervisor
+  reads a private envelope.
+- No new dependency or proof run is approved.
 
 ## Work Completed
 
-- B-0017 completed pure signed request admission.
-- B-0018 completed private-envelope encoding, storage, deletion, and orphan cleanup.
-- B-0019 completed atomic publication coordination and live BullMQ conformance.
-- No B-0020 implementation has started.
+- B-0020 completed and archived the bounded Create ingress at
+  `docs/agent/history/B-0020-create-capability-service-ingress.md`.
+- No B-0021 implementation has started.
 
 ## Validation Plan
 
-- Test strict configuration and redacted debug output.
-- Test the 2 MiB Tonic ceiling and malformed-request rejection before side effects.
-- Test trusted-clock admission, valid create, exact duplicate, changed fields, and
-  generic failure mapping.
-- Run a loopback Tonic client against the digest-pinned Redis service and prove that
-  create returns `QUEUED` without a worker.
-- Confirm startup cleanup preserves every live queue reference and removes only stale
-  unreferenced envelopes after the accepted grace period.
+- Test payload rejection before private-store reads.
+- Test private-envelope access only inside an official BullMQ processor claim.
+- Test one-job concurrency, progress redaction, cancellation delivery, and zero proof
+  retry against the pinned Redis service.
+- Test executor success, typed failure, timeout, and malformed-output boundaries with
+  a deterministic fake executor. Do not run SP1.
 - Run affected service and workspace tests in the pinned toolchain.
-- Run strict Clippy, repository formatting, `git diff --check`, dependency inspection,
-  and private-data scans.
+- Run strict Clippy, repository formatting, dependency inspection, privacy scans, and
+  `git diff --check`.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0019 archive | PASS | Atomic capability job publication | 2026-08-22T05:24:38Z |
-| B-0020 implementation | NOT AVAILABLE | Not started | 2026-08-22T05:24:38Z |
+| B-0020 archive | PASS | Bounded CreateCapability service ingress | 2026-08-22T07:33:26Z |
+| Not run | B-0021 implementation not claimed | Proof supervisor | 2026-08-22T07:33:26Z |
 
 ## Privacy Checks
 
-- NOT STARTED: Tonic responses and status details must expose no private request field,
-  opaque envelope reference, Redis credential, or filesystem path.
-- NOT STARTED: Startup reconciliation must not log envelope tokens or stored values.
-- NOT APPLICABLE: No real transaction data, witness, or proof is planned for this
-  baton.
+- NOT STARTED: Worker progress and failures must expose no private request or witness
+  value.
+- NOT STARTED: The executor handoff and its debug output must redact the complete
+  private envelope.
+- NOT APPLICABLE: This baton does not run a real proof or use transaction data.
 
 ## Risks and Private-Data Notes
 
-- Tonic decodes a request before invoking a service method. The message-size cap must
-  be set on the generated server wrapper, not only checked inside the handler.
-- Filesystem durability and startup cleanup are blocking operations. The async service
-  must keep them away from Tokio request executors.
-- The BullMQ binding emits custom job IDs at debug level. Service logging must filter
-  that target before debug output is active.
-- Startup cleanup needs an authoritative complete live-reference set. A partial queue
-  scan could delete private input for a retained job.
-- An uncertain B-0019 publication must map to retryable service unavailability. It
-  cannot be reported as queued or as a confirmed rejection.
+- BullMQ starts the processor only after it grants the active-job lock. Private reads
+  outside that processor could bypass queue ownership.
+- A private envelope can be corrupt, swapped, linked, missing, or commitment-mismatched
+  after publication. The supervisor must use the strict B-0018 read path.
+- Progress and terminal errors are public Redis values. They need closed typed schemas,
+  fixed ceilings, and redacted debug output.
+- A task spawn does not isolate a proof crash or OOM. This baton stops at an executor
+  contract and leaves real process isolation to the next proof-execution slice.
 
 ## Exact Next Action
 
-Inspect the generated `CapabilityService` server API, `razield` process shell, Compose
-service configuration, BullMQ public-job reads, and B-0018 cleanup interface. Then
-claim B-0020 with the exact RPC, runtime, and test file map.
+Reconcile the B-0020 commit, claim B-0021, then inspect the pinned BullMQ worker APIs
+and existing prover input boundary before selecting the implementation file map.

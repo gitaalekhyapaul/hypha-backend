@@ -370,6 +370,27 @@ fn cleanup_validates_the_complete_directory_before_deleting_any_file() {
 }
 
 #[test]
+fn reference_scan_is_sorted_and_fails_closed_on_unknown_entries() {
+    let root = TestRoot::new("reference-scan");
+    let store = PrivateEnvelopeStore::open(root.path()).unwrap();
+    let first = store.stage(&admitted_request(0xc1)).unwrap();
+    let second = store.stage(&admitted_request(0xc0)).unwrap();
+    let mut expected = vec![first, second];
+    expected.sort_unstable();
+
+    assert_eq!(store.scan_references().unwrap(), expected);
+
+    let unknown = root.path().join("unexpected-private-file");
+    write_private(&unknown, b"unknown");
+    assert_eq!(
+        store.scan_references(),
+        Err(PrivateEnvelopeError::CleanupFailed)
+    );
+    store.read(&first).unwrap();
+    store.read(&second).unwrap();
+}
+
+#[test]
 fn store_rejects_insecure_roots_and_detects_mode_changes() {
     let insecure = TestRoot::new("insecure-root");
     std::fs::create_dir(insecure.path()).unwrap();

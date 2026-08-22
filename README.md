@@ -16,9 +16,10 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 46,301,016,064-byte memory peak. See the
 [`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
-M4 is in active implementation under accepted ADR-0013 and ADR-0014. The `razield`
-and `verifierd` binaries remain process shells. The BullMQ `1.2.3` and Redis `8.2.8`
-conformance gate passes. The pure `razield` admission boundary validates generated
+M4 is in active implementation under accepted ADR-0013 and ADR-0014. `razield` now
+runs a bounded internal Tonic ingress. `verifierd` remains a process shell. The BullMQ
+`1.2.3` and Redis `8.2.8` conformance gate passes. The pure `razield` admission
+boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
 request commitment, derives the deterministic job ID, and enforces the 75-minute
 request window. A separate private-envelope boundary writes only admitted
@@ -26,17 +27,22 @@ proof-worker fields into a versioned 16 KiB Protobuf envelope. It uses a `0700`
 store, `0600` files, no-replacement atomic publication, strict reads, deletion, and
 grace-based orphan cleanup.
 
-The capability-job publisher now stages that private envelope first, then publishes
+The capability-job publisher stages that private envelope first, then publishes
 a strict two-field payload with a 256-byte ceiling. The request commitment remains
 the BullMQ custom ID. Exact duplicates return the retained Redis record. Confirmed
 publication failures delete a newly staged envelope. Ambiguous Redis outcomes keep
 it for reconciliation. Jobs use one attempt, global concurrency one, zero stalled
-retries, and terminal retention capped at 24 hours and 100 records. Live tests cover
-publication, duplicate handling, cleanup, queue lifecycle, stalled failure, and
-Redis restart recovery. The generated Tonic contracts and isolated
-verification-only build pass their existing gates. RPC handlers, listeners, startup
-reconciliation, proof execution, and the retained-proof verifier gate remain
-pending.
+retries, and terminal retention capped at 24 hours and 100 records.
+
+The runnable service validates explicit bind, Redis, queue-prefix, and private-store
+settings. It reconciles private files against exact BullMQ records before binding.
+The generated server rejects decoded messages above 2 MiB. `CreateCapability` uses
+trusted whole-second server time, then calls admission and publication. It returns an
+authoritative `QUEUED` job without waiting for proof work. Live tests cover startup
+cleanup, exact duplicates, bound mutations, request ceilings, publication, queue
+lifecycle, stalled failure, and Redis restart recovery. `GetCapability`,
+`CancelCapability`, worker terminal results, proof execution, and the retained-proof
+verifier gate remain pending.
 
 ## Read first
 

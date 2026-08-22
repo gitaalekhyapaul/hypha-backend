@@ -1,10 +1,12 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::fs::OpenOptions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use bullmq::types::JobState;
 use ed25519_dalek::{Signer, SigningKey};
 use prost_types::Timestamp;
 use raziel_authority::derive_ed25519_key_thumbprint;
@@ -19,7 +21,11 @@ use raziel_proto::raziel::v1::{
 use super::bullmq::{CapabilityQueue, QueueAddError, QueueReadError, RetainedQueueJob};
 use super::coordinator::publish_transaction;
 use super::payload::{CapabilityJobPayload, PayloadError};
-use super::{CAPABILITY_JOB_NAME, CapabilityPublicationError, PublicationDisposition};
+use super::reconciliation::{StartupReconciliationError, reconcile_startup_with_queue};
+use super::{
+    CAPABILITY_JOB_NAME, CapabilityPublicationError, PublicCapabilityJobState,
+    PublicationDisposition,
+};
 use crate::admission::{
     AdmittedCapabilityRequest, LOCAL_PLONK_ADMISSION_WINDOW_SECONDS,
     admit_create_capability_request,
@@ -80,6 +86,106 @@ fn payload_has_two_strict_fields_and_redacts_its_reference() {
 }
 
 #[tokio::test]
+async fn startup_reconciliation_keeps_live_and_recent_envelopes_only() {
+    let root = TestRoot::new("startup-reconcile");
+    let store = PrivateEnvelopeStore::open(root.path()).unwrap();
+    let live = store
+        .stage(&admitted_request(0xc0, DISPLAY_AGENT_ID))
+        .unwrap();
+    let stale_missing = store
+        .stage(&admitted_request(0xc1, DISPLAY_AGENT_ID))
+        .unwrap();
+    let recent_missing = store
+        .stage(&admitted_request(0xc2, DISPLAY_AGENT_ID))
+        .unwrap();
+    let terminal = store
+        .stage(&admitted_request(0xc3, DISPLAY_AGENT_ID))
+        .unwrap();
+    let now = SystemTime::now();
+    let old = now - Duration::from_secs(20 * 60);
+    for reference in [live, stale_missing, terminal] {
+        set_modified(&envelope_path(root.path(), reference), old);
+    }
+
+    let queue = ReconciliationQueue::default();
+    queue.insert(live, Ok(Some(retained_job(live, JobState::Waiting))));
+    queue.insert(
+        terminal,
+        Ok(Some(retained_job(terminal, JobState::Completed))),
+    );
+
+    let summary =
+        reconcile_startup_with_queue(store.clone(), &queue, now, Duration::from_secs(10 * 60))
+            .await
+            .unwrap();
+
+    assert_eq!(summary.references_scanned, 4);
+    assert_eq!(summary.live_references, 1);
+    assert_eq!(summary.cleanup.envelopes_deleted, 2);
+    assert_eq!(summary.cleanup.temporary_files_deleted, 0);
+    store.read(&live).unwrap();
+    store.read(&recent_missing).unwrap();
+    assert_eq!(
+        store.read(&stale_missing),
+        Err(PrivateEnvelopeError::EnvelopeNotFound)
+    );
+    assert_eq!(
+        store.read(&terminal),
+        Err(PrivateEnvelopeError::EnvelopeNotFound)
+    );
+}
+
+#[tokio::test]
+async fn startup_reconciliation_preserves_files_on_queue_failure_or_mismatch() {
+    let unavailable_root = TestRoot::new("startup-unavailable");
+    let unavailable_store = PrivateEnvelopeStore::open(unavailable_root.path()).unwrap();
+    let unavailable = unavailable_store
+        .stage(&admitted_request(0xc4, DISPLAY_AGENT_ID))
+        .unwrap();
+    set_modified(
+        &envelope_path(unavailable_root.path(), unavailable),
+        SystemTime::now() - Duration::from_secs(20 * 60),
+    );
+    let unavailable_queue = ReconciliationQueue::default();
+    unavailable_queue.insert(unavailable, Err(QueueReadError::Unavailable));
+    assert_eq!(
+        reconcile_startup_with_queue(
+            unavailable_store.clone(),
+            &unavailable_queue,
+            SystemTime::now(),
+            Duration::from_secs(10 * 60),
+        )
+        .await,
+        Err(StartupReconciliationError::QueueUnavailable)
+    );
+    unavailable_store.read(&unavailable).unwrap();
+
+    let mismatch_root = TestRoot::new("startup-mismatch");
+    let mismatch_store = PrivateEnvelopeStore::open(mismatch_root.path()).unwrap();
+    let mismatch = mismatch_store
+        .stage(&admitted_request(0xc5, DISPLAY_AGENT_ID))
+        .unwrap();
+    let wrong_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", "cd".repeat(32))).unwrap();
+    let mismatch_queue = ReconciliationQueue::default();
+    mismatch_queue.insert(
+        mismatch,
+        Ok(Some(retained_job(wrong_reference, JobState::Waiting))),
+    );
+    assert_eq!(
+        reconcile_startup_with_queue(
+            mismatch_store.clone(),
+            &mismatch_queue,
+            SystemTime::now(),
+            Duration::from_secs(10 * 60),
+        )
+        .await,
+        Err(StartupReconciliationError::QueueRecordMismatch)
+    );
+    mismatch_store.read(&mismatch).unwrap();
+}
+
+#[tokio::test]
 async fn stages_before_add_and_returns_the_authoritative_duplicate() {
     let root = TestRoot::new("ordering");
     let store = PrivateEnvelopeStore::open(root.path()).unwrap();
@@ -91,6 +197,9 @@ async fn stages_before_add_and_returns_the_authoritative_duplicate() {
         .unwrap();
     assert_eq!(created.job_id(), admitted.job_id());
     assert_eq!(created.disposition(), PublicationDisposition::Created);
+    assert_eq!(created.state(), PublicCapabilityJobState::Queued);
+    assert_eq!(created.submitted_at_unix_millis(), 1_800_000_000_000);
+    assert_eq!(created.updated_at_unix_millis(), 1_800_000_000_000);
     assert!(queue.add_saw_durable_envelope());
     assert_eq!(queue.add_calls(), 1);
 
@@ -107,6 +216,22 @@ async fn stages_before_add_and_returns_the_authoritative_duplicate() {
     assert!(!output.contains("pe1_"));
     assert!(!output.contains(PRIVATE_CONTEXT_VALUE));
     assert!(!output.contains(DISPLAY_AGENT_ID));
+}
+
+#[tokio::test]
+async fn terminal_record_fails_closed_until_a_bound_result_reader_exists() {
+    let root = TestRoot::new("terminal-result");
+    let store = PrivateEnvelopeStore::open(root.path()).unwrap();
+    let admitted = admitted_request(0xba, DISPLAY_AGENT_ID);
+    let queue = FakeQueue::new(store.clone());
+    queue.set_record(retained_job(reference_for(&admitted), JobState::Completed));
+
+    assert_eq!(
+        publish_transaction(&store, &queue, &admitted).await,
+        Err(CapabilityPublicationError::QueueTerminalResultUnavailable)
+    );
+    assert_eq!(queue.add_calls(), 0);
+    store.read(&reference_for(&admitted)).unwrap();
 }
 
 #[tokio::test]
@@ -222,12 +347,9 @@ async fn missing_records_clean_up_but_mismatches_preserve_private_input() {
     let mismatch_queue = FakeQueue::new(mismatch_store.clone());
     let wrong_reference =
         PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", "cd".repeat(32))).unwrap();
-    mismatch_queue.set_record(RetainedQueueJob {
-        id: mismatch_request.job_id().into(),
-        name: CAPABILITY_JOB_NAME.into(),
-        payload: Ok(CapabilityJobPayload::new(wrong_reference)),
-        policy_matches: true,
-    });
+    let mut mismatched_record = retained_job(reference_for(&mismatch_request), JobState::Waiting);
+    mismatched_record.payload = Ok(CapabilityJobPayload::new(wrong_reference));
+    mismatch_queue.set_record(mismatched_record);
     assert_eq!(
         publish_transaction(&mismatch_store, &mismatch_queue, &mismatch_request).await,
         Err(CapabilityPublicationError::QueueRecordMismatch)
@@ -252,6 +374,43 @@ async fn an_existing_envelope_without_a_job_never_publishes_or_deletes() {
     );
     assert_eq!(queue.add_calls(), 0);
     store.read(&reference).unwrap();
+}
+
+#[derive(Default)]
+struct ReconciliationQueue {
+    records: StdMutex<HashMap<String, Result<Option<RetainedQueueJob>, QueueReadError>>>,
+}
+
+impl ReconciliationQueue {
+    fn insert(
+        &self,
+        reference: PrivateEnvelopeRef,
+        record: Result<Option<RetainedQueueJob>, QueueReadError>,
+    ) {
+        self.records
+            .lock()
+            .unwrap()
+            .insert(job_id_for(reference), record);
+    }
+}
+
+impl CapabilityQueue for ReconciliationQueue {
+    async fn get_job(&self, job_id: &str) -> Result<Option<RetainedQueueJob>, QueueReadError> {
+        self.records
+            .lock()
+            .unwrap()
+            .get(job_id)
+            .cloned()
+            .unwrap_or(Ok(None))
+    }
+
+    async fn add_job(
+        &self,
+        _job_id: &str,
+        _payload: &CapabilityJobPayload,
+    ) -> Result<(), QueueAddError> {
+        panic!("startup reconciliation must not publish jobs")
+    }
 }
 
 struct FakeQueue {
@@ -339,12 +498,8 @@ impl CapabilityQueue for FakeQueue {
         state.add_saw_durable_envelope = durable;
         state.add_calls += 1;
 
-        let record = RetainedQueueJob {
-            id: job_id.into(),
-            name: CAPABILITY_JOB_NAME.into(),
-            payload: Ok(payload.clone()),
-            policy_matches: true,
-        };
+        let mut record = retained_job(payload.private_envelope_ref(), JobState::Waiting);
+        record.id = job_id.into();
         match state.add_error {
             None if state.persist_on_success => state.record = Some(record),
             Some(QueueAddError::Uncertain) if state.persist_on_uncertain => {
@@ -440,6 +595,37 @@ fn expected_binding(request: &CreateCapabilityRequest) -> CapabilityRequestBindi
 
 fn reference_for(admitted: &AdmittedCapabilityRequest) -> PrivateEnvelopeRef {
     PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", admitted.job_id())).unwrap()
+}
+
+fn retained_job(reference: PrivateEnvelopeRef, state: JobState) -> RetainedQueueJob {
+    RetainedQueueJob {
+        id: job_id_for(reference),
+        name: CAPABILITY_JOB_NAME.into(),
+        payload: Ok(CapabilityJobPayload::new(reference)),
+        policy_matches: true,
+        state,
+        timestamp_ms: 1_800_000_000_000,
+        processed_on_ms: None,
+        finished_on_ms: None,
+    }
+}
+
+fn job_id_for(reference: PrivateEnvelopeRef) -> String {
+    reference
+        .queue_token()
+        .strip_prefix("pe1_")
+        .unwrap()
+        .to_owned()
+}
+
+fn envelope_path(root: &Path, reference: PrivateEnvelopeRef) -> PathBuf {
+    root.join(format!("{}.pb", reference.queue_token()))
+}
+
+fn set_modified(path: &Path, time: SystemTime) {
+    let file = OpenOptions::new().write(true).open(path).unwrap();
+    file.set_times(std::fs::FileTimes::new().set_modified(time))
+        .unwrap();
 }
 
 struct TestRoot {

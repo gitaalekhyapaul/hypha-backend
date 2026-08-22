@@ -62,6 +62,10 @@ impl PrivateEnvelopeRef {
         &self.commitment
     }
 
+    pub(crate) fn job_id(&self) -> String {
+        lowercase_hex(&self.commitment)
+    }
+
     pub(super) fn file_name(&self) -> String {
         format!("{}.pb", self.queue_token())
     }

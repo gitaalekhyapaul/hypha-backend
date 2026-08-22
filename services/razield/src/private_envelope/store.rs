@@ -57,6 +57,19 @@ struct CleanupCandidate {
     kind: CleanupKind,
 }
 
+struct ScannedEntry {
+    path: PathBuf,
+    identity: FileIdentity,
+    modified: SystemTime,
+    link_count: u64,
+    kind: ScannedEntryKind,
+}
+
+enum ScannedEntryKind {
+    Envelope(PrivateEnvelopeRef),
+    Temporary,
+}
+
 impl PrivateEnvelopeStore {
     /// Opens or creates one dedicated `0700` store directory.
     pub fn open(root: impl AsRef<Path>) -> Result<Self, PrivateEnvelopeError> {
@@ -240,6 +253,21 @@ impl PrivateEnvelopeStore {
         Ok(DeleteStatus::Deleted)
     }
 
+    /// Returns canonical final-envelope references after validating every store entry.
+    pub fn scan_references(&self) -> Result<Vec<PrivateEnvelopeRef>, PrivateEnvelopeError> {
+        let mut references = self
+            .scan_entries()?
+            .into_iter()
+            .filter_map(|entry| match entry.kind {
+                ScannedEntryKind::Envelope(reference) => Some(reference),
+                ScannedEntryKind::Temporary => None,
+            })
+            .collect::<Vec<_>>();
+        references.sort_unstable();
+        self.verify_root()?;
+        Ok(references)
+    }
+
     /// Deletes old files that are absent from a caller-supplied BullMQ live set.
     ///
     /// The grace cutoff protects envelopes staged just before queue publication.
@@ -248,55 +276,34 @@ impl PrivateEnvelopeStore {
         live_references: &HashSet<PrivateEnvelopeRef>,
         not_modified_after: SystemTime,
     ) -> Result<CleanupSummary, PrivateEnvelopeError> {
-        self.verify_root()?;
         let mut candidates = Vec::new();
-        let entries =
-            std::fs::read_dir(&self.inner.root).map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
-
-        for entry in entries {
-            let entry = entry.map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
-            let path = entry.path();
-            let metadata = std::fs::symlink_metadata(&path)
-                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
-            validate_cleanup_metadata(&metadata)?;
-            let modified = metadata
-                .modified()
-                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
-
-            if let Some(reference) = reference_from_file_name(&name) {
-                let reference = reference?;
-                if live_references.contains(&reference) {
-                    if metadata.nlink() != 1 {
-                        return Err(PrivateEnvelopeError::UnsafeEnvelopeFile);
+        for entry in self.scan_entries()? {
+            match entry.kind {
+                ScannedEntryKind::Envelope(reference) => {
+                    if live_references.contains(&reference) {
+                        if entry.link_count != 1 {
+                            return Err(PrivateEnvelopeError::UnsafeEnvelopeFile);
+                        }
+                        continue;
                     }
-                    continue;
+                    if entry.modified <= not_modified_after {
+                        candidates.push(CleanupCandidate {
+                            path: entry.path,
+                            identity: entry.identity,
+                            kind: CleanupKind::Envelope,
+                        });
+                    }
                 }
-                if modified <= not_modified_after {
-                    candidates.push(CleanupCandidate {
-                        path,
-                        identity: FileIdentity::from_metadata(&metadata),
-                        kind: CleanupKind::Envelope,
-                    });
+                ScannedEntryKind::Temporary => {
+                    if entry.modified <= not_modified_after {
+                        candidates.push(CleanupCandidate {
+                            path: entry.path,
+                            identity: entry.identity,
+                            kind: CleanupKind::Temporary,
+                        });
+                    }
                 }
-                continue;
             }
-
-            if is_temporary_file_name(&name) {
-                if modified <= not_modified_after {
-                    candidates.push(CleanupCandidate {
-                        path,
-                        identity: FileIdentity::from_metadata(&metadata),
-                        kind: CleanupKind::Temporary,
-                    });
-                }
-                continue;
-            }
-
-            return Err(PrivateEnvelopeError::CleanupFailed);
         }
 
         let mut summary = CleanupSummary::default();
@@ -314,6 +321,43 @@ impl PrivateEnvelopeStore {
         }
         self.verify_root()?;
         Ok(summary)
+    }
+
+    fn scan_entries(&self) -> Result<Vec<ScannedEntry>, PrivateEnvelopeError> {
+        self.verify_root()?;
+        let directory =
+            std::fs::read_dir(&self.inner.root).map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
+        let mut entries = Vec::new();
+
+        for entry in directory {
+            let entry = entry.map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path)
+                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
+            validate_cleanup_metadata(&metadata)?;
+            let modified = metadata
+                .modified()
+                .map_err(|_| PrivateEnvelopeError::CleanupFailed)?;
+            let kind = match reference_from_file_name(&name) {
+                Some(reference) => ScannedEntryKind::Envelope(reference?),
+                None if is_temporary_file_name(&name) => ScannedEntryKind::Temporary,
+                None => return Err(PrivateEnvelopeError::CleanupFailed),
+            };
+            entries.push(ScannedEntry {
+                path,
+                identity: FileIdentity::from_metadata(&metadata),
+                modified,
+                link_count: metadata.nlink(),
+                kind,
+            });
+        }
+
+        self.verify_root()?;
+        Ok(entries)
     }
 
     fn create_temporary_file(

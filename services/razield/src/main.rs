@@ -1,11 +1,11 @@
-//! Raziel snapshot and prover service shell.
-//!
-//! M0 defines the process boundary only. Snapshot orchestration, witness construction,
-//! proof generation, capability issuance, and network serving are not implemented.
+//! Raziel asynchronous capability API process.
 
 #![forbid(unsafe_code)]
 
-fn main() {}
+#[tokio::main]
+async fn main() -> Result<(), razield::service::ServiceRuntimeError> {
+    razield::service::run_from_env().await
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,13 +1,16 @@
 use std::error::Error;
 use std::fmt::{self, Debug, Formatter};
 
+use bullmq::types::JobState;
 use tokio::sync::Mutex;
 
-use super::CAPABILITY_JOB_NAME;
 use super::bullmq::{
     BullMqCapabilityQueue, CapabilityQueue, QueueAddError, QueueReadError, RetainedQueueJob,
 };
 use super::payload::CapabilityJobPayload;
+use super::reconciliation::{
+    StartupReconciliationError, StartupReconciliationSummary, reconcile_startup_with_queue,
+};
 use crate::admission::AdmittedCapabilityRequest;
 use crate::private_envelope::{
     DeleteStatus, PrivateEnvelopeError, PrivateEnvelopeStore, PublicationStage,
@@ -21,14 +24,40 @@ pub enum PublicationDisposition {
     Retained,
 }
 
+/// Public lifecycle states available from the retained BullMQ record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PublicCapabilityJobState {
+    Queued,
+    Executing,
+}
+
 /// Public result of a durable capability-job publication.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PublishedCapabilityJob {
     job_id: String,
     disposition: PublicationDisposition,
+    state: PublicCapabilityJobState,
+    submitted_at_unix_millis: u64,
+    updated_at_unix_millis: u64,
 }
 
 impl PublishedCapabilityJob {
+    pub(crate) fn from_authoritative_fields(
+        job_id: String,
+        disposition: PublicationDisposition,
+        state: PublicCapabilityJobState,
+        submitted_at_unix_millis: u64,
+        updated_at_unix_millis: u64,
+    ) -> Self {
+        Self {
+            job_id,
+            disposition,
+            state,
+            submitted_at_unix_millis,
+            updated_at_unix_millis,
+        }
+    }
+
     /// Returns the exact lowercase request commitment used as the custom job ID.
     pub fn job_id(&self) -> &str {
         &self.job_id
@@ -38,6 +67,18 @@ impl PublishedCapabilityJob {
     pub const fn disposition(&self) -> PublicationDisposition {
         self.disposition
     }
+
+    pub const fn state(&self) -> PublicCapabilityJobState {
+        self.state
+    }
+
+    pub const fn submitted_at_unix_millis(&self) -> u64 {
+        self.submitted_at_unix_millis
+    }
+
+    pub const fn updated_at_unix_millis(&self) -> u64 {
+        self.updated_at_unix_millis
+    }
 }
 
 impl Debug for PublishedCapabilityJob {
@@ -46,6 +87,9 @@ impl Debug for PublishedCapabilityJob {
             .debug_struct("PublishedCapabilityJob")
             .field("job_id", &"<redacted>")
             .field("disposition", &self.disposition)
+            .field("state", &self.state)
+            .field("submitted_at", &"<public timestamp>")
+            .field("updated_at", &"<public timestamp>")
             .finish()
     }
 }
@@ -59,6 +103,7 @@ pub enum CapabilityPublicationError {
     QueuePublicationUncertain,
     QueueRecordMissing,
     QueueRecordMismatch,
+    QueueTerminalResultUnavailable,
     EnvelopeCleanupFailed,
 }
 
@@ -71,6 +116,9 @@ impl fmt::Display for CapabilityPublicationError {
             Self::QueuePublicationUncertain => "capability job publication is uncertain",
             Self::QueueRecordMissing => "published capability job is missing",
             Self::QueueRecordMismatch => "retained capability job does not match",
+            Self::QueueTerminalResultUnavailable => {
+                "retained capability job terminal result is unavailable"
+            }
             Self::EnvelopeCleanupFailed => "private capability envelope cleanup failed",
         })
     }
@@ -121,6 +169,15 @@ impl CapabilityJobPublisher {
     ) -> Result<PublishedCapabilityJob, CapabilityPublicationError> {
         let _guard = self.publication_lock.lock().await;
         publish_transaction(&self.store, &self.queue, admitted).await
+    }
+
+    /// Reconciles private files against exact authoritative BullMQ records.
+    pub async fn reconcile_startup(
+        &self,
+        now: std::time::SystemTime,
+        grace_period: std::time::Duration,
+    ) -> Result<StartupReconciliationSummary, StartupReconciliationError> {
+        reconcile_startup_with_queue(self.store.clone(), &self.queue, now, grace_period).await
     }
 
     /// Closes the BullMQ connection after all owners stop publishing.
@@ -232,18 +289,37 @@ fn validate_retained(
     payload: &CapabilityJobPayload,
     disposition: PublicationDisposition,
 ) -> Result<PublishedCapabilityJob, CapabilityPublicationError> {
-    if retained.id != job_id
-        || retained.name != CAPABILITY_JOB_NAME
-        || retained.payload.as_ref().ok() != Some(payload)
-        || !retained.policy_matches
-    {
+    if !retained.matches(job_id, payload) {
         return Err(CapabilityPublicationError::QueueRecordMismatch);
     }
 
-    Ok(PublishedCapabilityJob {
-        job_id: retained.id,
+    let state = match retained.state {
+        JobState::Waiting | JobState::Delayed | JobState::Prioritized => {
+            PublicCapabilityJobState::Queued
+        }
+        JobState::Active => PublicCapabilityJobState::Executing,
+        JobState::Completed | JobState::Failed => {
+            return Err(CapabilityPublicationError::QueueTerminalResultUnavailable);
+        }
+        JobState::WaitingChildren | JobState::Unknown => {
+            return Err(CapabilityPublicationError::QueueRecordMismatch);
+        }
+    };
+    let updated_at_unix_millis = retained
+        .finished_on_ms
+        .or(retained.processed_on_ms)
+        .unwrap_or(retained.timestamp_ms);
+    if updated_at_unix_millis < retained.timestamp_ms {
+        return Err(CapabilityPublicationError::QueueRecordMismatch);
+    }
+
+    Ok(PublishedCapabilityJob::from_authoritative_fields(
+        retained.id,
         disposition,
-    })
+        state,
+        retained.timestamp_ms,
+        updated_at_unix_millis,
+    ))
 }
 
 fn rollback_created(

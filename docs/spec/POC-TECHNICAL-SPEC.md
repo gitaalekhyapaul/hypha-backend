@@ -1118,9 +1118,16 @@ format version and opaque private-envelope reference. Exact duplicates return th
 authoritative retained record. Confirmed failures remove a newly created envelope,
 and ambiguous queue outcomes preserve it for reconciliation. One-attempt, zero-stall,
 global-concurrency-one, and bounded terminal-retention checks pass against live Redis.
-Service handlers, listeners, startup reconciliation, proof execution, and independent
-verifier behavior remain pending. The verification-only Rust feature and
-dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
+The runnable `razield` ingress now validates explicit owner configuration and
+reconciles private envelopes against exact BullMQ records before binding. Its Tonic
+wrapper caps decoded messages at 2 MiB. `CreateCapability` uses trusted whole-second
+server time, then calls admission and publication. It returns the authoritative
+queued record without waiting for proof work. Exact duplicates return the retained
+queued record. Bound mutations fail before publication, and display-only `agent_id`
+changes do not change job identity. Terminal records fail closed until the worker
+stores a bound public result. `GetCapability`, `CancelCapability`, proof execution,
+and independent verifier behavior remain pending. The verification-only Rust feature
+and dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and
 outbound SP1 client packages. This build result does not replace the later retained
 real-proof worker gate.

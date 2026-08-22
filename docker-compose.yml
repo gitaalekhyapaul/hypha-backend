@@ -169,6 +169,40 @@ services:
       - redis-data:/data
     profiles: ["services", "queue-conformance"]
 
+  razield-private-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d \
+          -o "$$RAZIEL_PRIVATE_UID" \
+          -g "$$RAZIEL_PRIVATE_GID" \
+          -m 0700 \
+          /var/lib/raziel/private-envelopes
+        test "$$(stat --format=%a /var/lib/raziel/private-envelopes)" = 700
+        test "$$(stat --format=%u /var/lib/raziel/private-envelopes)" = "$$RAZIEL_PRIVATE_UID"
+        test "$$(stat --format=%g /var/lib/raziel/private-envelopes)" = "$$RAZIEL_PRIVATE_GID"
+    environment:
+      RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
+      RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - razield-private-envelopes:/var/lib/raziel/private-envelopes
+    profiles: ["services"]
+
   razield:
     <<: *secure-rust-service
     command: ["cargo", "run", "--locked", "--offline", "-p", "razield"]
@@ -177,6 +211,9 @@ services:
       CARGO_NET_OFFLINE: "true"
       CARGO_TARGET_DIR: /tmp/raziel-target
       HOME: /tmp/raziel-home
+      RAZIEL_BIND_ADDRESS: 0.0.0.0:50052
+      RAZIEL_PRIVATE_ENVELOPE_ROOT: /var/lib/raziel/private-envelopes
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_QUEUE_PREFIX:-raziel-capabilities}
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
       RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
@@ -186,11 +223,22 @@ services:
       - .:/workspace:ro
       - cargo-registry:/usr/local/cargo/registry:ro
       - cargo-git:/usr/local/cargo/git:ro
+      - razield-private-envelopes:/var/lib/raziel/private-envelopes
       - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
       - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
     depends_on:
       redis:
         condition: service_healthy
+      razield-private-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/50052'
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
     networks:
       - default
       - owner-internal
@@ -306,6 +354,7 @@ volumes:
   pnpm-store:
   queue-conformance-target:
   redis-data:
+  razield-private-envelopes:
 
 networks:
   owner-internal:
