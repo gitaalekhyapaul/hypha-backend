@@ -38,10 +38,19 @@ The runnable service validates explicit bind, Redis, queue-prefix, and private-s
 settings. It reconciles private files against exact BullMQ records before binding.
 The generated server rejects decoded messages above 2 MiB. `CreateCapability` uses
 trusted whole-second server time, then calls admission and publication. It returns an
-authoritative `QUEUED` job without waiting for proof work. Live tests cover startup
-cleanup, exact duplicates, bound mutations, request ceilings, publication, queue
-lifecycle, stalled failure, and Redis restart recovery. `GetCapability`,
-`CancelCapability`, worker terminal results, proof execution, and the retained-proof
+authoritative `QUEUED` job without waiting for proof work.
+
+The B-0021 library supervisor uses the official BullMQ worker to claim one job. It
+checks the exact public payload and job policy before opening the private envelope.
+It rechecks the 75-minute request window at worker start, applies a fixed one-hour
+execution deadline, forwards cancellation, deletes the envelope, and publishes only
+closed progress and failure values. A crate-owned activation token prevents a
+production process from starting this boundary before a real isolated executor and
+terminal capability validator exist. The current placeholder handoff fails closed
+with no capability. Live tests cover startup cleanup, exact duplicates, bound
+mutations, request ceilings, publication, queue lifecycle, worker claim and cleanup,
+stalled failure, and Redis restart recovery. `GetCapability`, `CancelCapability`,
+real proof execution, terminal capability publication, and the retained-proof
 verifier gate remain pending.
 
 ## Read first

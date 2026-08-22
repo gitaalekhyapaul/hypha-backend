@@ -7,3 +7,4 @@ pub mod private_envelope;
 pub mod publication;
 pub mod queue;
 pub mod service;
+pub mod worker;

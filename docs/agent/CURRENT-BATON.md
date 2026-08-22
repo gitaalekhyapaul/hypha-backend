@@ -1,146 +1,128 @@
 # Current Engineering Baton
 
-- Baton ID: B-0021
+- Baton ID: B-0022
 - State: READY
-- Milestone: M4, BullMQ proof-supervisor claim and private-envelope handoff
+- Milestone: M4, canonical positive-path witness construction
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-08-22T07:33:26Z
+- Last updated UTC: 2026-08-22T08:56:28Z
 - Branch: `main`
-- Worktree: B-0020 service ingress and its archive are ready to commit after
-  `0a011c0`. The branch was two commits ahead of `origin/main` before that commit.
+- Worktree: B-0021 is archived at
+  `docs/agent/history/B-0021-bullmq-proof-supervisor-handoff.md`. Its scoped
+  implementation and the B-0022 reset await one commit after `598ba02`.
 
 ## Objective
 
-Implement the bounded proof-supervisor claim boundary. Use the official BullMQ worker
-to claim one job, validate its public payload, read its private envelope only after
-the claim, and pass a validated private request to an injectable one-shot executor
-contract. Do not run a real proof or publish a terminal capability in this baton.
+Implement the bounded host-side builder that evaluates approved PolicyIR against a
+selected blinded relationship snapshot and returns the minimum canonical
+`RelationshipWitnessSetV1` for the first positive path. Validate the witness set
+before returning it. Do not run SP1 or connect the builder to the proof supervisor in
+this baton.
 
 ## Acceptance Criteria
 
-- [ ] Supervisor configuration validates Redis, queue prefix, private-envelope root,
-      and worker timing values without exposing credentials or private paths.
-- [ ] The official BullMQ worker owns claims, locks, lock renewal, one-job
-      concurrency, stalled failure, and terminal retention.
-- [ ] The supervisor validates the strict public payload before private storage access.
-- [ ] The supervisor reads and commitment-checks the private envelope only after a
-      successful BullMQ claim.
-- [ ] An injectable one-shot executor contract receives only validated private input
-      and bounded owner configuration.
-- [ ] Invalid payloads, missing or corrupt envelopes, cancellation, and executor
-      failures produce generic public state and typed private failure classes.
-- [ ] Progress contains safe phase values only. It contains no request context,
-      policy branch, relationship, witness, path, opening, or proof bytes.
-- [ ] Focused unit tests, live Redis worker tests, affected workspace tests, strict
-      Clippy, formatting, privacy scans, and diff checks pass.
+- [ ] The builder indexes selected snapshot relationships through the existing
+      PolicyIR resolver contract without changing evaluator semantics.
+- [ ] One allowed request selects the evaluator's first canonical positive path and
+      includes only relationships reported as used by that evaluation.
+- [ ] Used relationships map to the exact snapshot indices and Merkle openings that
+      commit to the selected root.
+- [ ] The returned witness set has deterministic ordering, no duplicate structural
+      identity, and passes the existing snapshot witness validator.
+- [ ] Denied, missing, ambiguous, malformed, oversized, and commitment-mismatched
+      inputs fail through typed errors with no private values in debug or display
+      output.
+- [ ] Focused witness tests, affected cross-component tests, strict Clippy,
+      formatting, privacy scans, and diff checks pass.
 
 ## Architecture Constraints
 
-- The supervisor remains a process separate from the responsive `razield` API.
-- BullMQ remains the sole owner of claims, locks, lock renewal, stalled jobs, and
-  terminal retention.
-- The private filesystem remains a bounded data handoff. It is not a queue.
-- The worker cannot use request data to select an ELF, setup archive, proof mode,
-  resource profile, registry generation, or external endpoint.
-- A worker claim cannot expose the private envelope through Redis, Tonic, progress,
-  standard logs, or debug output.
-- No hosted prover or SP1 network client receives private input.
-- No architecture invariant, public proof value, capability format, or PolicyIR
-  semantic changes occur inside this baton.
+- Relationship tuples, satisfying paths, Merkle openings, salts, caveat values, and
+  evaluation traces remain Raziel-private witness data.
+- The baseline guest proves `ALLOW` only. A denied evaluation cannot produce a
+  witness set.
+- The builder consumes approved PolicyIR and a selected snapshot. It cannot approve
+  either input or choose a different policy or snapshot.
+- Existing PolicyIR semantics, snapshot leaf construction, canonical encodings,
+  commitments, public values, and capability fields do not change in this baton.
+- Scenario adapters cannot alter the builder or guest semantics.
+- No private witness value enters logs, public errors, Redis, Tonic, or client data.
 
 ## File Scope
 
-- `services/razield/src/worker/`
-- `services/razield/src/bin/` for the proof-supervisor process
-- `services/razield/src/queue.rs` only for shared worker policy
-- `services/razield/src/private_envelope/` only for the post-claim handoff
-- `services/razield/src/publication/` only for shared payload and public state types
-- `services/razield/src/lib.rs`
-- `services/razield/Cargo.toml`
-- `Cargo.lock` only for approved workspace selections
-- `services/razield/tests/` for focused and live worker checks
-- `scripts/test-bullmq-conformance`
-- `docker-compose.yml`
+- `crates/witness/`
+- `crates/witness/Cargo.toml`
+- `Cargo.lock` only for existing internal workspace selections
 - Current-status documentation only for behavior proven by this slice
 - `docs/agent/CURRENT-BATON.md`
 
 ## Out of Scope
 
-- Real SP1 execution or Plonk proof generation
-- Witness construction and registry-backed authorization input assembly
-- Final capability packaging or terminal success publication
-- `GetCapability` and `CancelCapability` RPC behavior
-- Active child-process cancellation and proof cgroup implementation
-- `verifierd`, verifier worker, ADR-0002, O-007, M5, M6, or M7
-- New packages, versions, toolchains, or proof runs without explicit approval
+- Proof-supervisor wiring or a production worker binary
+- One-shot child-process isolation, cgroups, or SP1 execution
+- Capability packaging or terminal queue publication
+- Policy and snapshot registry loading
+- `GetCapability`, `CancelCapability`, `verifierd`, ADR-0002, or O-007
+- M5, real transaction data, M6 acceptance, M7, or another scenario
+- New external dependencies, package versions, toolchains, or proof runs
 
 ## Decisions
 
-- Inherited: ADR-0013 fixes the separate Rust API and proof-supervisor processes,
-  official BullMQ ownership, one attempt, one-job concurrency, zero stalled retries,
-  and generic public errors.
-- Inherited: B-0018 supplies the strict owner-only private envelope.
-- Inherited: B-0019 supplies the strict public payload and atomic publication.
-- Inherited: B-0020 supplies runnable Create ingress and startup reconciliation.
-- Inherited: BullMQ `1.2.3`, Redis `8.2.8`, Tokio `1.53.1`, Tonic `0.14.6`, and current
-  workspace pins are approved.
+- Inherited: The architecture keeps PolicyIR, relationship tuples, selected paths,
+  Merkle openings, salts, and caveat values inside the data-owner proof boundary.
+- Inherited: ADR-0009 fixes blinded snapshot leaves, one snapshot salt, left-balanced
+  Merkle openings, and canonical witness limits.
+- Inherited: ADR-0010 fixes first-canonical-positive-path trace selection and bounded
+  witness accounting.
+- Inherited: ADR-0013 places witness construction in the local proof path and bars
+  hosted proving.
 - Made: None.
 
 ## Open Questions and Blockers
 
-- No blocker prevents inspection and claim.
-- Source inspection must fix the exact BullMQ processor, cancellation-token, progress,
-  and completion APIs before edits begin.
-- Source inspection must fix the narrow executor handoff type before the supervisor
-  reads a private envelope.
-- No new dependency or proof run is approved.
+- No approval blocker is known. The first implementation step must confirm the exact
+  PolicyIR resolver identity and snapshot-index mapping from current code.
+- No new dependency is planned.
 
 ## Work Completed
 
-- B-0020 completed and archived the bounded Create ingress at
-  `docs/agent/history/B-0020-create-capability-service-ingress.md`.
-- No B-0021 implementation has started.
+- B-0021 implemented and validated the BullMQ proof-supervisor claim and private
+  handoff boundary.
+- No B-0022 implementation has started.
 
 ## Validation Plan
 
-- Test payload rejection before private-store reads.
-- Test private-envelope access only inside an official BullMQ processor claim.
-- Test one-job concurrency, progress redaction, cancellation delivery, and zero proof
-  retry against the pinned Redis service.
-- Test executor success, typed failure, timeout, and malformed-output boundaries with
-  a deterministic fake executor. Do not run SP1.
-- Run affected service and workspace tests in the pinned toolchain.
-- Run strict Clippy, repository formatting, dependency inspection, privacy scans, and
-  `git diff --check`.
+- Run focused `raziel-witness` tests for one allowed path, canonical selection,
+  caveat use, denied evaluation, malformed snapshot input, and private error output.
+- Run affected PolicyIR, snapshot, authorization-core, and witness tests.
+- Run the non-guest workspace gate after the focused feature checks pass.
+- Run strict Clippy, repository formatting, privacy scans, and `git diff --check`.
+- Do not run SP1.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0020 archive | PASS | Bounded CreateCapability service ingress | 2026-08-22T07:33:26Z |
-| Not run | B-0021 implementation not claimed | Proof supervisor | 2026-08-22T07:33:26Z |
+| B-0021 archive | PASS | BullMQ supervisor claim and private handoff | 2026-08-22T08:56:28Z |
+| B-0022 implementation | NOT STARTED | No feature files edited | 2026-08-22T08:56:28Z |
 
 ## Privacy Checks
 
-- NOT STARTED: Worker progress and failures must expose no private request or witness
-  value.
-- NOT STARTED: The executor handoff and its debug output must redact the complete
-  private envelope.
-- NOT APPLICABLE: This baton does not run a real proof or use transaction data.
+- NOT STARTED: Builder errors and debug output must omit relationships, caveat values,
+  salts, paths, openings, and trace data.
+- NOT APPLICABLE: No real transaction data or proof run is part of this baton.
 
 ## Risks and Private-Data Notes
 
-- BullMQ starts the processor only after it grants the active-job lock. Private reads
-  outside that processor could bypass queue ownership.
-- A private envelope can be corrupt, swapped, linked, missing, or commitment-mismatched
-  after publication. The supervisor must use the strict B-0018 read path.
-- Progress and terminal errors are public Redis values. They need closed typed schemas,
-  fixed ceilings, and redacted debug output.
-- A task spawn does not isolate a proof crash or OOM. This baton stops at an executor
-  contract and leaves real process isolation to the next proof-execution slice.
+- Resolver identity and snapshot structural identity must match exactly. A positional
+  shortcut can select the wrong opening.
+- The evaluator can inspect more relationships than the selected positive path uses.
+  The builder must include only the reported used witness IDs.
+- Witness order and duplicate handling are proof inputs. The builder must defer to
+  existing canonical validators rather than creating a second rule set.
 
 ## Exact Next Action
 
-Reconcile the B-0020 commit, claim B-0021, then inspect the pinned BullMQ worker APIs
-and existing prover input boundary before selecting the implementation file map.
+Read `crates/witness`, the PolicyIR traced evaluator, snapshot tree and witness types,
+their tests, and the relevant FR-040 through FR-046 requirements. Then claim B-0022
+with a bounded implementation file map.

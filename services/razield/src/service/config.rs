@@ -101,7 +101,7 @@ impl ServiceConfig {
     }
 }
 
-fn valid_redis_url(value: &str) -> bool {
+pub(crate) fn valid_redis_url(value: &str) -> bool {
     if value.is_empty()
         || value.trim() != value
         || value.bytes().any(|byte| byte.is_ascii_whitespace())
@@ -115,7 +115,7 @@ fn valid_redis_url(value: &str) -> bool {
     matches!(authority, Some(authority) if !authority.is_empty() && !authority.starts_with('/'))
 }
 
-fn valid_queue_prefix(value: &str) -> bool {
+pub(crate) fn valid_queue_prefix(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_QUEUE_PREFIX_BYTES
         && value
@@ -123,7 +123,7 @@ fn valid_queue_prefix(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
-fn valid_private_root(path: &Path) -> bool {
+pub(crate) fn valid_private_root(path: &Path) -> bool {
     path.is_absolute()
         && path != Path::new("/")
         && path.components().all(|component| {

@@ -1,7 +1,7 @@
 //! Bounded Tonic ingress for the asynchronous capability service.
 
 mod clock;
-mod config;
+pub(crate) mod config;
 mod handler;
 mod runtime;
 

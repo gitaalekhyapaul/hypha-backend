@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -213,7 +213,21 @@ Exact duplicates return their retained queued record. Authorization-bound mutati
 fail before publication. The display-only `agent_id` does not change job identity.
 `GetCapability` and `CancelCapability` remain closed as unimplemented. Terminal queue
 records fail closed until the worker slice supplies a capability or typed terminal
-result. Worker execution, lifecycle reads and cancellation, and capability issuance
+result.
+
+The B-0021 library supervisor uses the official BullMQ worker for claim, lock renewal,
+one-job concurrency, stalled handling, and terminal retention. It validates the exact
+job name, identity, payload, and persisted queue policy before private storage access.
+The claimed processor loads one commitment-bound envelope, rechecks the 75-minute
+window with trusted whole-second time, publishes a closed `EXECUTING` phase, and calls
+a narrow one-shot executor contract. A fixed one-hour deadline and 30-second exit
+grace bound that handoff. Cancellation reaches active execution before envelope
+deletion. Supervisor shutdown cancels active work, closes the worker, and confirms no
+active jobs remain. A crate-owned activation token keeps the library boundary out of
+production startup until the isolated executor and strict terminal result validator
+exist. A successful placeholder handoff still records `SERVICE_UNAVAILABLE`, returns
+no capability, and deletes the envelope. Real witness construction, proof execution,
+capability issuance, lifecycle RPCs, and independent retained-proof verification
 remain pending.
 
 ## Main components

@@ -49,6 +49,13 @@ run_service_case() {
     "$test_name" -- --exact --ignored --nocapture
 }
 
+run_worker_case() {
+  test_name=$1
+  compose --profile queue-conformance run --rm --no-deps bullmq-conformance \
+    cargo test --locked --offline -p razield --lib \
+    "worker::tests::$test_name" -- --exact --ignored --nocapture
+}
+
 cd "$repo_root"
 
 # Populate the project-scoped Cargo cache before the isolated runner switches offline.
@@ -76,6 +83,7 @@ run_case stalled_job_never_reinvokes_processor
 run_publication_case publishes_minimal_waiting_job_and_returns_exact_duplicate
 run_publication_case confirmed_live_rejection_removes_the_new_envelope
 run_service_case live_create_uses_startup_reconciliation_and_returns_queued
+run_worker_case live_worker_claims_one_job_and_fails_closed_without_a_capability
 run_case prepare_restart_recovery
 
 compose --profile queue-conformance restart redis

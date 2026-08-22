@@ -1125,12 +1125,21 @@ server time, then calls admission and publication. It returns the authoritative
 queued record without waiting for proof work. Exact duplicates return the retained
 queued record. Bound mutations fail before publication, and display-only `agent_id`
 changes do not change job identity. Terminal records fail closed until the worker
-stores a bound public result. `GetCapability`, `CancelCapability`, proof execution,
-and independent verifier behavior remain pending. The verification-only Rust feature
-and dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
-verification and excludes SDK proving, core execution, native Gnark, JIT, and
-outbound SP1 client packages. This build result does not replace the later retained
-real-proof worker gate.
+stores a bound public result. The B-0021 library supervisor now claims one job through
+the official BullMQ worker and validates its exact public metadata before private
+storage access. It loads one commitment-bound envelope, rechecks the full 75-minute
+window with trusted whole-second time, records a closed `EXECUTING` phase, and passes
+the private request to a narrow one-shot executor contract. A fixed one-hour deadline,
+30-second termination grace, active cancellation, ordered envelope deletion, and
+shutdown confirmation bound this handoff. A crate-owned activation token blocks
+production startup until the isolated executor and terminal capability validator
+exist. The current placeholder handoff always fails closed and issues no capability.
+`GetCapability`, `CancelCapability`, witness construction, proof execution, terminal
+capability publication, and independent verifier behavior remain pending. The
+verification-only Rust feature and dependency-tree gate pass. That build uses direct
+`sp1-verifier` `6.3.1` Plonk verification and excludes SDK proving, core execution,
+native Gnark, JIT, and outbound SP1 client packages. This build result does not
+replace the later retained real-proof worker gate.
 
 Deliver:
 

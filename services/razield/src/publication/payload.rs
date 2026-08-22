@@ -22,14 +22,14 @@ struct CapabilityJobPayloadWire {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PayloadError {
+pub(crate) enum PayloadError {
     Malformed,
     UnsupportedVersion,
     InvalidReference,
 }
 
 impl CapabilityJobPayload {
-    pub(super) const fn new(private_envelope_ref: PrivateEnvelopeRef) -> Self {
+    pub(crate) const fn new(private_envelope_ref: PrivateEnvelopeRef) -> Self {
         Self {
             private_envelope_ref,
         }
@@ -45,7 +45,7 @@ impl CapabilityJobPayload {
         self.private_envelope_ref
     }
 
-    pub(super) fn to_json_value(&self) -> Result<Value, PayloadError> {
+    pub(crate) fn to_json_value(&self) -> Result<Value, PayloadError> {
         serde_json::to_value(CapabilityJobPayloadWire {
             format_version: CAPABILITY_JOB_PAYLOAD_FORMAT_VERSION,
             private_envelope_ref: self.private_envelope_ref.queue_token(),
@@ -53,7 +53,7 @@ impl CapabilityJobPayload {
         .map_err(|_| PayloadError::Malformed)
     }
 
-    pub(super) fn from_json_value(value: &Value) -> Result<Self, PayloadError> {
+    pub(crate) fn from_json_value(value: &Value) -> Result<Self, PayloadError> {
         let wire: CapabilityJobPayloadWire =
             serde_json::from_value(value.clone()).map_err(|_| PayloadError::Malformed)?;
         if wire.format_version != CAPABILITY_JOB_PAYLOAD_FORMAT_VERSION {

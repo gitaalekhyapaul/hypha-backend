@@ -2,6 +2,7 @@
 
 use std::error::Error;
 use std::fmt;
+use std::time::Duration;
 
 use bullmq::options::RedisConnectionOptions;
 use bullmq::types::{KeepJobs, RemoveOnFinish};
@@ -15,6 +16,18 @@ pub const GLOBAL_CONCURRENCY: u64 = 1;
 
 /// One worker process can invoke at most one proof processor at a time.
 pub const WORKER_CONCURRENCY: usize = 1;
+
+/// Active-job lock lifetime renewed by the official BullMQ worker.
+pub const WORKER_LOCK_DURATION: Duration = Duration::from_secs(30);
+
+/// Renewal runs often enough to survive one delayed tick before lock expiry.
+pub const WORKER_LOCK_RENEW_TIME: Duration = Duration::from_secs(10);
+
+/// Lost locks enter BullMQ's stalled path after one lock-duration interval.
+pub const WORKER_STALLED_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Empty queues are polled at a bounded whole-second interval.
+pub const WORKER_DRAIN_DELAY: Duration = Duration::from_secs(5);
 
 /// Proof jobs never retry after failure, lock loss, timeout, or process exit.
 pub const JOB_ATTEMPTS: u32 = 1;
@@ -79,6 +92,10 @@ impl QueueConfig {
             .connection(self.connection_options())
             .prefix(self.prefix.clone())
             .concurrency(WORKER_CONCURRENCY)
+            .lock_duration(WORKER_LOCK_DURATION)
+            .lock_renew_time(WORKER_LOCK_RENEW_TIME)
+            .stalled_interval(WORKER_STALLED_INTERVAL)
+            .drain_delay(WORKER_DRAIN_DELAY)
             .max_started_attempts(MAX_STARTED_ATTEMPTS)
             .max_stalled_count(MAX_STALLED_COUNT)
             .remove_on_complete(terminal_retention())
@@ -111,6 +128,42 @@ pub(crate) fn retained_job_options() -> JobOptions {
         .attempts(JOB_ATTEMPTS)
         .remove_on_complete(terminal_retention())
         .remove_on_fail(terminal_retention())
+}
+
+/// Accepts only the exact publisher-owned proof-job profile.
+pub(crate) fn valid_claimed_job_options(options: &JobOptions) -> bool {
+    options.delay.is_none()
+        && options.priority.is_none()
+        && options.attempts == Some(JOB_ATTEMPTS)
+        && options.backoff.is_none()
+        && options.lifo.is_none()
+        && valid_terminal_retention(options.remove_on_complete.as_ref())
+        && valid_terminal_retention(options.remove_on_fail.as_ref())
+        && options.keep_logs.is_none()
+        && options.job_id.is_none()
+        && options.timestamp.is_none()
+        && options.stack_trace_limit.is_none()
+        && options.parent.is_none()
+        && options.deduplication.is_none()
+        && options.repeat.is_none()
+        && options.prev_millis.is_none()
+        && options.repeat_job_key.is_none()
+        && options.fail_parent_on_failure.is_none()
+        && options.ignore_dependency_on_failure.is_none()
+        && options.remove_dependency_on_failure.is_none()
+        && options.continue_parent_on_failure.is_none()
+        && options.size_limit.is_none()
+}
+
+fn valid_terminal_retention(policy: Option<&RemoveOnFinish>) -> bool {
+    matches!(
+        policy,
+        Some(RemoveOnFinish::Options(KeepJobs {
+            age: Some(TERMINAL_RETENTION_AGE_SECONDS),
+            count: Some(TERMINAL_RETENTION_COUNT),
+            limit: Some(TERMINAL_RETENTION_EVICTION_LIMIT),
+        }))
+    )
 }
 
 impl fmt::Debug for QueueConfig {
@@ -191,6 +244,14 @@ mod tests {
         assert_terminal_retention(job.remove_on_fail.as_ref());
         assert_terminal_retention(worker.remove_on_complete.as_ref());
         assert_terminal_retention(worker.remove_on_fail.as_ref());
+        // BullMQ applies `job_id` and `size_limit` while publishing, then omits
+        // both client-only fields from the Redis job options read by a worker.
+        let stored_job = retained_job_options();
+        assert!(valid_claimed_job_options(&stored_job));
+
+        let mut repeated = stored_job;
+        repeated.repeat_job_key = Some("not-accepted".into());
+        assert!(!valid_claimed_job_options(&repeated));
     }
 
     fn assert_terminal_retention(policy: Option<&RemoveOnFinish>) {
