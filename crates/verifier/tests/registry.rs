@@ -57,6 +57,11 @@ fn installs_and_resolves_an_exact_policy_and_root() {
         "snapshot-1"
     );
     assert_eq!(resolved.policy_record.claims.claims().record_id, "policy-1");
+
+    let resolved_by_id = registry
+        .resolve_snapshot_exact("snapshot-1", TEST_NOW)
+        .unwrap();
+    assert_eq!(resolved_by_id, resolved);
     assert_eq!(registry.observed_time_floor(), Some(TEST_NOW));
 }
 
@@ -75,7 +80,11 @@ fn unknown_expired_and_clock_rollback_paths_fail_closed() {
         Err(RegistryError::UnknownRoot)
     );
     assert_eq!(
-        registry.resolve_root(&[0x22; 32], TEST_NOW + 101),
+        registry.resolve_snapshot_exact("missing", TEST_NOW),
+        Err(RegistryError::UnknownRoot)
+    );
+    assert_eq!(
+        registry.resolve_snapshot_exact("snapshot-1", TEST_NOW + 101),
         Err(RegistryError::ExpiredRoot)
     );
     assert_eq!(

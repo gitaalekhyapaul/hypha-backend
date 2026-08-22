@@ -47,7 +47,7 @@ pub fn authorize(
     .map_err(|_| AuthorizationError::InvalidWitness)?;
 
     let resolver = VerifiedWitnessResolver::new(&input.relationship_witness_set);
-    let request = evaluation_request(
+    let request = authorization_evaluation_request(
         &policy,
         &input.request,
         input.issued_at_unix_seconds,
@@ -184,7 +184,12 @@ pub fn validate_capability_request_binding(
     validate_context(&request.request_context)
 }
 
-fn evaluation_request(
+/// Maps one validated capability request into the PolicyIR evaluation model.
+///
+/// Service callers must obtain the request from the strict admission and private
+/// envelope path. `authorize` validates the same request again inside the guest
+/// statement.
+pub fn authorization_evaluation_request(
     policy: &ValidatedPolicyProgram,
     request: &CapabilityRequestBindingV1,
     issued_at_unix_seconds: i64,

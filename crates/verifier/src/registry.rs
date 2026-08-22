@@ -144,34 +144,18 @@ impl LocalRegistry {
             .root_by_digest
             .get(relationship_root)
             .ok_or(RegistryError::UnknownRoot)?;
-        let root_record = installed
-            .accepted_roots
-            .get(snapshot_id)
-            .ok_or(RegistryError::UnknownRoot)?;
-        let claims = root_record.claims.claims();
+        resolve_snapshot_exact(installed, snapshot_id, now)
+    }
 
-        if root_record.status == RootRecordStatus::Revoked {
-            return Err(RegistryError::RevokedRoot);
-        }
-        if now < claims.issued_at_unix_seconds || now >= claims.expires_at_unix_seconds {
-            return Err(RegistryError::ExpiredRoot);
-        }
-        let key = installed
-            .authority_keys
-            .get(&claims.signing_key_id)
-            .ok_or(RegistryError::UnknownAuthorityKey)?;
-        key.verify_snapshot_descriptor(now, &root_record.claims, &root_record.authority_signature)?;
-
-        let policy_record = resolve_policy_exact(
-            installed,
-            &claims.policy_record_id,
-            &claims.policy_hash,
-            now,
-        )?;
-        Ok(ResolvedRoot {
-            root_record: root_record.clone(),
-            policy_record,
-        })
+    /// Resolves one signed snapshot by the exact identifier bound into a request.
+    pub fn resolve_snapshot_exact(
+        &mut self,
+        snapshot_id: &str,
+        observed_now_unix_seconds: i64,
+    ) -> Result<ResolvedRoot, RegistryError> {
+        let now = self.observe_time(observed_now_unix_seconds);
+        let installed = self.installed.as_ref().ok_or(RegistryError::UnknownRoot)?;
+        resolve_snapshot_exact(installed, snapshot_id, now)
     }
 
     fn observe_time(&mut self, observed_now_unix_seconds: i64) -> i64 {
@@ -183,6 +167,41 @@ impl LocalRegistry {
         self.observed_time_floor = Some(effective_now);
         effective_now
     }
+}
+
+fn resolve_snapshot_exact(
+    installed: &InstalledGeneration,
+    snapshot_id: &str,
+    now: i64,
+) -> Result<ResolvedRoot, RegistryError> {
+    let root_record = installed
+        .accepted_roots
+        .get(snapshot_id)
+        .ok_or(RegistryError::UnknownRoot)?;
+    let claims = root_record.claims.claims();
+
+    if root_record.status == RootRecordStatus::Revoked {
+        return Err(RegistryError::RevokedRoot);
+    }
+    if now < claims.issued_at_unix_seconds || now >= claims.expires_at_unix_seconds {
+        return Err(RegistryError::ExpiredRoot);
+    }
+    let key = installed
+        .authority_keys
+        .get(&claims.signing_key_id)
+        .ok_or(RegistryError::UnknownAuthorityKey)?;
+    key.verify_snapshot_descriptor(now, &root_record.claims, &root_record.authority_signature)?;
+
+    let policy_record = resolve_policy_exact(
+        installed,
+        &claims.policy_record_id,
+        &claims.policy_hash,
+        now,
+    )?;
+    Ok(ResolvedRoot {
+        root_record: root_record.clone(),
+        policy_record,
+    })
 }
 
 struct InstalledGeneration {

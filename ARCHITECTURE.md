@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -237,9 +237,14 @@ evaluator returns only relationships used by its first positive path. The builde
 turns those sorted IDs into Merkle openings, creates `RelationshipWitnessSetV1`, and
 runs the existing witness validator against the selected root before returning it.
 Denied requests return no witness. Error and debug output contain no relationship,
-caveat, salt, path, or opening value. Proof-supervisor input assembly, proof execution,
-capability issuance, lifecycle RPCs, and independent retained-proof verification
-remain pending.
+caveat, salt, path, or opening value. The B-0023 assembler resolves the request's
+exact `snapshot_id` through the trusted local registry. It reuses authorization-core's
+request mapping, requires the request, approved policy, and signed snapshot to cover
+the fixed 75-minute window, consumes the B-0022 private selection, and runs host
+authorization over the assembled guest input. The returned type keeps the expected
+public journal beside the private input for the later proof comparison. Private
+snapshot-store integration, supervisor handoff, proof execution, capability issuance,
+lifecycle RPCs, and independent retained-proof verification remain pending.
 
 ## Main components
 

@@ -54,13 +54,18 @@ committed root of one selected snapshot. It rebuilds and checks that root, evalu
 the approved PolicyIR with snapshot leaf indices as witness IDs, opens only the
 relationships used by the first positive path, and validates the reduced witness set
 before returning it. Denied, malformed, oversized, and root-mismatched inputs fail
-without returning private witness data. The builder does not run SP1 and is not wired
-to the queue supervisor yet. Live and focused tests cover startup cleanup, exact
-duplicates, bound mutations, request ceilings, publication, queue lifecycle, worker
-claim and cleanup, stalled failure, Redis restart recovery, positive-path selection,
-caveated relationships, denial, and snapshot mismatch. `GetCapability`,
-`CancelCapability`, worker input assembly, real proof execution, terminal capability
-publication, and the retained-proof verifier gate remain pending.
+without returning private witness data. The B-0023 input assembler resolves the
+request's exact signed snapshot through `LocalRegistry`, requires the request, policy,
+and snapshot to cover the 75-minute proof window, consumes the private snapshot
+selection, builds `AuthorizationGuestInputV1`, and runs the shared host authorization
+statement. It retains the expected public journal for the later proof comparison. It
+does not run SP1 or activate the queue supervisor. Live and focused tests cover
+startup cleanup, exact duplicates, bound mutations, request ceilings, publication,
+queue lifecycle, worker claim and cleanup, stalled failure, Redis restart recovery,
+positive-path selection, caveated relationships, denial, snapshot mismatch, trusted
+input assembly, and expiry bounds. `GetCapability`, `CancelCapability`, private
+snapshot-store integration, supervisor-to-assembler handoff, real proof execution,
+terminal capability publication, and the retained-proof verifier gate remain pending.
 
 ## Read first
 

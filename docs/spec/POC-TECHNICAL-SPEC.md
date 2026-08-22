@@ -1141,10 +1141,16 @@ relationships used by the first positive path, and validates the resulting
 `RelationshipWitnessSetV1` against the selected root and declared limits. Denial,
 invalid evaluation, malformed records, count excess, root mismatch, and invalid
 constructed witnesses return typed errors with no private values. The builder does
-not run SP1 and has no queue or service binding. `GetCapability`, `CancelCapability`,
-worker input assembly, proof execution, terminal capability publication, and
-independent verifier behavior remain pending. The verification-only Rust feature and
-dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
+not run SP1 and has no queue or service binding. The B-0023 service assembler resolves
+the capability request's exact signed snapshot through `LocalRegistry`, checks the
+request, approved policy, and snapshot against the fixed 75-minute proof window,
+constructs the minimum witness, builds `AuthorizationGuestInputV1`, and passes the
+shared host authorization statement. It retains the exact expected public journal for
+the later proof result check. `GetCapability`, `CancelCapability`, private
+snapshot-store integration, supervisor handoff, proof execution, terminal capability
+publication, and independent verifier behavior remain pending. The verification-only
+Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
+`6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and
 outbound SP1 client packages. This build result does not replace the later retained
 real-proof worker gate.

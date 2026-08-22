@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod input_assembly;
 pub mod private_envelope;
 pub mod publication;
 pub mod queue;
