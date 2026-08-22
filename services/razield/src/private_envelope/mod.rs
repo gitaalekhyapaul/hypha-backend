@@ -125,6 +125,25 @@ pub struct CleanupSummary {
     pub temporary_files_deleted: usize,
 }
 
+/// Internal staging result used by the queue publication transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PublicationStage {
+    Created(PrivateEnvelopeRef),
+    Existing(PrivateEnvelopeRef),
+}
+
+impl PublicationStage {
+    pub(crate) const fn reference(self) -> PrivateEnvelopeRef {
+        match self {
+            Self::Created(reference) | Self::Existing(reference) => reference,
+        }
+    }
+
+    pub(crate) const fn was_created(self) -> bool {
+        matches!(self, Self::Created(_))
+    }
+}
+
 /// Redacted failure classes for private-envelope audit mapping.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrivateEnvelopeError {

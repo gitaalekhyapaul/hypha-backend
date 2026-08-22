@@ -3486,6 +3486,8 @@ dependencies = [
  "raziel-authorization-core",
  "raziel-policy-ir",
  "raziel-proto",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

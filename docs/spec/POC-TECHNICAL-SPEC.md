@@ -1112,12 +1112,18 @@ proof access. The separate private-envelope boundary stores only admitted
 proof-worker fields in a strict, versioned Rust-only Protobuf message capped at 16
 KiB. Its owner-only store uses atomic no-replacement publication, strict mode and link
 checks, commitment-bound reads, idempotent deletion, and grace-based orphan cleanup.
-Service handlers, listeners, store-to-queue wiring, queue publication, proof
-execution, and independent verifier behavior remain pending. The verification-only
-Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
-`6.3.1` Plonk verification and excludes SDK proving, core execution, native Gnark,
-JIT, and outbound SP1 client packages. This build result does not replace the later
-retained-real-proof worker gate.
+The capability publisher now completes private-envelope durability before publishing
+one deterministic BullMQ job. Its strict 256-byte public payload contains only a
+format version and opaque private-envelope reference. Exact duplicates return the
+authoritative retained record. Confirmed failures remove a newly created envelope,
+and ambiguous queue outcomes preserve it for reconciliation. One-attempt, zero-stall,
+global-concurrency-one, and bounded terminal-retention checks pass against live Redis.
+Service handlers, listeners, startup reconciliation, proof execution, and independent
+verifier behavior remain pending. The verification-only Rust feature and
+dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
+verification and excludes SDK proving, core execution, native Gnark, JIT, and
+outbound SP1 client packages. This build result does not replace the later retained
+real-proof worker gate.
 
 Deliver:
 

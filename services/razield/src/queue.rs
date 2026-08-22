@@ -4,7 +4,11 @@ use std::error::Error;
 use std::fmt;
 
 use bullmq::options::RedisConnectionOptions;
+use bullmq::types::{KeepJobs, RemoveOnFinish};
 use bullmq::{JobOptions, QueueOptions, WorkerOptions};
+
+/// BullMQ queue shared by the capability publisher and proof supervisor.
+pub const CAPABILITY_QUEUE_NAME: &str = "proof-jobs";
 
 /// The API and every proof worker use this queue-wide ceiling.
 pub const GLOBAL_CONCURRENCY: u64 = 1;
@@ -20,6 +24,21 @@ pub const MAX_STARTED_ATTEMPTS: u32 = 1;
 
 /// A stalled proof fails terminally instead of returning to the waiting set.
 pub const MAX_STALLED_COUNT: u32 = 0;
+
+/// The public queue handoff is deliberately much smaller than private ingress.
+pub const MAX_PUBLIC_JOB_PAYLOAD_BYTES: usize = 256;
+
+/// Retain terminal records long enough to cover the 75-minute capability window.
+///
+/// BullMQ's finish script multiplies this wire value by 1,000 before comparing it
+/// with millisecond timestamps, so the value is expressed in seconds.
+pub const TERMINAL_RETENTION_AGE_SECONDS: u64 = 24 * 60 * 60;
+
+/// A second bound prevents an unbounded terminal Redis set.
+pub const TERMINAL_RETENTION_COUNT: usize = 100;
+
+/// One terminal transition can evict at most this many aged records.
+pub const TERMINAL_RETENTION_EVICTION_LIMIT: usize = 100;
 
 /// Connection and keyspace settings for one owner-controlled BullMQ deployment.
 #[derive(Clone)]
@@ -62,11 +81,13 @@ impl QueueConfig {
             .concurrency(WORKER_CONCURRENCY)
             .max_started_attempts(MAX_STARTED_ATTEMPTS)
             .max_stalled_count(MAX_STALLED_COUNT)
+            .remove_on_complete(terminal_retention())
+            .remove_on_fail(terminal_retention())
     }
 
     /// Builds the only attempt policy accepted for proof jobs.
     pub fn job_options(&self) -> JobOptions {
-        JobOptions::new().attempts(JOB_ATTEMPTS)
+        retained_job_options().size_limit(MAX_PUBLIC_JOB_PAYLOAD_BYTES)
     }
 
     fn connection_options(&self) -> RedisConnectionOptions {
@@ -75,6 +96,21 @@ impl QueueConfig {
             ..Default::default()
         }
     }
+}
+
+fn terminal_retention() -> RemoveOnFinish {
+    RemoveOnFinish::Options(KeepJobs {
+        age: Some(TERMINAL_RETENTION_AGE_SECONDS),
+        count: Some(TERMINAL_RETENTION_COUNT),
+        limit: Some(TERMINAL_RETENTION_EVICTION_LIMIT),
+    })
+}
+
+pub(crate) fn retained_job_options() -> JobOptions {
+    JobOptions::new()
+        .attempts(JOB_ATTEMPTS)
+        .remove_on_complete(terminal_retention())
+        .remove_on_fail(terminal_retention())
 }
 
 impl fmt::Debug for QueueConfig {
@@ -148,5 +184,21 @@ mod tests {
         assert_eq!(worker.concurrency, WORKER_CONCURRENCY);
         assert_eq!(worker.max_started_attempts, Some(MAX_STARTED_ATTEMPTS));
         assert_eq!(worker.max_stalled_count, MAX_STALLED_COUNT);
+        assert_eq!(job.keep_logs, None);
+        assert_eq!(job.stack_trace_limit, None);
+        assert_eq!(job.size_limit, Some(MAX_PUBLIC_JOB_PAYLOAD_BYTES));
+        assert_terminal_retention(job.remove_on_complete.as_ref());
+        assert_terminal_retention(job.remove_on_fail.as_ref());
+        assert_terminal_retention(worker.remove_on_complete.as_ref());
+        assert_terminal_retention(worker.remove_on_fail.as_ref());
+    }
+
+    fn assert_terminal_retention(policy: Option<&RemoveOnFinish>) {
+        let Some(RemoveOnFinish::Options(keep)) = policy else {
+            panic!("expected age-and-count terminal retention");
+        };
+        assert_eq!(keep.age, Some(TERMINAL_RETENTION_AGE_SECONDS));
+        assert_eq!(keep.count, Some(TERMINAL_RETENTION_COUNT));
+        assert_eq!(keep.limit, Some(TERMINAL_RETENTION_EVICTION_LIMIT));
     }
 }

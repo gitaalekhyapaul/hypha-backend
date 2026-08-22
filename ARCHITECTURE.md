@@ -2,7 +2,7 @@
 
 Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -189,9 +189,20 @@ versioned Rust-only Prost message with a 16 KiB ceiling into a dedicated `0700`
 directory and publishes a `0600` file without replacing an existing job envelope.
 Reads reject links, non-regular files, wrong modes, oversized or non-canonical bytes,
 wrong versions, invalid request fields, and commitment or reference mismatches. The
-store supports idempotent deletion and grace-based orphan cleanup. Redis sees only the
-opaque reference after later API and publisher wiring. This boundary has no queue,
-network, witness, guest, or proof API.
+store supports idempotent deletion and grace-based orphan cleanup. This boundary has
+no queue, network, witness, guest, or proof API.
+
+The B-0019 publisher now joins the admitted request, private store, and BullMQ queue.
+It completes private-envelope durability before queue publication. Redis receives
+only a format version and opaque envelope reference under a 256-byte payload ceiling.
+The exact request commitment remains the custom job ID. The publisher fetches and
+validates the authoritative Redis record after add or duplicate handling. Confirmed
+failure removes a newly created envelope. An unreadable queue preserves it for later
+reconciliation. The queue policy fixes one attempt, global concurrency one, zero
+stalled retries, and terminal retention at 24 hours or 100 records. Live tests prove
+waiting-state publication, exact duplicate retention, payload privacy, confirmed
+failure cleanup, stalled failure, and Redis restart recovery. RPC serving, startup
+reconciliation, worker execution, and capability issuance remain pending.
 
 ## Main components
 

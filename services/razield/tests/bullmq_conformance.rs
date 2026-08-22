@@ -179,6 +179,11 @@ async fn verify_lock_cancellation_progress_and_retention() -> TestResult {
     let cancellation_seen = Arc::new(AtomicBool::new(false));
     let processor_invocations = Arc::clone(&invocations);
     let processor_cancellation_seen = Arc::clone(&cancellation_seen);
+    let test_retention = RemoveOnFinish::Options(KeepJobs {
+        age: Some(60),
+        count: Some(2),
+        limit: Some(10),
+    });
     let worker = Arc::new(
         Worker::with_options(
             QUEUE_NAME,
@@ -202,19 +207,27 @@ async fn verify_lock_cancellation_progress_and_retention() -> TestResult {
                 .worker_options()
                 .lock_duration(Duration::from_millis(300))
                 .lock_renew_time(Duration::from_millis(75))
-                .remove_on_complete(RemoveOnFinish::Options(KeepJobs {
-                    age: Some(60_000),
-                    count: Some(2),
-                    limit: Some(10),
-                })),
+                .remove_on_complete(test_retention.clone()),
         )
         .await?,
     );
 
     for id in 1..=3 {
-        add_public_test_job(&queue, &config, "lock-renewal", &format!("retained-{id}")).await?;
+        queue
+            .add("lock-renewal", "synthetic-public-test-payload")
+            .options(
+                config
+                    .job_options()
+                    .remove_on_complete(test_retention.clone()),
+            )
+            .job_id(format!("retained-{id}"))
+            .await?;
     }
-    add_public_test_job(&queue, &config, "cancel-me", "cancel-active-1").await?;
+    queue
+        .add("cancel-me", "synthetic-public-test-payload")
+        .options(config.job_options().remove_on_complete(test_retention))
+        .job_id("cancel-active-1")
+        .await?;
 
     let deadline = Instant::now() + WAIT_TIMEOUT;
     let mut cancellation_requested = false;

@@ -11,7 +11,7 @@ use std::time::SystemTime;
 use super::codec;
 use super::{
     CleanupSummary, DeleteStatus, MAX_PRIVATE_ENVELOPE_BYTES, PrivateCapabilityEnvelope,
-    PrivateEnvelopeError, PrivateEnvelopeRef,
+    PrivateEnvelopeError, PrivateEnvelopeRef, PublicationStage,
 };
 use crate::admission::AdmittedCapabilityRequest;
 
@@ -103,11 +103,36 @@ impl PrivateEnvelopeStore {
         admitted: &AdmittedCapabilityRequest,
     ) -> Result<PrivateEnvelopeRef, PrivateEnvelopeError> {
         let (reference, bytes) = codec::encode(admitted)?;
+        self.stage_encoded(&reference, &bytes)?;
+        Ok(reference)
+    }
+
+    /// Stages a new envelope or validates an exact envelope retained by a retry.
+    pub(crate) fn stage_for_publication(
+        &self,
+        admitted: &AdmittedCapabilityRequest,
+    ) -> Result<PublicationStage, PrivateEnvelopeError> {
+        let (reference, bytes) = codec::encode(admitted)?;
+        match self.stage_encoded(&reference, &bytes) {
+            Ok(()) => Ok(PublicationStage::Created(reference)),
+            Err(PrivateEnvelopeError::EnvelopeAlreadyExists) => {
+                self.read(&reference)?;
+                Ok(PublicationStage::Existing(reference))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn stage_encoded(
+        &self,
+        reference: &PrivateEnvelopeRef,
+        bytes: &[u8],
+    ) -> Result<(), PrivateEnvelopeError> {
         self.verify_root()?;
 
-        let final_path = self.final_path(&reference);
+        let final_path = self.final_path(reference);
         require_absent_final_path(&final_path)?;
-        let (temporary_path, mut temporary_file) = self.create_temporary_file(&reference)?;
+        let (temporary_path, mut temporary_file) = self.create_temporary_file(reference)?;
         let temporary_identity = FileIdentity::from_metadata(
             &temporary_file
                 .metadata()
@@ -118,7 +143,7 @@ impl PrivateEnvelopeStore {
 
         let result = (|| {
             temporary_file
-                .write_all(&bytes)
+                .write_all(bytes)
                 .map_err(|_| PrivateEnvelopeError::StorageWrite)?;
             temporary_file
                 .sync_all()
@@ -153,7 +178,7 @@ impl PrivateEnvelopeStore {
             return Err(error);
         }
 
-        Ok(reference)
+        Ok(())
     }
 
     /// Reads one bounded envelope and repeats all proof-critical validation.

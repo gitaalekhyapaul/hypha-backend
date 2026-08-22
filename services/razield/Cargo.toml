@@ -15,4 +15,6 @@ raziel-authority.workspace = true
 raziel-authorization-core.workspace = true
 raziel-policy-ir.workspace = true
 raziel-proto = { workspace = true, features = ["services"] }
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true

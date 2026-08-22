@@ -18,16 +18,25 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 
 M4 is in active implementation under accepted ADR-0013 and ADR-0014. The `razield`
 and `verifierd` binaries remain process shells. The BullMQ `1.2.3` and Redis `8.2.8`
-conformance gate passes. The pure `razield` admission boundary now validates generated
+conformance gate passes. The pure `razield` admission boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
 request commitment, derives the deterministic job ID, and enforces the 75-minute
-request window. It performs no Redis, filesystem, or proof operation. The generated
-Tonic contracts and isolated verification-only build pass their existing gates. A
-separate private-envelope boundary now writes only admitted proof-worker fields into a
-versioned 16 KiB Protobuf envelope. It uses a `0700` store, `0600` files,
-no-replacement atomic publication, strict reads, deletion, and grace-based orphan
-cleanup. RPC handlers, listeners, store-to-queue wiring, queue publication, proof
-execution, and the retained-proof verifier gate remain pending.
+request window. A separate private-envelope boundary writes only admitted
+proof-worker fields into a versioned 16 KiB Protobuf envelope. It uses a `0700`
+store, `0600` files, no-replacement atomic publication, strict reads, deletion, and
+grace-based orphan cleanup.
+
+The capability-job publisher now stages that private envelope first, then publishes
+a strict two-field payload with a 256-byte ceiling. The request commitment remains
+the BullMQ custom ID. Exact duplicates return the retained Redis record. Confirmed
+publication failures delete a newly staged envelope. Ambiguous Redis outcomes keep
+it for reconciliation. Jobs use one attempt, global concurrency one, zero stalled
+retries, and terminal retention capped at 24 hours and 100 records. Live tests cover
+publication, duplicate handling, cleanup, queue lifecycle, stalled failure, and
+Redis restart recovery. The generated Tonic contracts and isolated
+verification-only build pass their existing gates. RPC handlers, listeners, startup
+reconciliation, proof execution, and the retained-proof verifier gate remain
+pending.
 
 ## Read first
 

@@ -4,4 +4,5 @@
 
 pub mod admission;
 pub mod private_envelope;
+pub mod publication;
 pub mod queue;
