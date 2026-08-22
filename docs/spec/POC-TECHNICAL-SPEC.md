@@ -1134,12 +1134,20 @@ the private request to a narrow one-shot executor contract. A fixed one-hour dea
 shutdown confirmation bound this handoff. A crate-owned activation token blocks
 production startup until the isolated executor and terminal capability validator
 exist. The current placeholder handoff always fails closed and issues no capability.
-`GetCapability`, `CancelCapability`, witness construction, proof execution, terminal
-capability publication, and independent verifier behavior remain pending. The
-verification-only Rust feature and dependency-tree gate pass. That build uses direct
-`sp1-verifier` `6.3.1` Plonk verification and excludes SDK proving, core execution,
-native Gnark, JIT, and outbound SP1 client packages. This build result does not
-replace the later retained real-proof worker gate.
+The B-0022 host builder now checks one selected snapshot's count, ordered records,
+secret salt, and committed root before policy evaluation. It maps each validated leaf
+index to the existing PolicyIR witness ID, evaluates the approved policy, opens only
+relationships used by the first positive path, and validates the resulting
+`RelationshipWitnessSetV1` against the selected root and declared limits. Denial,
+invalid evaluation, malformed records, count excess, root mismatch, and invalid
+constructed witnesses return typed errors with no private values. The builder does
+not run SP1 and has no queue or service binding. `GetCapability`, `CancelCapability`,
+worker input assembly, proof execution, terminal capability publication, and
+independent verifier behavior remain pending. The verification-only Rust feature and
+dependency-tree gate pass. That build uses direct `sp1-verifier` `6.3.1` Plonk
+verification and excludes SDK proving, core execution, native Gnark, JIT, and
+outbound SP1 client packages. This build result does not replace the later retained
+real-proof worker gate.
 
 Deliver:
 

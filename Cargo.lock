@@ -3522,6 +3522,10 @@ dependencies = [
 [[package]]
 name = "raziel-witness"
 version = "0.0.0"
+dependencies = [
+ "raziel-policy-ir",
+ "raziel-snapshot",
+]
 
 [[package]]
 name = "razield"

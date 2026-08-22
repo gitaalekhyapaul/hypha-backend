@@ -7,3 +7,5 @@ license.workspace = true
 publish = false
 
 [dependencies]
+raziel-policy-ir = { path = "../policy-ir" }
+raziel-snapshot = { path = "../snapshot" }

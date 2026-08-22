@@ -47,11 +47,20 @@ execution deadline, forwards cancellation, deletes the envelope, and publishes o
 closed progress and failure values. A crate-owned activation token prevents a
 production process from starting this boundary before a real isolated executor and
 terminal capability validator exist. The current placeholder handoff fails closed
-with no capability. Live tests cover startup cleanup, exact duplicates, bound
-mutations, request ceilings, publication, queue lifecycle, worker claim and cleanup,
-stalled failure, and Redis restart recovery. `GetCapability`, `CancelCapability`,
-real proof execution, terminal capability publication, and the retained-proof
-verifier gate remain pending.
+with no capability.
+
+The B-0022 host builder consumes the exact ordered relationships, secret salt, and
+committed root of one selected snapshot. It rebuilds and checks that root, evaluates
+the approved PolicyIR with snapshot leaf indices as witness IDs, opens only the
+relationships used by the first positive path, and validates the reduced witness set
+before returning it. Denied, malformed, oversized, and root-mismatched inputs fail
+without returning private witness data. The builder does not run SP1 and is not wired
+to the queue supervisor yet. Live and focused tests cover startup cleanup, exact
+duplicates, bound mutations, request ceilings, publication, queue lifecycle, worker
+claim and cleanup, stalled failure, Redis restart recovery, positive-path selection,
+caveated relationships, denial, and snapshot mismatch. `GetCapability`,
+`CancelCapability`, worker input assembly, real proof execution, terminal capability
+publication, and the retained-proof verifier gate remain pending.
 
 ## Read first
 

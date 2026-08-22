@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -226,7 +226,18 @@ deletion. Supervisor shutdown cancels active work, closes the worker, and confir
 active jobs remain. A crate-owned activation token keeps the library boundary out of
 production startup until the isolated executor and strict terminal result validator
 exist. A successful placeholder handoff still records `SERVICE_UNAVAILABLE`, returns
-no capability, and deletes the envelope. Real witness construction, proof execution,
+no capability, and deletes the envelope.
+
+The B-0022 host builder takes one caller-selected snapshot's ordered relationship
+records, secret salt, committed root, and fixed snapshot limits. It checks the count
+ceiling before cloning private resolver fields. It rebuilds the blinded tree and
+rejects any root mismatch before evaluation. Each validated leaf index becomes the
+PolicyIR `witness_id`, which matches the guest's verified-witness resolver. The traced
+evaluator returns only relationships used by its first positive path. The builder
+turns those sorted IDs into Merkle openings, creates `RelationshipWitnessSetV1`, and
+runs the existing witness validator against the selected root before returning it.
+Denied requests return no witness. Error and debug output contain no relationship,
+caveat, salt, path, or opening value. Proof-supervisor input assembly, proof execution,
 capability issuance, lifecycle RPCs, and independent retained-proof verification
 remain pending.
 
