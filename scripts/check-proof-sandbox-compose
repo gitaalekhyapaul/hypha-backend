@@ -1,0 +1,69 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+compose_output=$(mktemp)
+sandbox_output=$(mktemp)
+worker_output=$(mktemp)
+trap 'rm -f "$compose_output" "$sandbox_output" "$worker_output"' EXIT
+
+cd "$repo_root"
+HOST_UID=${HOST_UID:-$(id -u)} \
+HOST_GID=${HOST_GID:-$(id -g)} \
+RAZIEL_EXPECTED_VERIFICATION_KEY_ID=sp1-vk-v1:abababababababababababababababababababababababababababababababab \
+RAZIEL_EXPECTED_SP1_VKEY_HASH=0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff \
+  ./scripts/compose --profile proof config >"$compose_output"
+
+extract_service() {
+  service_name=$1
+  output=$2
+  awk -v service="  $service_name:" '
+    $0 == service { found = 1; next }
+    found && /^  [a-zA-Z0-9_-]+:/ { exit }
+    found { print }
+    END { if (!found) exit 1 }
+  ' "$compose_output" >"$output"
+}
+
+extract_service razield-proof-sandbox "$sandbox_output"
+extract_service razield-proof-worker "$worker_output"
+
+for exact_setting in \
+  'cpuset: 0-3' \
+  'mem_limit: "60129542144"' \
+  'memswap_limit: "60129542144"' \
+  'network_mode: none' \
+  'pids_limit: 512' \
+  'read_only: true' \
+  'source: razield-private-snapshots' \
+  'source: razield-proof-ipc' \
+  'source: razield-proof-runtime' \
+  'target: /opt/raziel-runtime' \
+  'target: /run/raziel-proof' \
+  'target: /var/lib/raziel/private-snapshots' \
+  'target: /var/lib/raziel/registry' \
+  'target: /opt/sp1/circuits/plonk/v6.1.0' \
+  'tmpfs:' \
+  'size=1073741824'
+do
+  grep -Fq "$exact_setting" "$sandbox_output"
+done
+
+grep -Fq 'read_only: true' "$worker_output"
+grep -Fq 'source: razield-private-envelopes' "$worker_output"
+grep -Fq 'source: razield-proof-ipc' "$worker_output"
+grep -Fq 'target: /run/raziel-proof' "$worker_output"
+grep -Fq 'owner-internal: null' "$worker_output"
+
+for forbidden_setting in \
+  '/var/run/docker.sock' \
+  'privileged: true' \
+  'network_mode: host'
+do
+  if grep -Fq "$forbidden_setting" "$sandbox_output" "$worker_output"; then
+    echo "proof services contain a forbidden Compose setting" >&2
+    exit 1
+  fi
+done
+
+printf 'proof_sandbox_compose=pass\n'

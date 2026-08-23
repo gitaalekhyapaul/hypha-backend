@@ -1127,15 +1127,14 @@ server time, then calls admission and publication. It returns the authoritative
 queued record without waiting for proof work. Exact duplicates return the retained
 queued record. Bound mutations fail before publication, and display-only `agent_id`
 changes do not change job identity. Terminal records fail closed until the worker
-stores a bound public result. The B-0021 library supervisor now claims one job through
+stores a bound public result. The proof supervisor now claims one job through
 the official BullMQ worker and validates its exact public metadata before private
 storage access. It loads one commitment-bound envelope, rechecks the full 75-minute
 window with trusted whole-second time, records a closed `EXECUTING` phase, and passes
 the private request to a narrow one-shot executor contract. A fixed one-hour deadline,
 30-second termination grace, active cancellation, ordered envelope deletion, and
-shutdown confirmation bound this handoff. A crate-owned activation token blocks
-production startup until the isolated executor and terminal capability validator
-exist. The current placeholder handoff always fails closed and issues no capability.
+shutdown confirmation bound this handoff. Production startup constructs only the
+fixed Unix-socket executor and strict terminal capability validator.
 The B-0022 host builder now checks one selected snapshot's count, ordered records,
 secret salt, and committed root before policy evaluation. It maps each validated leaf
 index to the existing PolicyIR witness ID, evaluates the approved policy, opens only
@@ -1157,9 +1156,15 @@ Fixed owner configuration supplies trusted paths, Plonk setup, trust domain, key
 and resource profile. The child loads `current.pb`, calls B-0023, executes the guest,
 runs local CPU Plonk proving, and compares the complete public journal and key ID.
 Its feature build and focused protocol, configuration, cgroup, and privacy tests pass
-without running SP1. The default API graph excludes the SP1 SDK. `GetCapability`,
-`CancelCapability`, the fixed Compose launcher, terminal capability publication, and
-independent verifier behavior remain pending. The verification-only
+without running SP1. The default API graph excludes the SP1 SDK. The B-0025 fixed
+launcher accepts one bounded request and starts one fixed child at a time. It confirms
+child exit after cancellation, crash, malformed output, and closed typed failures.
+The Compose proof profile applies the accepted 60,129,542,144-byte cap, zero swap,
+four CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
+bounded tmpfs. The supervisor deletes the private envelope before direct Plonk and
+exact public-claim validation. Only then does BullMQ retain the public capability and
+aggregate metrics. `GetCapability`, `CancelCapability`, private snapshot publication,
+and independent verifier behavior remain pending. The verification-only
 Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
 `6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and

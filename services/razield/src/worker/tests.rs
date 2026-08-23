@@ -19,17 +19,19 @@ use raziel_authorization_core::{
 };
 use raziel_policy_ir::{CaveatValue, ContextEntry};
 use raziel_proto::raziel::v1::{
-    AuthorizationContextEntry, CreateCapabilityRequest, authorization_context_entry,
+    AuthorizationContextEntry, CreateCapabilityRequest, ProofCapability,
+    authorization_context_entry,
 };
 use serde_json::{Value, json};
 
 use super::processor::{execute_with_limits, validate_public_job};
 use super::{
-    CapabilityExecutionRequest, CapabilityExecutor, ClaimedJobProcessor, ExecutionControl,
-    ExecutionFuture, ExecutorFailureClass, PROOF_EXECUTION_DEADLINE, ProgressPublisher,
-    ProofSupervisor, PublicFailureClass, SupervisorConfig, SupervisorConfigError,
-    SupervisorFailureClass, SupervisorProgressPhase, WORKER_DRAIN_DELAY, WORKER_LOCK_DURATION,
-    WORKER_LOCK_RENEW_TIME, WORKER_STALLED_INTERVAL,
+    CapabilityExecutionRequest, CapabilityExecutor, CapabilityResultValidator, ClaimedJobProcessor,
+    ExecutionControl, ExecutionFuture, ExecutorFailureClass, PROOF_EXECUTION_DEADLINE,
+    ProgressPublisher, ProofSupervisor, PublicFailureClass, SupervisorConfig,
+    SupervisorConfigError, SupervisorFailureClass, SupervisorProgressPhase,
+    TerminalCapabilityResult, TerminalIssuanceContext, TerminalValidationError, WORKER_DRAIN_DELAY,
+    WORKER_LOCK_DURATION, WORKER_LOCK_RENEW_TIME, WORKER_STALLED_INTERVAL,
 };
 use crate::admission::{
     AdmittedCapabilityRequest, LOCAL_PLONK_ADMISSION_WINDOW_SECONDS,
@@ -249,6 +251,31 @@ async fn executor_failure_stays_typed_privately_and_generic_publicly() {
 }
 
 #[tokio::test]
+async fn terminal_rejection_happens_after_private_envelope_cleanup() {
+    let fixture = WorkerFixture::new("terminal-rejection", ExecutorBehavior::Complete);
+    let processor = ClaimedJobProcessor::new(
+        Arc::clone(&fixture.store) as Arc<dyn super::EnvelopeAccess>,
+        Arc::clone(&fixture.executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(RejectingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
+        Arc::new(FixedClock(TRUSTED_NOW)),
+    );
+    let mut progress = RecordingProgress::default();
+
+    let error = processor
+        .process(fixture.reference, CancellationToken::new(), &mut progress)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.class(),
+        SupervisorFailureClass::TerminalValidation(TerminalValidationError::ProofRejected)
+    );
+    assert_eq!(error.public_class(), PublicFailureClass::ServiceUnavailable);
+    assert_eq!(fixture.store.deletes(), 1);
+    assert!(!fixture.root.envelope_path(&fixture.reference).exists());
+}
+
+#[tokio::test]
 async fn worker_start_rechecks_the_full_local_proof_window() {
     let fixture = WorkerFixture::new_at(
         "stale-at-worker-start",
@@ -342,9 +369,11 @@ impl WorkerFixture {
         let reference = inner.stage(&admitted).unwrap();
         let store = Arc::new(RecordingStore::new(inner));
         let executor = Arc::new(FakeExecutor::new(behavior));
+        let validator = Arc::new(AcceptingTerminalValidator);
         let processor = Arc::new(ClaimedJobProcessor::new(
             Arc::clone(&store) as Arc<dyn super::EnvelopeAccess>,
             Arc::clone(&executor) as Arc<dyn CapabilityExecutor>,
+            validator as Arc<dyn CapabilityResultValidator>,
             Arc::new(FixedClock(trusted_now)),
         ));
         Self {
@@ -362,6 +391,30 @@ impl WorkerFixture {
             "format_version": 1,
             "private_envelope_ref": self.reference.queue_token(),
         })
+    }
+}
+
+struct AcceptingTerminalValidator;
+
+impl CapabilityResultValidator for AcceptingTerminalValidator {
+    fn validate(
+        &self,
+        _context: TerminalIssuanceContext,
+        result: OneShotSuccess,
+    ) -> Result<TerminalCapabilityResult, TerminalValidationError> {
+        TerminalCapabilityResult::for_test(ProofCapability::default(), result.metrics())
+    }
+}
+
+struct RejectingTerminalValidator;
+
+impl CapabilityResultValidator for RejectingTerminalValidator {
+    fn validate(
+        &self,
+        _context: TerminalIssuanceContext,
+        _result: OneShotSuccess,
+    ) -> Result<TerminalCapabilityResult, TerminalValidationError> {
+        Err(TerminalValidationError::ProofRejected)
     }
 }
 
@@ -681,7 +734,7 @@ fn worker_timing_constants_are_sane() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires the digest-pinned Redis conformance service"]
-async fn live_worker_claims_one_job_and_fails_closed_without_a_capability()
+async fn live_worker_claims_one_job_and_retains_only_the_public_capability()
 -> Result<(), Box<dyn Error + Send + Sync>> {
     let redis_url = std::env::var("RAZIEL_QUEUE_TEST_REDIS_URL")?;
     let root = TestRoot::new("live-claim");
@@ -716,6 +769,7 @@ async fn live_worker_claims_one_job_and_fails_closed_without_a_capability()
     let supervisor = ProofSupervisor::start_with_clock(
         config,
         Arc::clone(&executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
         Arc::new(FixedClock(TRUSTED_NOW)),
         super::ProofSupervisorActivation::library_plumbing(),
     )
@@ -724,7 +778,7 @@ async fn live_worker_claims_one_job_and_fails_closed_without_a_capability()
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
     loop {
         let counts = queue.get_job_counts().await?;
-        if counts.failed == 1 && counts.active == 0 && counts.waiting == 0 {
+        if counts.completed == 1 && counts.active == 0 && counts.waiting == 0 {
             break;
         }
         if tokio::time::Instant::now() >= deadline {
@@ -736,11 +790,16 @@ async fn live_worker_claims_one_job_and_fails_closed_without_a_capability()
     let retained = queue
         .get_job(&job_id)
         .await?
-        .ok_or("failed-closed live worker job is missing")?;
+        .ok_or("completed live worker job is missing")?;
     assert_eq!(executor.invocations(), 1);
     assert_eq!(executor.last_issued_at(), Some(TRUSTED_NOW));
-    assert_eq!(retained.failed_reason(), "SERVICE_UNAVAILABLE");
-    assert!(retained.returnvalue().is_empty());
+    assert!(retained.failed_reason().is_empty());
+    let return_value: Value = serde_json::from_str(retained.returnvalue())?;
+    assert_eq!(return_value["format_version"], 1);
+    assert_eq!(return_value["capability_protobuf_hex"], "");
+    assert_eq!(return_value["execute_millis"], 1);
+    assert_eq!(return_value["prove_millis"], 1);
+    assert_eq!(return_value["artifact_bytes"], 15);
     match retained.progress() {
         JobProgress::Object(value) => {
             assert_eq!(value, &SupervisorProgressPhase::Executing.to_public_value())
@@ -749,11 +808,12 @@ async fn live_worker_claims_one_job_and_fails_closed_without_a_capability()
     }
     assert!(!root.envelope_path(&reference).exists());
     assert!(!serde_json::to_string(retained.data())?.contains(PRIVATE_CONTEXT_VALUE));
+    assert!(!retained.returnvalue().contains(PRIVATE_CONTEXT_VALUE));
 
     supervisor.close().await?;
     queue.remove_global_concurrency().await?;
     queue.obliterate(true, 1_000).await?;
     queue.close().await;
-    println!("bullmq_supervisor_plumbing=pass");
+    println!("bullmq_supervisor_terminal_success=pass");
     Ok(())
 }

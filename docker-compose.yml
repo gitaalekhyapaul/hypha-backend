@@ -167,7 +167,7 @@ services:
       - /run/redis:rw,nosuid,nodev,mode=0700
     volumes:
       - redis-data:/data
-    profiles: ["services", "queue-conformance"]
+    profiles: ["services", "queue-conformance", "proof"]
 
   razield-private-init:
     <<: *toolchain-service
@@ -201,7 +201,190 @@ services:
       - no-new-privileges:true
     volumes:
       - razield-private-envelopes:/var/lib/raziel/private-envelopes
-    profiles: ["services"]
+    profiles: ["services", "proof"]
+
+  razield-proof-build:
+    <<: *toolchain-service
+    user: "0:0"
+    command: ["./scripts/prepare-proof-sandbox-runtime"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /var/cache/raziel-proof-build
+      HOME: /tmp/raziel-home
+      RAZIEL_PROOF_RUNTIME_ROOT: /opt/raziel-runtime
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=1073741824
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - razield-proof-build-cache:/var/cache/raziel-proof-build
+      - razield-proof-runtime:/opt/raziel-runtime
+    profiles: ["proof"]
+
+  razield-proof-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        memory_bytes=$$(awk '/^MemTotal:/ { printf "%.0f", $$2 * 1024 }' /proc/meminfo)
+        test "$$memory_bytes" -ge 66571993088
+        install -d \
+          -o "$$RAZIEL_PRIVATE_UID" \
+          -g "$$RAZIEL_PRIVATE_GID" \
+          -m 0700 \
+          /var/lib/raziel/private-snapshots \
+          /run/raziel-proof
+        for private_root in \
+          /var/lib/raziel/private-snapshots \
+          /run/raziel-proof
+        do
+          test "$$(stat --format=%a "$$private_root")" = 700
+          test "$$(stat --format=%u "$$private_root")" = "$$RAZIEL_PRIVATE_UID"
+          test "$$(stat --format=%g "$$private_root")" = "$$RAZIEL_PRIVATE_GID"
+        done
+    environment:
+      RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
+      RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - razield-private-snapshots:/var/lib/raziel/private-snapshots
+      - razield-proof-ipc:/run/raziel-proof
+    profiles: ["proof"]
+
+  razield-proof-sandbox:
+    <<: *toolchain-service
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    command: ["/opt/raziel-runtime/razield-proof-launcher"]
+    environment:
+      GOMAXPROCS: "4"
+      GOMEMLIMIT: "24GiB"
+      HOME: /tmp
+      RAYON_NUM_THREADS: "4"
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_GUEST_ELF_PATH: /opt/raziel-runtime/raziel-authorization-guest
+      RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
+      RAZIEL_PROOF_LAUNCHER_SOCKET_PATH: /run/raziel-proof/launcher.sock
+      RAZIEL_PROVER_CHILD_PATH: /opt/raziel-runtime/razield-prover
+      RAZIEL_PROVER_CHILD_SOCKET_PATH: /run/raziel-proof/child.sock
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      SP1_PLONK_CIRCUIT_PATH: /opt/sp1/circuits/plonk
+    cpuset: "0-3"
+    mem_limit: "60129542144"
+    memswap_limit: "60129542144"
+    network_mode: none
+    read_only: true
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=0700,size=1073741824,uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}
+    volumes:
+      - type: volume
+        source: razield-proof-runtime
+        target: /opt/raziel-runtime
+        read_only: true
+      - type: volume
+        source: razield-private-snapshots
+        target: /var/lib/raziel/private-snapshots
+        read_only: true
+      - type: volume
+        source: razield-proof-ipc
+        target: /run/raziel-proof
+      - type: bind
+        source: ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}
+        target: /var/lib/raziel/registry
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${RAZIEL_SP1_PLONK_SETUP_PATH:-./.sp1/circuits/plonk/v6.1.0}
+        target: /opt/sp1/circuits/plonk/v6.1.0
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      razield-proof-build:
+        condition: service_completed_successfully
+      razield-proof-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -S /run/raziel-proof/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-proof/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-proof/launcher.sock)" = "${HOST_UID:-1000}"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    restart: unless-stopped
+    profiles: ["proof"]
+
+  razield-proof-worker:
+    <<: *secure-rust-service
+    command: ["cargo", "run", "--locked", "--offline", "-p", "razield", "--bin", "razield-proof-worker"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_PRIVATE_ENVELOPE_ROOT: /var/lib/raziel/private-envelopes
+      RAZIEL_PROOF_LAUNCHER_SOCKET_PATH: /run/raziel-proof/launcher.sock
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_QUEUE_PREFIX:-raziel-capabilities}
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - razield-private-envelopes:/var/lib/raziel/private-envelopes
+      - razield-proof-ipc:/run/raziel-proof
+      - type: bind
+        source: ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}
+        target: /var/lib/raziel/registry
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      redis:
+        condition: service_healthy
+      razield-private-init:
+        condition: service_completed_successfully
+      razield-proof-sandbox:
+        condition: service_healthy
+    networks:
+      - owner-internal
+    profiles: ["proof"]
 
   razield:
     <<: *secure-rust-service
@@ -355,6 +538,10 @@ volumes:
   queue-conformance-target:
   redis-data:
   razield-private-envelopes:
+  razield-private-snapshots:
+  razield-proof-build-cache:
+  razield-proof-ipc:
+  razield-proof-runtime:
 
 networks:
   owner-internal:

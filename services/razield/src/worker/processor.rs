@@ -10,8 +10,9 @@ use bullmq::worker::CancellationToken;
 use serde_json::{Value, json};
 
 use super::{
-    CapabilityExecutionRequest, CapabilityExecutor, EXECUTOR_TERMINATION_GRACE, ExecutionControl,
-    ExecutorFailureClass, PROOF_EXECUTION_DEADLINE,
+    CapabilityExecutionRequest, CapabilityExecutor, CapabilityResultValidator,
+    EXECUTOR_TERMINATION_GRACE, ExecutionControl, ExecutorFailureClass, PROOF_EXECUTION_DEADLINE,
+    TerminalCapabilityResult, TerminalIssuanceContext, TerminalValidationError,
 };
 use crate::admission::{LOCAL_PLONK_ADMISSION_WINDOW_SECONDS, MAX_PROTOBUF_TIMESTAMP_SECONDS};
 use crate::private_envelope::{
@@ -76,11 +77,11 @@ impl SupervisorProgressPhase {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExecutorHandoffComplete {
-    result: crate::one_shot::OneShotSuccess,
+    result: TerminalCapabilityResult,
 }
 
 impl ExecutorHandoffComplete {
-    pub(crate) fn into_result(self) -> crate::one_shot::OneShotSuccess {
+    pub(crate) fn into_result(self) -> TerminalCapabilityResult {
         self.result
     }
 }
@@ -120,6 +121,7 @@ pub enum SupervisorFailureClass {
     BlockingTaskFailed,
     Cancelled,
     Executor(ExecutorFailureClass),
+    TerminalValidation(TerminalValidationError),
 }
 
 /// One typed internal failure with a fixed public projection.
@@ -157,7 +159,10 @@ impl SupervisorFailure {
             | SupervisorFailureClass::PrivateEnvelopeRead(_)
             | SupervisorFailureClass::PrivateEnvelopeCleanup(_)
             | SupervisorFailureClass::BlockingTaskFailed
-            | SupervisorFailureClass::Executor(_) => PublicFailureClass::ServiceUnavailable,
+            | SupervisorFailureClass::Executor(_)
+            | SupervisorFailureClass::TerminalValidation(_) => {
+                PublicFailureClass::ServiceUnavailable
+            }
         }
     }
 }
@@ -174,6 +179,7 @@ impl Error for SupervisorFailure {}
 pub(crate) struct ClaimedJobProcessor {
     store: Arc<dyn EnvelopeAccess>,
     executor: Arc<dyn CapabilityExecutor>,
+    validator: Arc<dyn CapabilityResultValidator>,
     clock: Arc<dyn TrustedClock>,
 }
 
@@ -181,11 +187,13 @@ impl ClaimedJobProcessor {
     pub(crate) fn new(
         store: Arc<dyn EnvelopeAccess>,
         executor: Arc<dyn CapabilityExecutor>,
+        validator: Arc<dyn CapabilityResultValidator>,
         clock: Arc<dyn TrustedClock>,
     ) -> Self {
         Self {
             store,
             executor,
+            validator,
             clock,
         }
     }
@@ -254,6 +262,8 @@ impl ClaimedJobProcessor {
                 .await;
         }
 
+        let terminal_context =
+            TerminalIssuanceContext::new(envelope.clone(), issued_at_unix_seconds);
         let request = CapabilityExecutionRequest::new(envelope, issued_at_unix_seconds);
         let execution = execute_with_limits(
             self.executor.as_ref(),
@@ -267,7 +277,13 @@ impl ClaimedJobProcessor {
         self.cleanup(reference).await?;
 
         match execution {
-            Ok(result) => Ok(ExecutorHandoffComplete { result }),
+            Ok(result) => self
+                .validator
+                .validate(terminal_context, result)
+                .map(|result| ExecutorHandoffComplete { result })
+                .map_err(|error| {
+                    SupervisorFailure::new(SupervisorFailureClass::TerminalValidation(error))
+                }),
             Err(ExecutorFailureClass::Cancelled) => {
                 Err(SupervisorFailure::new(SupervisorFailureClass::Cancelled))
             }

@@ -40,14 +40,13 @@ The generated server rejects decoded messages above 2 MiB. `CreateCapability` us
 trusted whole-second server time, then calls admission and publication. It returns an
 authoritative `QUEUED` job without waiting for proof work.
 
-The B-0021 library supervisor uses the official BullMQ worker to claim one job. It
+The proof supervisor uses the official BullMQ worker to claim one job. It
 checks the exact public payload and job policy before opening the private envelope.
 It rechecks the 75-minute request window at worker start, applies a fixed one-hour
 execution deadline, forwards cancellation, deletes the envelope, and publishes only
-closed progress and failure values. A crate-owned activation token prevents a
-production process from starting this boundary before a real isolated executor and
-terminal capability validator exist. The current placeholder handoff fails closed
-with no capability.
+closed progress and terminal values. The production binary installs only the fixed
+Unix-socket executor and strict terminal validator. It cannot inject another executor
+or validator.
 
 The B-0022 host builder consumes the exact ordered relationships, secret salt, and
 committed root of one selected snapshot. It rebuilds and checks that root, evaluates
@@ -68,17 +67,27 @@ owner configuration selects `current.pb`, the private snapshot store, guest ELF,
 Plonk setup, expected key ID, and proof resource profile. The child calls B-0023,
 executes the guest, creates one local Plonk proof, and compares the exact public
 journal and key ID before returning a bounded public result. The default API build
-does not include the SP1 SDK. Production activation remains closed until B-0025 adds
-the fixed Docker sandbox launcher and terminal result validation.
+does not include the SP1 SDK.
+
+The B-0025 proof profile builds the launcher, prover child, and guest ELF through the
+pinned offline toolchain. The persistent sandbox has a 60,129,542,144-byte cap,
+zero swap, four CPUs, no network, a read-only root, fixed read-only trusted mounts,
+and a bounded one-GiB tmpfs. The supervisor reaches it through an owner-only Unix
+socket. One launcher starts one child, forwards cancellation, confirms exit, and
+returns one strict bounded result. The supervisor deletes the private envelope, runs
+direct Plonk verification, checks every public claim against the request and trusted
+registry, then retains only the public capability and aggregate metrics in BullMQ.
+Controlled process tests do not run SP1.
 
 Live and focused tests cover
 startup cleanup, exact duplicates, bound mutations, request ceilings, publication,
 queue lifecycle, worker claim and cleanup, stalled failure, Redis restart recovery,
 positive-path selection, caveated relationships, denial, snapshot mismatch, trusted
 input assembly, private snapshot persistence, strict child transport, fixed cgroup
-checks, and expiry bounds. `GetCapability`, `CancelCapability`, sandbox launcher
-integration, terminal capability publication, and the retained-proof verifier gate
-remain pending.
+checks, launcher cancellation and exit, terminal capability publication, rendered
+sandbox controls, and expiry bounds. `GetCapability`, `CancelCapability`, private
+snapshot publication, and the retained-proof independent-verifier gate remain
+pending.
 
 ## Read first
 
@@ -140,6 +149,20 @@ Start the local application and service shells with:
 ```bash
 ./scripts/compose --profile apps --profile services up --build
 ```
+
+The 64 GiB proof VM uses the separate `proof` profile. It requires at least
+66,571,993,088 host bytes, the downloaded Plonk setup, a populated pinned Cargo
+cache, and the two approved SP1 program-key values in `.env`. Check the rendered
+boundary before startup:
+
+```bash
+./scripts/check-proof-sandbox-compose
+./scripts/compose --env-file .env --profile services --profile proof up --build
+```
+
+Startup builds the fixed proof runtime. It does not generate a proof until a valid
+capability job reaches the worker. The complete API proof-flow runbook remains
+pending with the M4 lifecycle and verifier endpoints.
 
 ## Authority administration
 

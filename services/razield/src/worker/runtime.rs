@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
+use std::os::unix::fs::MetadataExt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,9 +12,11 @@ use tokio::task::JoinHandle;
 
 use super::processor::{EnvelopeAccess, validate_claimed_job};
 use super::{
-    CapabilityExecutor, ClaimedJobProcessor, EXECUTOR_TERMINATION_GRACE, ProgressPublisher,
-    PublicFailureClass, SupervisorConfig, SupervisorProgressPhase,
+    CapabilityExecutor, CapabilityResultValidator, ClaimedJobProcessor, EXECUTOR_TERMINATION_GRACE,
+    ProgressPublisher, PublicFailureClass, SupervisorConfig, SupervisorProgressPhase,
+    TerminalResultValidator, TerminalValidatorConfig,
 };
+use crate::one_shot::UnixSocketExecutor;
 use crate::private_envelope::PrivateEnvelopeStore;
 use crate::queue::{CAPABILITY_QUEUE_NAME, GLOBAL_CONCURRENCY};
 use crate::service::{SystemClock, TrustedClock};
@@ -24,16 +27,13 @@ const SUPERVISOR_CLOSE_TIMEOUT: Duration = Duration::from_secs(45);
 const EVENT_BRIDGE_CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Official BullMQ worker wrapper for one proof-supervisor process.
-///
-/// No production binary starts this wrapper until terminal capability validation
-/// and the concrete one-shot prover exist.
 pub struct ProofSupervisor {
     shutdown: CancellationToken,
     lifecycle: Option<JoinHandle<Result<(), SupervisorRuntimeError>>>,
 }
 
-/// Startup authority retained inside `razield` until terminal capability validation exists.
-pub struct ProofSupervisorActivation {
+/// Crate-owned authority for test-only construction of the worker boundary.
+pub(crate) struct ProofSupervisorActivation {
     _private: (),
 }
 
@@ -45,18 +45,50 @@ impl ProofSupervisorActivation {
 }
 
 impl ProofSupervisor {
+    /// Starts the production worker with only the fixed local launcher and strict validator.
+    pub async fn start_production(
+        config: SupervisorConfig,
+    ) -> Result<Self, SupervisorRuntimeError> {
+        let owner_uid = std::fs::symlink_metadata(config.private_envelope_root())
+            .map_err(|_| SupervisorRuntimeError::PrivateStorage)?
+            .uid();
+        let executor = UnixSocketExecutor::from_env(owner_uid)
+            .map_err(|_| SupervisorRuntimeError::Configuration)?;
+        let validator = TerminalResultValidator::new(
+            TerminalValidatorConfig::from_env()
+                .map_err(|_| SupervisorRuntimeError::Configuration)?,
+        )
+        .map_err(|_| SupervisorRuntimeError::Configuration)?;
+        Self::start(
+            config,
+            Arc::new(executor),
+            validator,
+            ProofSupervisorActivation { _private: () },
+        )
+        .await
+    }
+
     /// Starts the claim boundary only for code holding the crate-owned activation token.
-    pub async fn start(
+    async fn start(
         config: SupervisorConfig,
         executor: Arc<dyn CapabilityExecutor>,
+        validator: TerminalResultValidator,
         _activation: ProofSupervisorActivation,
     ) -> Result<Self, SupervisorRuntimeError> {
-        Self::start_with_clock(config, executor, Arc::new(SystemClock), _activation).await
+        Self::start_with_clock(
+            config,
+            executor,
+            Arc::new(validator) as Arc<dyn CapabilityResultValidator>,
+            Arc::new(SystemClock),
+            _activation,
+        )
+        .await
     }
 
     pub(crate) async fn start_with_clock(
         config: SupervisorConfig,
         executor: Arc<dyn CapabilityExecutor>,
+        validator: Arc<dyn CapabilityResultValidator>,
         clock: Arc<dyn TrustedClock>,
         _activation: ProofSupervisorActivation,
     ) -> Result<Self, SupervisorRuntimeError> {
@@ -82,6 +114,7 @@ impl ProofSupervisor {
         let processor = Arc::new(ClaimedJobProcessor::new(
             Arc::new(store) as Arc<dyn EnvelopeAccess>,
             executor,
+            validator,
             clock,
         ));
         let worker_processor = Arc::clone(&processor);
@@ -104,12 +137,13 @@ impl ProofSupervisor {
                                 ))
                             },
                             |complete| {
-                                drop(complete.into_result());
-                                Err(BullMqError::Unrecoverable(
-                                    PublicFailureClass::ServiceUnavailable
-                                        .redis_reason()
-                                        .to_owned(),
-                                ))
+                                complete.into_result().to_public_value().map_err(|_| {
+                                    BullMqError::Unrecoverable(
+                                        PublicFailureClass::ServiceUnavailable
+                                            .redis_reason()
+                                            .to_owned(),
+                                    )
+                                })
                             },
                         )
                 }
@@ -232,6 +266,7 @@ fn spawn_lifecycle(
 /// Redacted process-boundary failures for supervisor startup and shutdown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SupervisorRuntimeError {
+    Configuration,
     QueueUnavailable,
     PrivateStorage,
     BlockingTaskFailed,
@@ -244,6 +279,7 @@ pub enum SupervisorRuntimeError {
 impl fmt::Display for SupervisorRuntimeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
+            Self::Configuration => "proof supervisor configuration is invalid",
             Self::QueueUnavailable => "proof supervisor queue is unavailable",
             Self::PrivateStorage => "proof supervisor private storage failed",
             Self::BlockingTaskFailed => "proof supervisor blocking task failed",

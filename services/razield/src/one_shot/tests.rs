@@ -1,8 +1,11 @@
 use std::io::Cursor;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use bullmq::worker::CancellationToken;
 use ed25519_dalek::{Signer, SigningKey};
 use prost::Message;
 use prost_types::Timestamp;
@@ -13,16 +16,22 @@ use raziel_authorization_core::{
     encode_public_values,
 };
 use raziel_proto::raziel::v1::CreateCapabilityRequest;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{UnixListener, UnixStream};
 
 use super::wire::{OneShotRequestWireV1, OneShotResultWireV1};
 use super::{
     MAX_ONE_SHOT_REQUEST_BYTES, MAX_ONE_SHOT_RESULT_BYTES, ONE_SHOT_PROTOCOL_VERSION,
     OneShotFailure, OneShotFailureClass, OneShotMetrics, OneShotProtocolError, OneShotRequest,
-    OneShotResult, OneShotSuccess, decode_request, decode_result, encode_request, encode_result,
-    read_frame_to_eof, write_frame,
+    OneShotResult, OneShotSuccess, UnixSocketExecutor, decode_request, decode_result,
+    encode_request, encode_result, read_frame_to_eof, write_frame,
 };
 use crate::admission::{LOCAL_PLONK_ADMISSION_WINDOW_SECONDS, admit_create_capability_request};
 use crate::private_envelope::PrivateEnvelopeStore;
+use crate::worker::{
+    CapabilityExecutionRequest, CapabilityExecutor, ExecutionControl, ExecutorFailureClass,
+    execute_with_limits,
+};
 
 const TRUSTED_NOW: i64 = 1_800_000_000;
 const PRIVATE_TASK: &str = "private-task-001";
@@ -162,6 +171,162 @@ fn result_validation_rejects_bad_public_values_keys_and_resource_claims() {
     );
 }
 
+#[tokio::test]
+async fn unix_executor_exchanges_one_strict_request_and_result() {
+    let root = TestRoot::new();
+    let (listener, socket_path, owner_uid) = test_listener(&root);
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request =
+            decode_request(&read_frame_async(&mut stream, MAX_ONE_SHOT_REQUEST_BYTES).await)
+                .unwrap();
+        assert_eq!(request.worker_start_unix_seconds(), TRUSTED_NOW);
+        let result = encode_result(&OneShotResult::Success(Box::new(success()))).unwrap();
+        write_frame_async(&mut stream, &result).await;
+        stream.shutdown().await.unwrap();
+    });
+
+    let executor = UnixSocketExecutor::new(socket_path, owner_uid).unwrap();
+    let result = executor
+        .execute(
+            CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+            ExecutionControl::new(Duration::from_secs(5), CancellationToken::new()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.metrics(), metrics(19));
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn unix_executor_waits_for_launcher_cancellation_acknowledgement() {
+    let root = TestRoot::new();
+    let (listener, socket_path, owner_uid) = test_listener(&root);
+    let (request_seen_tx, request_seen_rx) = tokio::sync::oneshot::channel();
+    let (exit_confirmed_tx, exit_confirmed_rx) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request =
+            decode_request(&read_frame_async(&mut stream, MAX_ONE_SHOT_REQUEST_BYTES).await)
+                .unwrap();
+        request_seen_tx.send(()).unwrap();
+        assert_eq!(stream.read_u8().await.unwrap(), 1);
+        assert_eq!(
+            stream.read_u8().await.unwrap_err().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        exit_confirmed_tx.send(()).unwrap();
+        let failure = OneShotFailure::new(
+            OneShotFailureClass::Cancelled,
+            request.correlation_id().to_owned(),
+        )
+        .unwrap();
+        let result = encode_result(&OneShotResult::Failure(failure)).unwrap();
+        write_frame_async(&mut stream, &result).await;
+        stream.shutdown().await.unwrap();
+    });
+
+    let cancellation = CancellationToken::new();
+    let execution = tokio::spawn(
+        UnixSocketExecutor::new(socket_path, owner_uid)
+            .unwrap()
+            .execute(
+                CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+                ExecutionControl::new(Duration::from_secs(5), cancellation.clone()),
+            ),
+    );
+    request_seen_rx.await.unwrap();
+    cancellation.cancel();
+    assert_eq!(
+        execution.await.unwrap(),
+        Err(ExecutorFailureClass::Cancelled)
+    );
+    exit_confirmed_rx.await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn unix_executor_rejects_an_unsafe_launcher_socket() {
+    let root = TestRoot::new();
+    let (_listener, socket_path, owner_uid) = test_listener(&root);
+    std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o660)).unwrap();
+    let result = UnixSocketExecutor::new(socket_path.clone(), owner_uid)
+        .unwrap()
+        .execute(
+            CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+            ExecutionControl::new(Duration::from_secs(5), CancellationToken::new()),
+        )
+        .await;
+    assert_eq!(result, Err(ExecutorFailureClass::Unavailable));
+
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let result = UnixSocketExecutor::new(socket_path, owner_uid)
+        .unwrap()
+        .execute(
+            CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+            ExecutionControl::new(Duration::from_secs(5), CancellationToken::new()),
+        )
+        .await;
+    assert_eq!(result, Err(ExecutorFailureClass::Unavailable));
+}
+
+#[tokio::test]
+async fn unix_executor_requires_a_canonical_termination_acknowledgement() {
+    let root = TestRoot::new();
+    let (listener, socket_path, owner_uid) = test_listener(&root);
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let _ = read_frame_async(&mut stream, MAX_ONE_SHOT_REQUEST_BYTES).await;
+        assert_eq!(stream.read_u8().await.unwrap(), 1);
+    });
+    let executor = UnixSocketExecutor::new(socket_path, owner_uid).unwrap();
+    let result = execute_with_limits(
+        &executor,
+        CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+        CancellationToken::new(),
+        Duration::from_millis(20),
+        Duration::from_millis(50),
+    )
+    .await;
+    assert_eq!(result, Err(ExecutorFailureClass::TerminationUnconfirmed));
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn unix_executor_rejects_a_non_cancellation_terminal_acknowledgement() {
+    let root = TestRoot::new();
+    let (listener, socket_path, owner_uid) = test_listener(&root);
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request =
+            decode_request(&read_frame_async(&mut stream, MAX_ONE_SHOT_REQUEST_BYTES).await)
+                .unwrap();
+        assert_eq!(stream.read_u8().await.unwrap(), 1);
+        let failure = OneShotFailure::new(
+            OneShotFailureClass::Internal,
+            request.correlation_id().to_owned(),
+        )
+        .unwrap();
+        let result = encode_result(&OneShotResult::Failure(failure)).unwrap();
+        write_frame_async(&mut stream, &result).await;
+        stream.shutdown().await.unwrap();
+    });
+
+    let executor = UnixSocketExecutor::new(socket_path, owner_uid).unwrap();
+    let result = execute_with_limits(
+        &executor,
+        CapabilityExecutionRequest::new(private_envelope(), TRUSTED_NOW),
+        CancellationToken::new(),
+        Duration::from_millis(20),
+        Duration::from_millis(50),
+    )
+    .await;
+    assert_eq!(result, Err(ExecutorFailureClass::TerminationUnconfirmed));
+    server.await.unwrap();
+}
+
 fn success() -> OneShotSuccess {
     OneShotSuccess::new(
         b"proof-secret-marker".to_vec(),
@@ -200,7 +365,7 @@ fn verification_key_id() -> String {
     format!("sp1-vk-v1:{}", "ab".repeat(32))
 }
 
-fn private_envelope() -> crate::private_envelope::PrivateCapabilityEnvelope {
+pub(crate) fn private_envelope() -> crate::private_envelope::PrivateCapabilityEnvelope {
     let root = TestRoot::new();
     let store = PrivateEnvelopeStore::open(root.path()).unwrap();
     let signing_key = SigningKey::from_bytes(&[7; 32]);
@@ -245,6 +410,30 @@ fn private_envelope() -> crate::private_envelope::PrivateCapabilityEnvelope {
     store.read(&reference).unwrap()
 }
 
+fn test_listener(root: &TestRoot) -> (UnixListener, PathBuf, u32) {
+    std::fs::create_dir(root.path()).unwrap();
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let socket_path = root.path().join("launcher.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let owner_uid = std::fs::symlink_metadata(&socket_path).unwrap().uid();
+    (listener, socket_path, owner_uid)
+}
+
+async fn read_frame_async(stream: &mut UnixStream, maximum: usize) -> Vec<u8> {
+    let length = stream.read_u32().await.unwrap() as usize;
+    assert!(length > 0 && length <= maximum);
+    let mut payload = vec![0_u8; length];
+    stream.read_exact(&mut payload).await.unwrap();
+    payload
+}
+
+async fn write_frame_async(stream: &mut UnixStream, payload: &[u8]) {
+    stream.write_u32(payload.len() as u32).await.unwrap();
+    stream.write_all(payload).await.unwrap();
+    stream.flush().await.unwrap();
+}
+
 struct TestRoot {
     path: PathBuf,
 }
@@ -257,7 +446,7 @@ impl TestRoot {
             .unwrap()
             .as_nanos();
         Self {
-            path: std::env::temp_dir().join(format!(
+            path: PathBuf::from("/tmp").join(format!(
                 "razield-one-shot-{}-{timestamp}-{sequence}",
                 std::process::id()
             )),

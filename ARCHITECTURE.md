@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service, identity, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, private snapshot, one-shot child, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service, identity, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, private snapshot, one-shot child, fixed launcher, proof sandbox, terminal capability, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -126,8 +126,9 @@ flowchart LR
         Q["BullMQ and Redis\nowner-only queue state"]
         B["Private envelope store\nbounded owner-only blobs"]
         D["Private snapshot store\nroot-keyed owner-only records"]
-        W["Rust proof supervisor\nBullMQ worker"]
-        E["One-shot prover\nnetworkless CpuProver"]
+        W["Rust proof supervisor\nBullMQ worker and terminal verifier"]
+        L["Fixed proof launcher\nowner-only Unix socket"]
+        E["One-shot prover child\nnetworkless CpuProver"]
         PR["Policy registry\napproved PolicyIR records"]
         S --> C
         C --> PA
@@ -138,7 +139,8 @@ flowchart LR
         R -->|"write private envelope"| B
         Q <-->|"claim, renew, finish"| W
         B -->|"bounded private input"| W
-        W -->|"spawn in proof cgroup"| E
+        W -->|"bounded local protocol"| L
+        L -->|"spawn one in proof cgroup"| E
         D -->|"relationships and salt"| E
         PR -->|"current trusted generation"| E
         E -->|"bounded public result"| W
@@ -214,11 +216,10 @@ time, calls admission, publishes the job, and returns the authoritative queued r
 Malformed and oversized requests cause no publication or private-file side effect.
 Exact duplicates return their retained queued record. Authorization-bound mutations
 fail before publication. The display-only `agent_id` does not change job identity.
-`GetCapability` and `CancelCapability` remain closed as unimplemented. Terminal queue
-records fail closed until the worker slice supplies a capability or typed terminal
-result.
+`GetCapability` and `CancelCapability` remain closed as unimplemented. The worker can
+now store a typed public terminal result, but the API does not expose it yet.
 
-The B-0021 library supervisor uses the official BullMQ worker for claim, lock renewal,
+The proof supervisor uses the official BullMQ worker for claim, lock renewal,
 one-job concurrency, stalled handling, and terminal retention. It validates the exact
 job name, identity, payload, and persisted queue policy before private storage access.
 The claimed processor loads one commitment-bound envelope, rechecks the 75-minute
@@ -226,10 +227,10 @@ window with trusted whole-second time, publishes a closed `EXECUTING` phase, and
 a narrow one-shot executor contract. A fixed one-hour deadline and 30-second exit
 grace bound that handoff. Cancellation reaches active execution before envelope
 deletion. Supervisor shutdown cancels active work, closes the worker, and confirms no
-active jobs remain. A crate-owned activation token keeps the library boundary out of
-production startup until the isolated executor and strict terminal result validator
-exist. A successful placeholder handoff still records `SERVICE_UNAVAILABLE`, returns
-no capability, and deletes the envelope.
+active jobs remain. Production startup constructs only the fixed Unix-socket executor
+and strict terminal validator. A valid result becomes BullMQ success only after
+private-envelope deletion and direct proof, journal, request, snapshot, policy, root,
+time, nullifier, and trusted program-key checks.
 
 The B-0022 host builder takes one caller-selected snapshot's ordered relationship
 records, secret salt, committed root, and fixed snapshot limits. It checks the count
@@ -258,11 +259,19 @@ expected key ID, and trust domain. Startup checks the 60,129,542,144-byte cgroup
 zero swap, four visible CPUs, local proving environment, setup artifacts, and trusted
 file shapes before private input. The child calls B-0023, executes the guest, runs
 local CPU Plonk proving, compares the complete public journal and key ID, and returns
-one bounded public result. The default API dependency graph excludes `raziel-prover`
-and the SP1 SDK. The production supervisor remains disabled. B-0025 owns the fixed
-Compose launcher, deadline and cancellation process tests, strict terminal result
-validation, and activation. Capability issuance, lifecycle RPCs, and independent
-retained-proof verification remain pending.
+one bounded public result. The default API dependency graph excludes the SP1 SDK.
+
+The B-0025 persistent launcher accepts one bounded request at a time and starts one
+fixed `razield-prover` child. It forwards cancellation and confirms child exit before
+acknowledgment. Controlled process tests cover host, witness, proof, journal,
+resource, crash, malformed-output, and cancellation paths without running SP1. The
+Compose proof profile applies the exact 60,129,542,144-byte memory and memory-swap
+caps, four-CPU affinity, no network, read-only root, fixed trusted mounts, owner-only
+socket, and bounded tmpfs. The production supervisor runs direct verification and
+retains a public `ProofCapability` plus aggregate metrics only after cleanup. Live
+Redis tests confirm one completed terminal result, no private context in Redis, zero
+proof retry, and restart recovery. Lifecycle RPCs, private snapshot publication, and
+independent retained-proof verification remain pending.
 
 ## Main components
 

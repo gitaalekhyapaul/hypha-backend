@@ -1,7 +1,9 @@
 //! Strict local protocol for one isolated authorization proof process.
 
 mod codec;
+mod executor;
 mod frame;
+mod launcher;
 mod wire;
 
 #[cfg(feature = "one-shot-prover")]
@@ -10,7 +12,7 @@ mod config;
 mod runner;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::error::Error;
 use std::fmt::{self, Debug, Formatter};
@@ -23,7 +25,12 @@ use crate::worker::CapabilityExecutionRequest;
 pub use codec::{decode_request, decode_result, encode_request, encode_result};
 #[cfg(feature = "one-shot-prover")]
 pub use config::OneShotProverConfig;
+pub use executor::{OneShotExecutorConfigError, UnixSocketExecutor};
 pub use frame::{read_frame_to_eof, write_frame};
+pub use launcher::{
+    PROOF_LAUNCHER_SOCKET_PATH_ENV, PROVER_CHILD_PATH_ENV, PROVER_CHILD_SOCKET_PATH_ENV,
+    ProofSandboxLauncherConfig, ProofSandboxLauncherError, run_launcher_from_env,
+};
 #[cfg(feature = "one-shot-prover")]
 pub use runner::run_child_from_env;
 
