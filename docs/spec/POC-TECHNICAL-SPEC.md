@@ -1103,7 +1103,9 @@ Exit gate:
 Status: active implementation. The maintainer accepted
 [ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) and
 [ADR-0014](../decisions/0014-agent-key-thumbprint-and-issuance-identity.md) on
-2026-08-12. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
+2026-08-12, then accepted
+[ADR-0015](../decisions/0015-private-snapshot-and-one-shot-prover-boundary.md) on
+2026-08-23. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
 Tonic `0.14.6` service contracts compile behind an explicit feature. The pure
 `razield` admission boundary now performs typed request conversion, raw-key Ed25519
 thumbprint derivation, exact commitment signature verification, deterministic job-ID
@@ -1146,9 +1148,18 @@ the capability request's exact signed snapshot through `LocalRegistry`, checks t
 request, approved policy, and snapshot against the fixed 75-minute proof window,
 constructs the minimum witness, builds `AuthorizationGuestInputV1`, and passes the
 shared host authorization statement. It retains the exact expected public journal for
-the later proof result check. `GetCapability`, `CancelCapability`, private
-snapshot-store integration, supervisor handoff, proof execution, terminal capability
-publication, and independent verifier behavior remain pending. The verification-only
+the later proof result check. The B-0024 owner-only store now persists one immutable
+private snapshot under its approved relationship-root digest. Every load strictly
+decodes typed relationships and caveat values, binds the exact registry snapshot ID
+and root, and rebuilds the blinded tree. The feature-gated `razield-prover` child uses
+a strict 32 KiB request and 2 MiB result protocol over an owner-only Unix socket.
+Fixed owner configuration supplies trusted paths, Plonk setup, trust domain, key ID,
+and resource profile. The child loads `current.pb`, calls B-0023, executes the guest,
+runs local CPU Plonk proving, and compares the complete public journal and key ID.
+Its feature build and focused protocol, configuration, cgroup, and privacy tests pass
+without running SP1. The default API graph excludes the SP1 SDK. `GetCapability`,
+`CancelCapability`, the fixed Compose launcher, terminal capability publication, and
+independent verifier behavior remain pending. The verification-only
 Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
 `6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and

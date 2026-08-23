@@ -103,7 +103,8 @@ impl ProofSupervisor {
                                     failure.public_class().redis_reason().to_owned(),
                                 ))
                             },
-                            |_| {
+                            |complete| {
+                                drop(complete.into_result());
                                 Err(BullMqError::Unrecoverable(
                                     PublicFailureClass::ServiceUnavailable
                                         .redis_reason()

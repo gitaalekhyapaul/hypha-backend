@@ -13,7 +13,9 @@ use ed25519_dalek::{Signer, SigningKey};
 use prost_types::Timestamp;
 use raziel_authority::derive_ed25519_key_thumbprint;
 use raziel_authorization_core::{
-    AUTHORIZATION_GUEST_INPUT_VERSION, CapabilityRequestBindingV1, capability_request_commitment,
+    AUTHORIZATION_GUEST_INPUT_VERSION, AUTHORIZATION_PUBLIC_VALUES_VERSION,
+    AuthorizationPublicValuesV1, CapabilityRequestBindingV1, capability_request_commitment,
+    encode_public_values,
 };
 use raziel_policy_ir::{CaveatValue, ContextEntry};
 use raziel_proto::raziel::v1::{
@@ -33,6 +35,7 @@ use crate::admission::{
     AdmittedCapabilityRequest, LOCAL_PLONK_ADMISSION_WINDOW_SECONDS,
     admit_create_capability_request,
 };
+use crate::one_shot::{OneShotMetrics, OneShotSuccess};
 use crate::private_envelope::{
     DeleteStatus, PrivateCapabilityEnvelope, PrivateEnvelopeError, PrivateEnvelopeRef,
     PrivateEnvelopeStore,
@@ -482,7 +485,7 @@ impl CapabilityExecutor for FakeExecutor {
         let behavior = self.behavior;
         Box::pin(async move {
             match behavior {
-                ExecutorBehavior::Complete => Ok(()),
+                ExecutorBehavior::Complete => Ok(fake_success()),
                 ExecutorBehavior::Fail(error) => Err(error),
                 ExecutorBehavior::AwaitCancellation => {
                     control.cancelled().await;
@@ -491,6 +494,34 @@ impl CapabilityExecutor for FakeExecutor {
             }
         })
     }
+}
+
+fn fake_success() -> OneShotSuccess {
+    let artifact = b"synthetic-proof".to_vec();
+    let public_values = encode_public_values(&AuthorizationPublicValuesV1 {
+        format_version: AUTHORIZATION_PUBLIC_VALUES_VERSION,
+        policy_hash: [0x11; 32],
+        relationship_snapshot_root: [0x22; 32],
+        capability_request_commitment: [0x33; 32],
+        capability_scope_hash: [0x44; 32],
+        issued_at_unix_seconds: TRUSTED_NOW,
+        expires_at_unix_seconds: TRUSTED_NOW + LOCAL_PLONK_ADMISSION_WINDOW_SECONDS,
+        issuance_nullifier: [0x55; 32],
+    })
+    .unwrap();
+    OneShotSuccess::new(
+        artifact.clone(),
+        public_values,
+        format!("sp1-vk-v1:{}", "ab".repeat(32)),
+        OneShotMetrics {
+            execute_millis: 1,
+            prove_millis: 1,
+            artifact_bytes: artifact.len() as u64,
+            peak_memory_bytes: 1,
+            peak_swap_bytes: 0,
+        },
+    )
+    .unwrap()
 }
 
 #[derive(Clone, Copy)]

@@ -499,11 +499,18 @@ fn manifest_loader_hashes_strictly_parses_and_installs_one_generation() {
         }),
     };
     let manifest_bytes = manifest.encode_to_vec();
+    directory.write_bytes("current.pb", &manifest_bytes);
 
     let loader = RegistryLoader::new(config());
     let candidate = loader
         .load_candidate(directory.path(), &manifest_bytes, TEST_NOW)
         .unwrap();
+    let current = loader.load_current(directory.path(), TEST_NOW).unwrap();
+    assert_eq!(current.generation, candidate.generation);
+    assert_eq!(current.publication_digest, candidate.publication_digest);
+    assert_eq!(current.authority_keys.len(), candidate.authority_keys.len());
+    assert_eq!(current.policies.len(), candidate.policies.len());
+    assert_eq!(current.accepted_roots.len(), candidate.accepted_roots.len());
     let mut registry = LocalRegistry::new(config());
     registry.install_generation(candidate).unwrap();
     assert!(registry.resolve_root(&[0x22; 32], TEST_NOW).is_ok());

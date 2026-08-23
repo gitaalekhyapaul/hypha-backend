@@ -2,12 +2,17 @@
 
 #![forbid(unsafe_code)]
 
+mod config;
 mod error;
 mod ingress;
 mod loader;
 mod model;
 mod registry;
 
+pub use config::{
+    DEFAULT_MAX_ARTIFACT_LIFETIME_SECONDS, DEFAULT_MAX_REGISTRY_RECORD_BYTES,
+    DEFAULT_MAX_REGISTRY_STRING_BYTES, default_policy_validation_ceilings, default_registry_config,
+};
 pub use error::RegistryError;
 pub use ingress::{
     REGISTRY_DESCRIPTOR_SHA256, decode_accepted_root_record_strict,

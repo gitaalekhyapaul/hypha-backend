@@ -2,7 +2,7 @@
 
 Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service and identity contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service, identity, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, private snapshot, one-shot child, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -125,6 +125,7 @@ flowchart LR
         R["razield API\nRust job controller"]
         Q["BullMQ and Redis\nowner-only queue state"]
         B["Private envelope store\nbounded owner-only blobs"]
+        D["Private snapshot store\nroot-keyed owner-only records"]
         W["Rust proof supervisor\nBullMQ worker"]
         E["One-shot prover\nnetworkless CpuProver"]
         PR["Policy registry\napproved PolicyIR records"]
@@ -138,6 +139,8 @@ flowchart LR
         Q <-->|"claim, renew, finish"| W
         B -->|"bounded private input"| W
         W -->|"spawn in proof cgroup"| E
+        D -->|"relationships and salt"| E
+        PR -->|"current trusted generation"| E
         E -->|"bounded public result"| W
     end
 
@@ -242,9 +245,24 @@ exact `snapshot_id` through the trusted local registry. It reuses authorization-
 request mapping, requires the request, approved policy, and signed snapshot to cover
 the fixed 75-minute window, consumes the B-0022 private selection, and runs host
 authorization over the assembled guest input. The returned type keeps the expected
-public journal beside the private input for the later proof comparison. Private
-snapshot-store integration, supervisor handoff, proof execution, capability issuance,
-lifecycle RPCs, and independent retained-proof verification remain pending.
+public journal beside the private input for the later proof comparison.
+
+The B-0024 private snapshot store persists one strict Rust-only Protobuf record under
+its registry-approved relationship-root digest. It checks `0700` and `0600` modes,
+owner identity, regular files, link counts, immutable publication, transport limits,
+typed caveat values, exact snapshot identity, and a rebuilt Merkle root. The
+feature-gated `razield-prover` binary reads one strict 32 KiB request from a `0600`
+Unix socket. Request data cannot select paths, proof mode, limits, or keys. Fixed
+owner configuration selects `current.pb`, the snapshot store, guest ELF, Plonk setup,
+expected key ID, and trust domain. Startup checks the 60,129,542,144-byte cgroup,
+zero swap, four visible CPUs, local proving environment, setup artifacts, and trusted
+file shapes before private input. The child calls B-0023, executes the guest, runs
+local CPU Plonk proving, compares the complete public journal and key ID, and returns
+one bounded public result. The default API dependency graph excludes `raziel-prover`
+and the SP1 SDK. The production supervisor remains disabled. B-0025 owns the fixed
+Compose launcher, deadline and cancellation process tests, strict terminal result
+validation, and activation. Capability issuance, lifecycle RPCs, and independent
+retained-proof verification remain pending.
 
 ## Main components
 

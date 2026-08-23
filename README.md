@@ -16,7 +16,7 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 46,301,016,064-byte memory peak. See the
 [`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
-M4 is in active implementation under accepted ADR-0013 and ADR-0014. `razield` now
+M4 is in active implementation under accepted ADR-0013, ADR-0014, and ADR-0015. `razield` now
 runs a bounded internal Tonic ingress. `verifierd` remains a process shell. The BullMQ
 `1.2.3` and Redis `8.2.8` conformance gate passes. The pure `razield` admission
 boundary validates generated
@@ -58,14 +58,27 @@ without returning private witness data. The B-0023 input assembler resolves the
 request's exact signed snapshot through `LocalRegistry`, requires the request, policy,
 and snapshot to cover the 75-minute proof window, consumes the private snapshot
 selection, builds `AuthorizationGuestInputV1`, and runs the shared host authorization
-statement. It retains the expected public journal for the later proof comparison. It
-does not run SP1 or activate the queue supervisor. Live and focused tests cover
+statement. It retains the expected public journal for the later proof comparison.
+
+The B-0024 boundary stores each private relationship snapshot in one immutable,
+root-keyed Protobuf file. Loads enforce owner-only modes, strict encoding, exact
+registry identity, fixed size limits, and a full Merkle-root rebuild. The feature-gated
+`razield-prover` child reads one bounded request from an owner-only Unix socket. Fixed
+owner configuration selects `current.pb`, the private snapshot store, guest ELF,
+Plonk setup, expected key ID, and proof resource profile. The child calls B-0023,
+executes the guest, creates one local Plonk proof, and compares the exact public
+journal and key ID before returning a bounded public result. The default API build
+does not include the SP1 SDK. Production activation remains closed until B-0025 adds
+the fixed Docker sandbox launcher and terminal result validation.
+
+Live and focused tests cover
 startup cleanup, exact duplicates, bound mutations, request ceilings, publication,
 queue lifecycle, worker claim and cleanup, stalled failure, Redis restart recovery,
 positive-path selection, caveated relationships, denial, snapshot mismatch, trusted
-input assembly, and expiry bounds. `GetCapability`, `CancelCapability`, private
-snapshot-store integration, supervisor-to-assembler handoff, real proof execution,
-terminal capability publication, and the retained-proof verifier gate remain pending.
+input assembly, private snapshot persistence, strict child transport, fixed cgroup
+checks, and expiry bounds. `GetCapability`, `CancelCapability`, sandbox launcher
+integration, terminal capability publication, and the retained-proof verifier gate
+remain pending.
 
 ## Read first
 

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use bullmq::worker::CancellationToken;
 
+use crate::one_shot::OneShotSuccess;
 use crate::private_envelope::PrivateCapabilityEnvelope;
 
 /// Approved maximum wall time for one local proof execution.
@@ -15,7 +16,7 @@ pub const EXECUTOR_TERMINATION_GRACE: Duration = Duration::from_secs(30);
 
 /// Boxed one-shot executor future used without an async-trait dependency.
 pub type ExecutionFuture =
-    Pin<Box<dyn Future<Output = Result<(), ExecutorFailureClass>> + Send + 'static>>;
+    Pin<Box<dyn Future<Output = Result<OneShotSuccess, ExecutorFailureClass>> + Send + 'static>>;
 
 /// Narrow handoff accepted by a future isolated one-shot prover.
 pub struct CapabilityExecutionRequest {
@@ -42,6 +43,10 @@ impl CapabilityExecutionRequest {
     /// Returns the owner-trusted whole-second start time for later proof binding.
     pub const fn issued_at_unix_seconds(&self) -> i64 {
         self.issued_at_unix_seconds
+    }
+
+    pub(crate) fn into_parts(self) -> (PrivateCapabilityEnvelope, i64) {
+        (self.envelope, self.issued_at_unix_seconds)
     }
 }
 

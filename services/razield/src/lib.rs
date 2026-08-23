@@ -4,7 +4,9 @@
 
 pub mod admission;
 pub mod input_assembly;
+pub mod one_shot;
 pub mod private_envelope;
+pub mod private_snapshot;
 pub mod publication;
 pub mod queue;
 pub mod service;

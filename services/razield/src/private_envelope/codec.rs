@@ -16,7 +16,23 @@ use crate::admission::{AdmittedCapabilityRequest, MAX_PROTOBUF_TIMESTAMP_SECONDS
 pub(super) fn encode(
     admitted: &AdmittedCapabilityRequest,
 ) -> Result<(PrivateEnvelopeRef, Vec<u8>), PrivateEnvelopeError> {
-    let request = admitted.request();
+    let bytes = encode_parts(admitted.request(), admitted.capability_request_commitment())?;
+    Ok((
+        PrivateEnvelopeRef::from_commitment(*admitted.capability_request_commitment()),
+        bytes,
+    ))
+}
+
+pub(super) fn encode_validated(
+    envelope: &PrivateCapabilityEnvelope,
+) -> Result<Vec<u8>, PrivateEnvelopeError> {
+    encode_parts(envelope.request(), envelope.capability_request_commitment())
+}
+
+fn encode_parts(
+    request: &CapabilityRequestBindingV1,
+    commitment: &[u8; 32],
+) -> Result<Vec<u8>, PrivateEnvelopeError> {
     let wire = PrivateCapabilityEnvelopeWireV1 {
         envelope_format_version: PRIVATE_ENVELOPE_FORMAT_VERSION,
         request_format_version: request.format_version,
@@ -34,7 +50,7 @@ pub(super) fn encode(
             .iter()
             .map(context_to_wire)
             .collect(),
-        capability_request_commitment: admitted.capability_request_commitment().to_vec(),
+        capability_request_commitment: commitment.to_vec(),
     };
 
     if wire.encoded_len() > MAX_PRIVATE_ENVELOPE_BYTES {
@@ -45,14 +61,21 @@ pub(super) fn encode(
         return Err(PrivateEnvelopeError::EnvelopeTooLarge);
     }
 
-    Ok((
-        PrivateEnvelopeRef::from_commitment(*admitted.capability_request_commitment()),
-        bytes,
-    ))
+    Ok(bytes)
 }
 
 pub(super) fn decode(
     reference: &PrivateEnvelopeRef,
+    bytes: &[u8],
+) -> Result<PrivateCapabilityEnvelope, PrivateEnvelopeError> {
+    let envelope = decode_unbound(bytes)?;
+    if reference.commitment() != envelope.capability_request_commitment() {
+        return Err(PrivateEnvelopeError::CommitmentMismatch);
+    }
+    Ok(envelope)
+}
+
+pub(super) fn decode_unbound(
     bytes: &[u8],
 ) -> Result<PrivateCapabilityEnvelope, PrivateEnvelopeError> {
     if bytes.is_empty() {
@@ -85,7 +108,7 @@ pub(super) fn decode(
         .map_err(|_| PrivateEnvelopeError::InvalidEnvelope)?;
     let recalculated = capability_request_commitment(&request)
         .map_err(|_| PrivateEnvelopeError::InvalidEnvelope)?;
-    if stored_commitment != recalculated || reference.commitment() != &recalculated {
+    if stored_commitment != recalculated {
         return Err(PrivateEnvelopeError::CommitmentMismatch);
     }
 

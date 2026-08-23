@@ -64,7 +64,8 @@ one owner-only Redis service:
 | `verifier-worker` | Decode one artifact and run the direct SP1 Plonk verifier against a registry-pinned program key | No witness data | None; local Unix socket only |
 
 `razield`, `razield-proof-worker`, and `razield-prover` use separate processes. The
-one-shot prover runs in the 60 GiB proof cgroup. A proof OOM or abort must not
+one-shot prover runs in the 60,129,542,144-byte proof cgroup, which is 56 GiB or about
+60.13 GB. A proof OOM or abort must not
 terminate the API or BullMQ supervisor. All three run inside the data-owner trust
 boundary. The one-shot prover cannot construct an SP1 network, CUDA, hosted, mock, or
 environment-selected prover.

@@ -74,8 +74,16 @@ impl SupervisorProgressPhase {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ExecutorHandoffComplete;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExecutorHandoffComplete {
+    result: crate::one_shot::OneShotSuccess,
+}
+
+impl ExecutorHandoffComplete {
+    pub(crate) fn into_result(self) -> crate::one_shot::OneShotSuccess {
+        self.result
+    }
+}
 
 /// Closed public terminal classes written verbatim to BullMQ failure state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -259,7 +267,7 @@ impl ClaimedJobProcessor {
         self.cleanup(reference).await?;
 
         match execution {
-            Ok(()) => Ok(ExecutorHandoffComplete),
+            Ok(result) => Ok(ExecutorHandoffComplete { result }),
             Err(ExecutorFailureClass::Cancelled) => {
                 Err(SupervisorFailure::new(SupervisorFailureClass::Cancelled))
             }
@@ -338,7 +346,7 @@ pub(crate) async fn execute_with_limits(
     cancellation: CancellationToken,
     deadline: Duration,
     termination_grace: Duration,
-) -> Result<(), ExecutorFailureClass> {
+) -> Result<crate::one_shot::OneShotSuccess, ExecutorFailureClass> {
     let control = ExecutionControl::new(deadline, cancellation.clone());
     let mut execution = executor.execute(request, control);
     let deadline_sleep = tokio::time::sleep(deadline);

@@ -98,6 +98,14 @@ impl PrivateCapabilityEnvelope {
         &self.capability_request_commitment
     }
 
+    pub(crate) fn encode_transport(&self) -> Result<Vec<u8>, PrivateEnvelopeError> {
+        codec::encode_validated(self)
+    }
+
+    pub(crate) fn decode_transport(bytes: &[u8]) -> Result<Self, PrivateEnvelopeError> {
+        codec::decode_unbound(bytes)
+    }
+
     fn new(request: CapabilityRequestBindingV1, commitment: [u8; 32]) -> Self {
         Self {
             request,

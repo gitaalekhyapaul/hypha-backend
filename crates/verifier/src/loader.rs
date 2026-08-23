@@ -27,6 +27,39 @@ impl RegistryLoader {
         Self { config }
     }
 
+    /// Loads the fixed current registry manifest from an owner-selected root.
+    pub fn load_current(
+        &self,
+        registry_root: &Path,
+        observed_now_unix_seconds: i64,
+    ) -> Result<RegistryGenerationV1, RegistryError> {
+        let manifest_path = registry_root.join("current.pb");
+        let metadata =
+            std::fs::symlink_metadata(&manifest_path).map_err(|_| RegistryError::FileRead)?;
+        if metadata.file_type().is_symlink() {
+            return Err(RegistryError::SymlinkForbidden);
+        }
+        if !metadata.is_file() {
+            return Err(RegistryError::FilePathInvalid);
+        }
+        let read_limit = self
+            .config
+            .limits
+            .max_record_bytes
+            .checked_add(1)
+            .ok_or(RegistryError::InputTooLarge)?;
+        let mut manifest_bytes = Vec::new();
+        std::fs::File::open(&manifest_path)
+            .map_err(|_| RegistryError::FileRead)?
+            .take(read_limit)
+            .read_to_end(&mut manifest_bytes)
+            .map_err(|_| RegistryError::FileRead)?;
+        if manifest_bytes.len() as u64 > self.config.limits.max_record_bytes {
+            return Err(RegistryError::InputTooLarge);
+        }
+        self.load_candidate(registry_root, &manifest_bytes, observed_now_unix_seconds)
+    }
+
     pub fn load_candidate(
         &self,
         registry_root: &Path,

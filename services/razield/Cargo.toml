@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+default = []
+one-shot-prover = ["dep:raziel-prover"]
+
 [dependencies]
 bullmq.workspace = true
 ed25519-dalek.workspace = true
@@ -14,6 +18,7 @@ prost-types.workspace = true
 raziel-authority.workspace = true
 raziel-authorization-core.workspace = true
 raziel-policy-ir.workspace = true
+raziel-prover = { workspace = true, features = ["proving"], optional = true }
 raziel-proto = { workspace = true, features = ["services"] }
 raziel-snapshot.workspace = true
 raziel-verifier = { path = "../../crates/verifier" }
@@ -25,3 +30,8 @@ tonic = { workspace = true, features = ["router"] }
 
 [dev-dependencies]
 raziel-canonical.workspace = true
+
+[[bin]]
+name = "razield-prover"
+path = "src/bin/razield-prover.rs"
+required-features = ["one-shot-prover"]
