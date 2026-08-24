@@ -294,22 +294,22 @@ for integer_value in "$prove_ms" "$artifact_bytes" "$verify_ms"; do
 done
 
 if [ "$source_status" != clean ] ||
-  [ "$benchmark_profile" != cluster-56g ] ||
+  [ "$benchmark_profile" != cluster-56g-8cpu ] ||
   [ "$memory_max" != 60129542144 ] ||
   [ "$swap_max" != 0 ] ||
   [ "$swap_peak" != 0 ] ||
   [ "$oom_count" != 0 ] ||
   [ "$oom_kill_count" != 0 ] ||
-  [ "$go_max_procs" != 4 ] ||
+  [ "$go_max_procs" != 8 ] ||
   [ "$go_memory_limit" != 24GiB ] ||
   [ "$go_debug" != gctrace=1 ] ||
-  [ "$rayon_threads" != 4 ] ||
+  [ "$rayon_threads" != 8 ] ||
   [ "$mutations" != pass ]
 then
-  echo "benchmark result does not meet the approved cluster-56g pass profile" >&2
+  echo "benchmark result does not meet the approved cluster-56g-8cpu pass profile" >&2
   exit 1
 fi
-if [ "$available_cpus" != 4 ] ||
+if [ "$available_cpus" != 8 ] ||
   [ "$memory_peak" -gt "$memory_max" ] ||
   [ "$prove_ms" -gt 3600000 ] ||
   [ "$artifact_bytes" -gt 1048576 ] ||

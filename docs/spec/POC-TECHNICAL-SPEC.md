@@ -1164,7 +1164,7 @@ without running SP1. The default API graph excludes the SP1 SDK. The B-0025 fixe
 launcher accepts one bounded request and starts one fixed child at a time. It confirms
 child exit after cancellation, crash, malformed output, and closed typed failures.
 The Compose proof profile applies the accepted 60,129,542,144-byte cap, zero swap,
-four CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
+eight CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
 bounded tmpfs. The supervisor deletes the private envelope before direct Plonk and
 exact public-claim validation. Only then does BullMQ retain the public capability and
 aggregate metrics. The B-0026 runtime now resolves one exact approved policy and

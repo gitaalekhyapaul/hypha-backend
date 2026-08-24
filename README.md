@@ -11,12 +11,12 @@ acceptance run.
 ## Current status
 
 M0 through M3 are complete. M3 produced and independently verified a real local SP1
-Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
-1,742,106-millisecond proving time, 479-millisecond verification time, and a
-46,301,016,064-byte memory peak. See the
-[`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
+Plonk proof. The approved eight-CPU profile records a 2,537-byte proof,
+929,660-millisecond proving time, 438-millisecond verification time, and a
+45,592,842,240-byte memory peak. See the
+[`cluster-20260813T063649Z-8cpu` benchmark](docs/benchmarks/sp1-plonk/cluster-20260813T063649Z-8cpu.md).
 
-M4 is in active implementation under accepted ADR-0013 through ADR-0016. `razield`
+M4 is in active implementation under accepted ADR-0013 through ADR-0017. `razield`
 now runs bounded CapabilityService and SnapshotService Tonic ingress. `verifierd`
 remains a process shell. The BullMQ
 `1.2.3` and Redis `8.2.8` conformance gate passes. The pure `razield` admission
@@ -72,7 +72,7 @@ does not include the SP1 SDK.
 
 The B-0025 proof profile builds the launcher, prover child, and guest ELF through the
 pinned offline toolchain. The persistent sandbox has a 60,129,542,144-byte cap,
-zero swap, four CPUs, no network, a read-only root, fixed read-only trusted mounts,
+zero swap, eight CPUs, no network, a read-only root, fixed read-only trusted mounts,
 and a bounded one-GiB tmpfs. The supervisor reaches it through an owner-only Unix
 socket. One launcher starts one child, forwards cancellation, confirms exit, and
 returns one strict bounded result. The supervisor deletes the private envelope, runs

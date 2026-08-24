@@ -50,8 +50,8 @@ if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
 fi
 
 available_cpus=$(getconf _NPROCESSORS_ONLN)
-if [ "$preflight_phase" = prove ] && [ "$available_cpus" -lt 4 ]; then
-  echo "the cluster allocation must expose at least four CPUs" >&2
+if [ "$preflight_phase" = prove ] && [ "$available_cpus" -lt 8 ]; then
+  echo "the cluster allocation must expose at least eight CPUs" >&2
   exit 1
 fi
 

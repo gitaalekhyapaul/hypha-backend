@@ -13,7 +13,7 @@ trust and data-governance decision.
 The fixed cluster profile uses:
 
 - one Linux node
-- four CPU cores
+- eight CPU cores
 - 64 GiB scheduler memory
 - a 56 GiB proof-process memory cap
 - a 24 GiB Go soft heap target
@@ -23,12 +23,12 @@ The fixed cluster profile uses:
 - a two-hour scheduler limit
 - a 60-minute proof deadline
 
-The 30 GiB and 36 GiB gates failed at their exact cgroup limits. The maintainer
-approved one 56 GiB attempt on the dedicated independent Docker VM on 2026-08-11.
-That approval permits no retry, cap increase, Slurm submission, or proof-profile
-change. The proof runner fixes every listed value. Environment variables cannot
-raise or lower the approved memory, disk, heap, CPU-affinity, diagnostic, or worker
-limits.
+The 30 GiB and 36 GiB gates failed at their exact cgroup limits. A four-CPU 56 GiB
+attempt passed on 2026-08-11. A later eight-CPU run passed on 2026-08-13. On
+2026-08-24, the maintainer adopted `cluster-56g-8cpu` as the current profile. This
+amendment changes CPU affinity and worker counts only. The proof runner fixes every
+listed value. Environment variables cannot raise or lower the approved memory, disk,
+heap, CPU-affinity, diagnostic, or worker limits.
 
 ## Runtime Choice
 
@@ -49,7 +49,7 @@ export RAZIEL_CLUSTER_RUNTIME=docker
 The independent machine needs Git, a local Docker Engine, and Docker Compose. The
 repository toolchain image supplies Node.js, pnpm, Rust, Go, Buf, Protobuf, libclang,
 and SP1. Do not install those tools on the host for this run. The proof preflight also
-requires at least four CPUs, 62 GiB RAM, and 60 GiB free disk.
+requires at least eight CPUs, 62 GiB RAM, and 60 GiB free disk.
 
 The NUS preflight rejects Docker even if a client binary appears in `PATH`. It also
 rejects an invocation without `SLURM_JOB_ID`. Preparation and proving must run inside
@@ -175,7 +175,7 @@ Run this command on a development host with Docker Compose:
 ```
 
 It checks shell syntax, checks JavaScript syntax through the digest-pinned Node image,
-renders the 56 GiB Compose profile, verifies the four-CPU affinity and Go memory
+renders the 56 GiB Compose profile, verifies the eight-CPU affinity and Go memory
 diagnostics, exercises the public result exporter, and proves that raw host and
 scheduler identifiers stay out of the generated Markdown. Host Node.js is not
 required. Docker pulls the pinned Node image on the first run if the image is not
@@ -244,18 +244,19 @@ export RAZIEL_SP1_CLUSTER_GATE_APPROVED=1
 ./scripts/cluster/run-sp1-plonk
 ```
 
-The same 56 GiB hard cap, four-CPU affinity, Go memory diagnostics, zero-swap rule,
+The same 56 GiB hard cap, eight-CPU affinity, Go memory diagnostics, zero-swap rule,
 network isolation, source checks, setup checks, proof deadline, verification gate,
-mutation gate, and public result exporter apply. The 2026-08-11 approval permits
-this command once against the recorded preparation state. Do not rerun it after
-success or failure without another decision.
+mutation gate, and public result exporter apply. B-0028 imports an existing measured
+run and does not authorize a new proof. Every new proof run needs a separate
+maintainer decision tied to its preparation state.
 
 The wrapper writes proof output to an owner-only in-progress log and prints it only
-after the container exits. A healthy terminal can remain silent for about 68 minutes.
-The stage limits are two minutes for execution, 60 minutes for proving, one minute
-for verification, and five minutes for mutation checks. Small wrapper steps run
-outside those limits. Keep the SSH session open. Do not interrupt or rerun a quiet
-process.
+after the container exits. The measured eight-CPU direct fixture proved in about 15
+minutes 30 seconds, but a healthy terminal can remain silent for the full 60-minute
+proof limit. The stage limits are two minutes for execution, 60 minutes for proving,
+one minute for verification, and five minutes for mutation checks. Small wrapper
+steps run outside those limits. Keep the SSH session open. Do not interrupt or rerun
+a quiet process.
 
 From a second SSH session, this read-only command confirms whether the proof
 container is still running:
@@ -291,7 +292,12 @@ The exporter rejects duplicate required fields, unknown execution-path combinati
 profile drift, malformed digests, unsafe Markdown values, mismatched proof and
 verification keys, and any timing or resource value outside ADR-0012.
 
-The `44d58c7` cluster wrapper wrote the same `benchmark_profile=cluster-56g` field
+The current exporter accepts `benchmark_profile=cluster-56g-8cpu`. The
+maintainer-supplied validation record is
+[`cluster-20260813T063649Z-8cpu.md`](../benchmarks/sp1-plonk/cluster-20260813T063649Z-8cpu.md).
+
+The `44d58c7` cluster wrapper wrote the historical
+`benchmark_profile=cluster-56g` field
 once outside the container and once inside it. Its successful proof log remains
 valid, but the default exporter rejects that duplicate. Preserve the raw log and use
 the narrow recovery mode once:

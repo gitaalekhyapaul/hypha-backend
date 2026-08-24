@@ -45,9 +45,9 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
 
-The validated M3 run used the synthetic direct fixture. It produced a 2,537-byte
-Plonk artifact in 1,742,106 milliseconds, used 46,301,016,064 bytes at peak, and
-verified in 479 milliseconds. This closes the cryptographic M3 gate. It does not
+The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
+2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
+and verified in 438 milliseconds. This closes the cryptographic M3 gate. It does not
 claim real-data acceptance.
 
 M5 can produce the first connected visual checkpoint once M4 services exist. The
@@ -261,7 +261,7 @@ feature-gated `razield-prover` binary reads one strict 32 KiB request from a `06
 Unix socket. Request data cannot select paths, proof mode, limits, or keys. Fixed
 owner configuration selects `current.pb`, the snapshot store, guest ELF, Plonk setup,
 expected key ID, and trust domain. Startup checks the 60,129,542,144-byte cgroup,
-zero swap, four visible CPUs, local proving environment, setup artifacts, and trusted
+zero swap, eight visible CPUs, local proving environment, setup artifacts, and trusted
 file shapes before private input. The child calls B-0023, executes the guest, runs
 local CPU Plonk proving, compares the complete public journal and key ID, and returns
 one bounded public result. The default API dependency graph excludes the SP1 SDK.
@@ -271,7 +271,7 @@ fixed `razield-prover` child. It forwards cancellation and confirms child exit b
 acknowledgment. Controlled process tests cover host, witness, proof, journal,
 resource, crash, malformed-output, and cancellation paths without running SP1. The
 Compose proof profile applies the exact 60,129,542,144-byte memory and memory-swap
-caps, four-CPU affinity, no network, read-only root, fixed trusted mounts, owner-only
+caps, eight-CPU affinity, no network, read-only root, fixed trusted mounts, owner-only
 socket, and bounded tmpfs. The production supervisor runs direct verification and
 retains a public `ProofCapability` plus aggregate metrics only after cleanup. Live
 Redis tests confirm one completed terminal result, no private context in Redis, zero
@@ -343,8 +343,10 @@ reduces host-versus-guest semantic drift.
 
 Plonk is the only approved proof mode for an agent-facing capability. The validated
 profile provides computational zero knowledge, a small public artifact, and fast
-independent verification. Its measured cost is about 29 minutes and 43.12 GiB for the
-direct fixture on the four-CPU VM profile.
+independent verification. Its measured cost is about 15 minutes 30 seconds and 42.46
+GiB for the direct fixture on the eight-CPU VM profile. The validated run took
+929,660 ms to prove, 438 ms to verify, and peaked at 45,592,842,240 bytes without
+swap or OOM.
 
 Core remains useful for execute-mode checks and non-sensitive internal measurements.
 The pinned SP1 6.3.1 Core artifact carries witness-derived trace openings and has no

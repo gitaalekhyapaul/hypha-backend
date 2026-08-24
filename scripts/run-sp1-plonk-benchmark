@@ -10,10 +10,10 @@ umask 077
 )
 
 expected_memory_max=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-32212254720}
-expected_worker_threads=${RAZIEL_SP1_EXPECTED_WORKER_THREADS:-4}
+expected_worker_threads=${RAZIEL_SP1_EXPECTED_WORKER_THREADS:-8}
 expected_go_memory_limit=${RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT:-24GiB}
 expected_go_debug=${RAZIEL_SP1_EXPECTED_GO_DEBUG:-gctrace=1}
-expected_visible_cpus=${RAZIEL_SP1_EXPECTED_VISIBLE_CPUS:-4}
+expected_visible_cpus=${RAZIEL_SP1_EXPECTED_VISIBLE_CPUS:-8}
 benchmark_profile=${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}
 cgroup_relative_path=$(awk -F: '$1 == "0" { print $3; found = 1 } END { exit found ? 0 : 1 }' /proc/self/cgroup)
 case "$cgroup_relative_path" in

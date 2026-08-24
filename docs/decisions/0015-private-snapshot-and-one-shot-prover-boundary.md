@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-08-22
 - Accepted: 2026-08-23
+- Eight-CPU resource amendment accepted: 2026-08-24
 - Milestone: M4
 - Related decisions: ADR-0009, ADR-0010, ADR-0012, ADR-0013
 - Related baton: B-0024
@@ -21,10 +22,11 @@ combine that witness with trusted policy and snapshot registry records. The one-
 prover still needs a trusted source for the exact private snapshot used by the signed
 descriptor.
 
-An asynchronous capability job can wait through process restarts. A Plonk proof can
-run for about 29 minutes and use about 43 GiB. The private snapshot cannot exist only
-in the API process or BullMQ job payload. Querying SpiceDB again at proof time can
-return state from a different revision and cannot reproduce the committed salt.
+An asynchronous capability job can wait through process restarts. The direct Plonk
+fixture took about 29 minutes with four CPUs and 15 minutes 30 seconds with eight.
+Both runs used about 43 GiB. The private snapshot cannot exist only in the API
+process or BullMQ job payload. Querying SpiceDB again at proof time can return state
+from a different revision and cannot reproduce the committed salt.
 
 ADR-0013 requires a separate one-shot prover in a 60,129,542,144-byte cgroup with no
 swap or network. This is 56 GiB, or about 60.13 GB. It does not define the private
@@ -200,12 +202,17 @@ and starts one `razield-prover` child at a time.
 The entire sandbox container uses these required Compose settings:
 
 ```yaml
-cpuset: "0-3"
+cpuset: "0-7"
 mem_limit: "60129542144"
 memswap_limit: "60129542144"
 network_mode: none
 read_only: true
 ```
+
+The maintainer approved the eight-CPU amendment on 2026-08-24 after the measured run
+recorded in ADR-0012. The sandbox sets `GOMAXPROCS=8` and `RAYON_NUM_THREADS=8` and
+rejects any other visible CPU or worker count. Memory, swap, network, filesystem,
+mount, scratch, protocol, and deadline controls remain unchanged.
 
 Docker treats equal positive memory and memory-swap limits as zero container swap.
 The sandbox uses a bounded private `tmpfs`. It receives read-only mounts for the
@@ -218,8 +225,8 @@ CPU, network, root-filesystem, mount, and scratch settings. The child checks cgr
 at startup and exits before private input if `memory.max` is not `60129542144` or
 `memory.swap.max` is not `0`.
 
-The cap is a maximum, not a reservation. The validated proof peaked at
-46,301,016,064 bytes. Docker can kill the sandbox at its hard limit without killing
+The cap is a maximum, not a reservation. The current eight-CPU validation peaked at
+45,592,842,240 bytes. Docker can kill the sandbox at its hard limit without killing
 the API or proof supervisor.
 
 The proof supervisor does not receive the Docker socket. Compose owns container
@@ -348,7 +355,7 @@ B-0025 must cover:
 - canceled, timed-out, and crashed child handling with confirmed process exit
 - host denial, witness failure, proof failure, and public-journal mismatch across the
   launched process boundary
-- rendered Compose equality for the exact byte cap, zero swap, four CPUs, no network,
+- rendered Compose equality for the exact byte cap, zero swap, eight CPUs, no network,
   read-only root, fixed mounts, owner-only socket, and bounded scratch
 - strict terminal result validation before capability issuance or worker activation
 

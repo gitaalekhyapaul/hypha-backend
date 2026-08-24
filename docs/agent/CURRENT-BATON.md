@@ -1,114 +1,120 @@
 # Current Engineering Baton
 
-- Baton ID: B-0028
+- Baton ID: B-0029
 - State: READY
-- Milestone: M4, proof resource profile reconciliation
+- Milestone: M4, independent verifier admission
 - Owner: unassigned
 - Started UTC: None
-- Last updated UTC: 2026-08-24T11:33:29Z
+- Last updated UTC: 2026-08-24T11:50:17Z
 - Branch: `main`
-- Worktree: B-0027 is archived. Inspect Git before claiming B-0028.
+- Worktree: B-0028 is archived. Inspect Git before claiming B-0029.
 
 ## Objective
 
-Adopt the validated eight-CPU SP1 Plonk profile across production Compose, proof
-checks, approved decisions, current documentation, and durable benchmark evidence.
+Close the protected-request signature decision, then implement the strict public
+admission boundary that prepares one capability for independent verification without
+calling `razield` or reading private graph data.
 
 ## Acceptance Criteria
 
-- [ ] Production and benchmark proof profiles use CPUs `0-7`, `GOMAXPROCS=8`, and
-      `RAYON_NUM_THREADS=8`.
-- [ ] Proof controls retain the 56 GiB memory cap, zero swap, one-hour proof deadline,
-      and 75-minute capability admission window.
-- [ ] Host and Compose checks require eight visible proof CPUs and reject drift.
-- [ ] ADR-0012 and ADR-0015 record the approved resource-profile amendment.
-- [ ] The later VM benchmark is stored as durable public evidence with its source,
-      timing, peak memory, verification result, and zero-OOM result.
-- [ ] Current-state documentation no longer presents four CPUs as the approved
-      production profile.
-- [ ] Focused checks, formatting, lint, package tests, privacy scans, and diff gates
-      pass without generating another SP1 proof.
+- [ ] ADR-0002 is reviewed and explicitly accepted before its signature rules enter
+      production code.
+- [ ] `VerifyCapabilityRequest` applies the 2 MiB service ceiling and rejects missing,
+      malformed, oversized, unknown, and noncanonical public fields.
+- [ ] Admission validates agent-key thumbprint binding and the exact protected-request
+      Ed25519 signature envelope from ADR-0002.
+- [ ] Trusted time, capability expiry, request timestamp, nonce, method, target, and
+      body-hash checks fail closed with typed private causes and generic public errors.
+- [ ] Verifier-owned registries resolve the exact policy, snapshot, authority keys,
+      and program-key identity without a `razield` endpoint.
+- [ ] Admission reconstructs the complete expected ADR-0011 public-value bytes and
+      emits only a bounded public worker request.
+- [ ] Focused canonical, verifier, service, mutation, privacy, formatting, lint, and
+      diff gates pass without running SP1.
 
 ## Architecture Constraints
 
-- Proof semantics, public values, keys, artifacts, and witness handling do not change.
-- The existing 56 GiB memory and memory-plus-swap caps remain equal.
-- The proof process retains no network and runs with a read-only root filesystem.
-- The one-hour proof deadline and 75-minute admission window remain unchanged.
-- Existing operator-provided VM output is the evidence source. B-0028 does not run a
-  new SP1 proof.
-- No package, CLI, runtime, or system dependency is added.
+- `verifierd` never calls `razield`.
+- The capability carries `policy_hash`, not PolicyIR. The verifier resolves the exact
+  approved policy from its read-only local registry.
+- No relationship, caveat value, salt, opening, path, witness, or private envelope
+  enters verifier admission.
+- Request data cannot select proof mode, setup, verification key, registry path,
+  worker endpoint, or resource profile.
+- ADR-0011 fixes proof public values. B-0029 cannot change them.
+- The isolated verifier worker and its cgroup activation remain a later bounded baton.
+- No package, CLI, runtime, or system dependency is approved by this baton.
 
 ## File Scope
 
-- Production and benchmark proof services in `docker-compose.yml`
-- Proof resource checks and cluster benchmark scripts
-- ADR-0012 and ADR-0015 amendments
-- Public SP1 benchmark evidence
-- Current-state README, architecture, runbook, specification, and baton documents
+- ADR-0002 and O-007 status documentation
+- Existing canonical, authority, verifier, prover verification, and Protobuf contracts
+- `services/verifierd` pure admission and focused tests
+- Current-state README, architecture, specification, and baton documents
 
 ## Out of Scope
 
-- Capability lifecycle behavior completed in B-0027
-- Independent `verifierd` service behavior
-- Proof protocol, guest, canonical commitments, or capability format
-- New proof generation, dependency changes, M5, M6, M7, or another scenario
+- Isolated verifier worker process, socket, cgroup, and real retained-proof run
+- `razield` lifecycle, queue, prover, witness, or snapshot changes
+- Gateway replay database and capability cache
+- M5 frontend, M6 real-data acceptance, M7, or another scenario
 
 ## Decisions
 
-- Approved by the maintainer on 2026-08-24: adopt eight CPUs as the production proof
-  profile after B-0027.
-- Evidence supplied by the maintainer: the eight-CPU VM run completed proving in
-  929,660 ms, verification in 438 ms, and peaked at 45,592,842,240 bytes with no OOM
-  or swap use.
-- Inherited: the four-CPU run remains valid historical benchmark evidence.
+- Inherited: ADR-0010, ADR-0011, ADR-0012, and ADR-0013.
+- Pending maintainer review: ADR-0002 protected-request signature envelope.
+- Inherited: B-0028 fixes the eight-CPU proof profile. Verifier admission does not
+  alter that profile.
 
 ## Open Questions and Blockers
 
-- None. Confirm the source commit and complete metric set from the supplied VM output
-  before writing the benchmark record.
+- ADR-0002 remains proposed. Its exact method, target, body-hash, nonce, timestamp,
+  capability-ID, and domain-separation rules need maintainer approval before coding.
+- O-007 remains open until that approval is recorded.
 
 ## Work Completed
 
-- B-0027 completed and archived authoritative capability lifecycle RPCs.
-- The maintainer compared the later eight-CPU VM result with the checked-in four-CPU
-  benchmark and approved the resource-profile amendment.
-- The current repository still pins production and benchmark proving to CPUs `0-3`.
+- B-0027 completed and archived capability lifecycle RPCs.
+- B-0028 completed and archived the validated eight-CPU proof profile.
+- `services/verifierd` remains a shell with the approved verification-only dependency
+  graph.
+- Generated `VerificationService` request and response contracts already compile.
 
 ## Validation Plan
 
-- Import the supplied VM evidence without changing its measured values.
-- Reconcile every current four-CPU resource setting and assertion.
-- Keep memory, swap, network, filesystem, timeout, and admission controls unchanged.
-- Run focused Compose and cluster checks, formatting, lint, package tests, privacy
-  scans, and `git diff --check`.
+- Review ADR-0002 against the current Protobuf request and ADR-0013 verifier boundary.
+- Request explicit maintainer approval with a short field-by-field explanation.
+- After approval, implement the smallest pure admission path before service or worker
+  process activation.
+- Run canonical mutation, key binding, time, registry, privacy, formatting, lint, and
+  default workspace tests.
 - Do not run SP1.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0027 archive | PASS | Capability lifecycle RPCs | 2026-08-24T11:33:29Z |
-| Eight-CPU profile approval | PASS, accepted by maintainer | Production proof resource profile | 2026-08-24T11:33:29Z |
-| Eight-CPU VM proof result | PASS, operator-provided | Plonk prove, verify, resource, and OOM metrics | 2026-08-24T11:33:29Z |
-| B-0028 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T11:33:29Z |
+| B-0028 archive | PASS | Eight-CPU proof resource profile | 2026-08-24T11:50:17Z |
+| ADR-0002 status | BLOCKED, maintainer approval needed | Protected-request signature semantics | 2026-08-24T11:50:17Z |
+| B-0029 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T11:50:17Z |
 
 ## Privacy Checks
 
-- PASS: the supplied benchmark output contains public toolchain and aggregate resource
-  evidence. It contains no witness, relationship, caveat, salt, or private envelope.
-- NOT APPLICABLE: no proof or private input will be generated in this baton.
+- NOT AVAILABLE: B-0029 has not started.
+- REQUIRED: verifier admission must process public capability and request-envelope
+  data only.
 
 ## Risks and Private-Data Notes
 
-- Eight CPUs reduce elapsed time but do not change the proof's security statement.
-- Higher parallelism can change peak memory for later fixtures. The fixed 56 GiB cap
-  remains the fail-closed boundary.
-- One QEMU VM run supports this PoC profile. It does not establish broad hardware
-  scaling behavior.
-- Historical four-CPU benchmark records must stay unchanged.
+- A signature that omits method or canonical target permits cross-route replay.
+- Target canonicalization must have one byte representation across the TypeScript
+  gateway and Rust verifier.
+- Capability proof verification does not replace per-request signature and replay
+  checks.
+- Replay storage belongs to the gateway in a later baton. B-0029 validates the signed
+  replay inputs but does not claim nonce consumption.
 
 ## Exact Next Action
 
-Inspect Git and the supplied eight-CPU VM output, claim B-0028, and map every current
-four-CPU production assertion before editing.
+Read ADR-0002 against the generated verifier request, claim B-0029, and ask the
+maintainer to approve or amend the exact protected-request signature envelope.

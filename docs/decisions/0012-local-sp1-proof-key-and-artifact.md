@@ -9,6 +9,8 @@
 - 36 GiB validation failed: 2026-08-10
 - One 56 GiB proof attempt approved by maintainer: 2026-08-11
 - 56 GiB validation passed: 2026-08-11
+- Eight-CPU validation passed: 2026-08-13
+- Eight-CPU profile approved by maintainer: 2026-08-24
 - 30 GiB diagnostic approved by maintainer: 2026-07-27
 - Resolution: O-003 is closed. D-019 selects local Plonk for final demo proof
   artifacts.
@@ -267,6 +269,31 @@ The raw owner-only log remains ignored. Its exporter used the documented narrow
 recovery for duplicate profile output and an exact Rust test-harness prefix. The
 recovery changed no proof, public value, metric, or resource result.
 
+### Eight-CPU profile amendment
+
+A later dedicated-VM run kept the direct fixture, source manifest, verification key,
+56 GiB cap, zero swap, Go heap target, proof deadline, and proof code unchanged. It
+restricted the process to CPUs `0-7` and set `GOMAXPROCS=8` and
+`RAYON_NUM_THREADS=8`.
+
+The run passed on 2026-08-13. Proof generation took 929,660 milliseconds,
+verification took 438 milliseconds, and the encoded artifact remained 2,537 bytes.
+The container peaked at 45,592,842,240 bytes with no swap, OOM event, or OOM kill.
+Mutation checks passed. Against the four-CPU validation, proving time fell by 46.6
+percent and peak memory fell by 1.5 percent.
+
+The maintainer approved this eight-CPU profile on 2026-08-24. The current fixed
+profile is `cluster-56g-8cpu`. The amendment changes CPU affinity and Go and Rust
+worker counts only. It does not change the proof statement, guest, source fixture,
+keys, public journal, artifact format, memory cap, swap policy, network policy,
+deadline, or 75-minute capability window.
+
+The public record is
+[`cluster-20260813T063649Z-8cpu.md`](../benchmarks/sp1-plonk/cluster-20260813T063649Z-8cpu.md).
+Its source manifest matches the four-CPU validation. The manual transcript did not
+emit a source commit, source tree, run-bundle manifest digest, or toolchain image ID,
+so the record leaves those fields unknown.
+
 Plonk is selected over Groth16 for three reasons:
 
 - the baseline authorization paths execute in fewer than 520,000 instructions
@@ -313,12 +340,12 @@ On Linux, the 2 GiB `memory_limit` caps the native executor child process RSS. T
 outer Gnark process is outside this setting. The 7, 30, and 36 GiB failures confirm
 that the outer cgroup limit remains the operative total-memory boundary.
 
-The approved container sets `RAYON_NUM_THREADS=4`, `GOMAXPROCS=4`,
+The approved container sets `RAYON_NUM_THREADS=8`, `GOMAXPROCS=8`,
 `GOMEMLIMIT=24GiB`, and `GODEBUG=gctrace=1`. Docker restricts the process to CPUs
-`0-3`. The Compose memory and memory-plus-swap limits both equal 56 GiB. The runner
-requires four affinity-visible CPUs, the exact Go controls, and
+`0-7`. The Compose memory and memory-plus-swap limits both equal 56 GiB. The runner
+requires eight affinity-visible CPUs, the exact Go controls, and
 `memory.swap.max=0` before witness construction. The 56 GiB cgroup limit is the hard
-failure boundary for the approved attempt.
+failure boundary for the approved profile.
 
 The proof request uses:
 

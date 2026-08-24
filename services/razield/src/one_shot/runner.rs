@@ -231,9 +231,9 @@ fn read_guest_elf(path: &Path) -> Result<Vec<u8>, OneShotProtocolError> {
 
 fn validate_runtime_profile(cgroup_root: &Path) -> Result<(), OneShotProtocolError> {
     validate_cgroup(cgroup_root)?;
-    if !matches!(std::thread::available_parallelism().map(usize::from), Ok(4))
-        || std::env::var("RAYON_NUM_THREADS").as_deref() != Ok("4")
-        || std::env::var("GOMAXPROCS").as_deref() != Ok("4")
+    if !matches!(std::thread::available_parallelism().map(usize::from), Ok(8))
+        || std::env::var("RAYON_NUM_THREADS").as_deref() != Ok("8")
+        || std::env::var("GOMAXPROCS").as_deref() != Ok("8")
         || std::env::var("GOMEMLIMIT").as_deref() != Ok("24GiB")
     {
         return Err(OneShotProtocolError::ResourceProfile);

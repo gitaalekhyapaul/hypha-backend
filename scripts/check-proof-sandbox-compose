@@ -29,7 +29,9 @@ extract_service razield-proof-sandbox "$sandbox_output"
 extract_service razield-proof-worker "$worker_output"
 
 for exact_setting in \
-  'cpuset: 0-3' \
+  'cpuset: 0-7' \
+  'GOMAXPROCS: "8"' \
+  'RAYON_NUM_THREADS: "8"' \
   'mem_limit: "60129542144"' \
   'memswap_limit: "60129542144"' \
   'network_mode: none' \

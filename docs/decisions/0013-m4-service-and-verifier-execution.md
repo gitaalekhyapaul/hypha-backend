@@ -14,6 +14,8 @@
   instead of SDK `LightProver` in the isolated verifier build
 - Maintainer amendment on 2026-08-24: ADR-0017 defines the durable BullMQ
   cancellation-command queue that implements this record and control contract
+- Maintainer amendment on 2026-08-24: ADR-0012's validated eight-CPU proof profile
+  supplies the current M4 proof-worker measurements
 
 ## Context
 
@@ -22,16 +24,17 @@ fixture has these service-relevant measurements:
 
 ```text
 execution instructions = 422138
-execution time = 424 ms
-proof time = 1742106 ms
+execution time = 431 ms
+proof time = 929660 ms
 encoded proof artifact = 2537 bytes
-verification time = 479 ms
-proof-process peak memory = 46301016064 bytes
+verification time = 438 ms
+proof-process peak memory = 45592842240 bytes
 proof-process hard limit = 60129542144 bytes
+visible proof CPUs = 8
 parallel proof jobs = 1
 ```
 
-The proof takes about 29 minutes and peaks near 43.12 GiB. A request-serving process
+The proof takes about 15 minutes 30 seconds and peaks near 42.46 GiB. A request-serving process
 cannot perform that work inline. FR-066 already requires an asynchronous capability
 job API, and the Protobuf contract already exposes Create, Get, and Cancel operations
 with QUEUED, EXECUTING, PROVING, SUCCEEDED, FAILED, and CANCELED states.

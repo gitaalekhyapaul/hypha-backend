@@ -58,22 +58,22 @@ services:
   sp1-plonk-benchmark:
     <<: *toolchain-service
     command: ["./scripts/run-sp1-plonk-benchmark"]
-    cpuset: "0-3"
+    cpuset: "0-7"
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     read_only: true
     environment:
       CARGO_NET_OFFLINE: "true"
       GODEBUG: "gctrace=1"
-      GOMAXPROCS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      GOMAXPROCS: "${RAZIEL_SP1_WORKER_THREADS:-8}"
       GOMEMLIMIT: "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}"
       HOME: /tmp/raziel-home
-      RAYON_NUM_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      RAYON_NUM_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-8}"
       RAZIEL_SP1_BENCHMARK_PROFILE: "${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}"
       RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT: "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}"
       RAZIEL_SP1_EXPECTED_GO_DEBUG: "gctrace=1"
       RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-32212254720}"
-      RAZIEL_SP1_EXPECTED_VISIBLE_CPUS: "4"
-      RAZIEL_SP1_EXPECTED_WORKER_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-4}"
+      RAZIEL_SP1_EXPECTED_VISIBLE_CPUS: "8"
+      RAZIEL_SP1_EXPECTED_WORKER_THREADS: "${RAZIEL_SP1_WORKER_THREADS:-8}"
       RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
       SP1_PLONK_CIRCUIT_PATH: /opt/sp1/circuits/plonk
     mem_limit: "${RAZIEL_SP1_MEMORY_LIMIT:-30g}"
@@ -279,10 +279,10 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     command: ["/opt/raziel-runtime/razield-proof-launcher"]
     environment:
-      GOMAXPROCS: "4"
+      GOMAXPROCS: "8"
       GOMEMLIMIT: "24GiB"
       HOME: /tmp
-      RAYON_NUM_THREADS: "4"
+      RAYON_NUM_THREADS: "8"
       RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
       RAZIEL_GUEST_ELF_PATH: /opt/raziel-runtime/raziel-authorization-guest
       RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
@@ -292,7 +292,7 @@ services:
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
       SP1_PLONK_CIRCUIT_PATH: /opt/sp1/circuits/plonk
-    cpuset: "0-3"
+    cpuset: "0-7"
     mem_limit: "60129542144"
     memswap_limit: "60129542144"
     network_mode: none

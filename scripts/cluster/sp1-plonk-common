@@ -79,23 +79,23 @@ raziel_resolve_cluster_scheduler() {
 }
 
 raziel_configure_cluster_proof_profile() {
-  if [ "${RAZIEL_SP1_BENCHMARK_PROFILE:-cluster-56g}" != cluster-56g ] ||
+  if [ "${RAZIEL_SP1_BENCHMARK_PROFILE:-cluster-56g-8cpu}" != cluster-56g-8cpu ] ||
     [ "${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-60129542144}" != 60129542144 ] ||
     [ "${RAZIEL_SP1_MEMORY_LIMIT:-60129542144}" != 60129542144 ] ||
     [ "${RAZIEL_SP1_GO_MEMORY_LIMIT:-24GiB}" != 24GiB ] ||
-    [ "${RAZIEL_SP1_WORKER_THREADS:-4}" != 4 ] ||
+    [ "${RAZIEL_SP1_WORKER_THREADS:-8}" != 8 ] ||
     [ "${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-66571993088}" != 66571993088 ] ||
     [ "${RAZIEL_SP1_MINIMUM_DISK_BYTES:-64424509440}" != 64424509440 ]
   then
-    echo "the approved cluster-56g proof profile cannot be overridden" >&2
+    echo "the approved cluster-56g-8cpu proof profile cannot be overridden" >&2
     exit 1
   fi
 
-  RAZIEL_SP1_BENCHMARK_PROFILE=cluster-56g
+  RAZIEL_SP1_BENCHMARK_PROFILE=cluster-56g-8cpu
   RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES=60129542144
   RAZIEL_SP1_MEMORY_LIMIT=60129542144
   RAZIEL_SP1_GO_MEMORY_LIMIT=24GiB
-  RAZIEL_SP1_WORKER_THREADS=4
+  RAZIEL_SP1_WORKER_THREADS=8
   RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES=66571993088
   RAZIEL_SP1_MINIMUM_DISK_BYTES=64424509440
   export \
