@@ -16,18 +16,20 @@ use raziel_authorization_core::{
 use raziel_policy_ir::{CaveatValue, ContextEntry};
 use raziel_proto::raziel::v1::capability_service_client::CapabilityServiceClient;
 use raziel_proto::raziel::v1::{
-    AuthorizationContextEntry, CreateCapabilityRequest, ProofJobState, authorization_context_entry,
+    AuthorizationContextEntry, CancelCapabilityRequest, CreateCapabilityRequest,
+    GetCapabilityRequest, ProofJobState, authorization_context_entry,
 };
 use razield::admission::{LOCAL_PLONK_ADMISSION_WINDOW_SECONDS, admit_create_capability_request};
 use razield::private_envelope::{PrivateEnvelopeError, PrivateEnvelopeRef, PrivateEnvelopeStore};
 use razield::publication::CapabilityJobPublisher;
-use razield::queue::{CAPABILITY_QUEUE_NAME, QueueConfig};
+use razield::queue::{CANCELLATION_QUEUE_NAME, CAPABILITY_QUEUE_NAME, QueueConfig};
 use razield::service::{ServiceConfig, run_until_shutdown};
 use tokio::sync::oneshot;
 use tonic::Code;
 
 const PRIVATE_CONTEXT_VALUE: &str = "private-merchant-4829";
 const OBLITERATE_BATCH_SIZE: usize = 1_000;
+const LIVE_REQUEST_VALIDITY_MARGIN_SECONDS: i64 = 5 * 60;
 
 static TEST_ROOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -39,7 +41,8 @@ async fn live_create_uses_startup_reconciliation_and_returns_queued() -> TestRes
     let redis_url = required_env("RAZIEL_QUEUE_TEST_REDIS_URL")?;
     let prefix = unique_prefix();
     let queue_config = QueueConfig::new(redis_url.clone(), prefix.clone())?;
-    let queue = open_clean_queue(&queue_config).await?;
+    let queue = open_clean_queue(&queue_config, CAPABILITY_QUEUE_NAME).await?;
+    let cancellation_queue = open_clean_queue(&queue_config, CANCELLATION_QUEUE_NAME).await?;
     let root = TestRoot::new("capability-service");
     let store = PrivateEnvelopeStore::open(root.path())?;
     let trusted_now = unix_now()?;
@@ -99,6 +102,36 @@ async fn live_create_uses_startup_reconciliation_and_returns_queued() -> TestRes
     assert!(job.metrics.is_none());
     assert!(!format!("{job:?}").contains(PRIVATE_CONTEXT_VALUE));
 
+    let fetched = client
+        .get_capability(GetCapabilityRequest {
+            job_id: admitted.job_id().to_owned(),
+        })
+        .await?
+        .into_inner()
+        .job
+        .ok_or_else(|| io::Error::other("GetCapability returned no job"))?;
+    assert_eq!(fetched.state, ProofJobState::Queued as i32);
+
+    for _ in 0..2 {
+        let canceled = client
+            .cancel_capability(CancelCapabilityRequest {
+                job_id: admitted.job_id().to_owned(),
+            })
+            .await?
+            .into_inner()
+            .job
+            .ok_or_else(|| io::Error::other("CancelCapability returned no job"))?;
+        assert_eq!(canceled.state, ProofJobState::Queued as i32);
+    }
+    assert_eq!(cancellation_queue.get_job_counts().await?.waiting, 1);
+    let command = cancellation_queue
+        .get_job(admitted.job_id())
+        .await?
+        .ok_or_else(|| io::Error::other("cancellation command is missing"))?;
+    let command_json = serde_json::to_string(command.data())?;
+    assert!(!command_json.contains(PRIVATE_CONTEXT_VALUE));
+    assert!(!command_json.contains("private_envelope"));
+
     let mut mutated = request;
     mutated.resource_scope.push_str("-changed");
     let error = client.create_capability(mutated).await.unwrap_err();
@@ -110,6 +143,7 @@ async fn live_create_uses_startup_reconciliation_and_returns_queued() -> TestRes
         .map_err(|_| io::Error::other("service shutdown receiver closed"))?;
     server.await??;
     clean_queue(&queue).await?;
+    clean_queue(&cancellation_queue).await?;
     println!("capability_service_live=pass");
     Ok(())
 }
@@ -131,8 +165,8 @@ fn unique_prefix() -> String {
     )
 }
 
-async fn open_clean_queue(config: &QueueConfig) -> TestResult<Queue> {
-    let queue = Queue::with_options(CAPABILITY_QUEUE_NAME, config.queue_options()).await?;
+async fn open_clean_queue(config: &QueueConfig, queue_name: &str) -> TestResult<Queue> {
+    let queue = Queue::with_options(queue_name, config.queue_options()).await?;
     queue.remove_global_concurrency().await?;
     queue.obliterate(true, OBLITERATE_BATCH_SIZE).await?;
     Ok(queue)
@@ -157,7 +191,9 @@ fn valid_request(trusted_now: i64, nonce_byte: u8, agent_id: &str) -> CreateCapa
         resource_type: "payment_batch".into(),
         resource_scope: "batch:synthetic-001".into(),
         requested_expires_at: Some(Timestamp {
-            seconds: trusted_now + LOCAL_PLONK_ADMISSION_WINDOW_SECONDS,
+            seconds: trusted_now
+                + LOCAL_PLONK_ADMISSION_WINDOW_SECONDS
+                + LIVE_REQUEST_VALIDITY_MARGIN_SECONDS,
             nanos: 0,
         }),
         issuance_nonce: vec![nonce_byte; 32],

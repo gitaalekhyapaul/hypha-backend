@@ -123,7 +123,8 @@ flowchart LR
         C["SpiceDB compiler adapter\nGo build-time tool"]
         PA["Policy authority\nreview and signature"]
         R["razield API\nRust job controller"]
-        Q["BullMQ and Redis\nowner-only queue state"]
+        Q["BullMQ proof-jobs\nowner-only Redis state"]
+        CQ["BullMQ cancellation-commands\ndurable control records"]
         B["Private envelope store\nbounded owner-only blobs"]
         D["Private snapshot store\nroot-keyed owner-only records"]
         RW["Registry writer\nowner-only Unix socket"]
@@ -140,8 +141,10 @@ flowchart LR
         R -->|"append or revoke signed root"| RW
         RW -->|"atomic validated generation"| PR
         R -->|"publish and query"| Q
+        R -->|"publish and query"| CQ
         R -->|"write private envelope"| B
         Q <-->|"claim, renew, finish"| W
+        CQ <-->|"claim, reconcile, finish"| W
         B -->|"bounded private input"| W
         W -->|"bounded local protocol"| L
         L -->|"spawn one in proof cgroup"| E
@@ -164,7 +167,7 @@ flowchart LR
 The `verifierd` process must never call `razield`. That invariant keeps proof
 verification separate from issuer trust.
 
-The API, BullMQ queue, private envelope store, supervisor, and one-shot prover are the
+The API, BullMQ queues, private envelope store, supervisor, and one-shot prover are the
 accepted M4 target in
 [ADR-0013](docs/decisions/0013-m4-service-and-verifier-execution.md). Implementation
 started with a passing queue conformance gate. The gate covers request-ID
@@ -220,15 +223,13 @@ time, calls admission, publishes the job, and returns the authoritative queued r
 Malformed and oversized requests cause no publication or private-file side effect.
 Exact duplicates return their retained queued record. Authorization-bound mutations
 fail before publication. The display-only `agent_id` does not change job identity.
-`GetCapability` and `CancelCapability` remain closed as unimplemented. The worker can
-now store a typed public terminal result, but the API does not expose it yet.
 
 The proof supervisor uses the official BullMQ worker for claim, lock renewal,
 one-job concurrency, stalled handling, and terminal retention. It validates the exact
 job name, identity, payload, and persisted queue policy before private storage access.
 The claimed processor loads one commitment-bound envelope, rechecks the 75-minute
-window with trusted whole-second time, publishes a closed `EXECUTING` phase, and calls
-a narrow one-shot executor contract. A fixed one-hour deadline and 30-second exit
+window with trusted whole-second time, publishes closed `EXECUTING` and `PROVING`
+phases, and calls a narrow one-shot executor contract. A fixed one-hour deadline and 30-second exit
 grace bound that handoff. Cancellation reaches active execution before envelope
 deletion. Supervisor shutdown cancels active work, closes the worker, and confirms no
 active jobs remain. Production startup constructs only the fixed Unix-socket executor
@@ -283,8 +284,16 @@ generates one fresh 32-byte salt. It stores the immutable private snapshot first
 The networkless registry writer then validates the signed descriptor and atomically
 publishes a complete next generation through an owner-only Unix socket. `razield`
 reloads its read-only registry view before returning. Build, read, revoke, and live
-SpiceDB compatibility gates pass. Capability lifecycle RPCs and independent
-retained-proof verification remain pending.
+SpiceDB compatibility gates pass.
+
+The B-0027 lifecycle boundary strictly decodes retained proof progress, terminal
+capabilities, metrics, failure classes, and timestamps. A second BullMQ queue stores
+public cancellation commands before any target mutation. The same supervisor process
+removes waiting jobs or signals active work. It reports `CANCELED` only after private
+cleanup. Duplicate calls return the retained outcome. Bounded reads reconcile rapid
+cross-queue transitions, and persistent mismatches fail closed. Startup recovery
+finishes commands retained before or after proof-job removal. Independent
+retained-proof verification remains pending.
 
 ## Main components
 
@@ -433,9 +442,9 @@ sequenceDiagram
     R-->>A: Job ID and QUEUED state
     W->>Q: Claim one job and renew its lock
     W->>Q: Record EXECUTING
+    W->>Q: Record PROVING
     W->>E: Launch with bounded private envelope
     E->>E: Resolve snapshot and build private witness
-    W->>Q: Record PROVING
     E->>E: Execute and prove SP1 guest
     E-->>W: Return bounded public result
     W->>B: Delete private envelope

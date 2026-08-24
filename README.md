@@ -89,6 +89,14 @@ atomically advances a fully validated generation. `razield` keeps a read-only mo
 `BuildSnapshot`, `GetSnapshot`, and `RevokeSnapshot` pass a live Compose lifecycle
 gate against SpiceDB `v1.54.0` through the pinned Authzed `v1.53.0` generated API.
 
+The B-0027 capability lifecycle reads strict public state from retained BullMQ
+records. `GetCapability` returns queued, executing, proving, succeeded, failed, or
+canceled jobs. `CancelCapability` publishes one durable command on a separate
+`cancellation-commands` queue. The proof supervisor removes waiting jobs or signals
+active work, waits for private cleanup, and retains a closed cancellation outcome.
+Bounded snapshot retries cover BullMQ state transitions. Startup recovery finishes
+commands retained before or after proof-job removal.
+
 Live and focused tests cover
 startup cleanup, exact duplicates, bound mutations, request ceilings, publication,
 queue lifecycle, worker claim and cleanup, stalled failure, Redis restart recovery,
@@ -96,8 +104,9 @@ positive-path selection, caveated relationships, denial, snapshot mismatch, trus
 input assembly, private snapshot persistence, strict child transport, fixed cgroup
 checks, launcher cancellation and exit, terminal capability publication, rendered
 sandbox controls, exact-revision snapshot publication, atomic root registration,
-revocation, and expiry bounds. `GetCapability`, `CancelCapability`, and the
-retained-proof independent-verifier gate remain pending.
+revocation, expiry bounds, public lifecycle projection, queued and active
+cancellation, duplicate cancellation, and cancellation recovery. The retained-proof
+independent-verifier gate remains pending.
 
 ## Read first
 

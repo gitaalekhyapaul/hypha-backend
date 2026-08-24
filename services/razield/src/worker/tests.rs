@@ -42,8 +42,11 @@ use crate::private_envelope::{
     DeleteStatus, PrivateCapabilityEnvelope, PrivateEnvelopeError, PrivateEnvelopeRef,
     PrivateEnvelopeStore,
 };
-use crate::publication::{CAPABILITY_JOB_NAME, CapabilityJobPayload};
-use crate::queue::CAPABILITY_QUEUE_NAME;
+use crate::publication::{
+    CAPABILITY_JOB_NAME, CapabilityJobPayload, CapabilityJobPublisher, CapabilityLifecycleError,
+    PublicCapabilityJobState,
+};
+use crate::queue::{CANCELLATION_QUEUE_NAME, CAPABILITY_QUEUE_NAME, QueueConfig};
 use crate::service::{ClockError, TrustedClock};
 
 const TRUSTED_NOW: i64 = 1_800_000_000;
@@ -184,7 +187,13 @@ async fn valid_claim_uses_closed_progress_then_executes_and_deletes() {
         .process(fixture.reference, CancellationToken::new(), &mut progress)
         .await
         .unwrap();
-    assert_eq!(progress.phases(), &[SupervisorProgressPhase::Executing]);
+    assert_eq!(
+        progress.phases(),
+        &[
+            SupervisorProgressPhase::Executing,
+            SupervisorProgressPhase::Proving,
+        ]
+    );
     assert_eq!(fixture.store.reads(), 1);
     assert_eq!(fixture.store.deletes(), 1);
     assert_eq!(fixture.executor.invocations(), 1);
@@ -219,6 +228,24 @@ async fn progress_failure_stops_before_private_read_and_removes_the_envelope() {
     assert_eq!(error.class(), SupervisorFailureClass::ProgressUnavailable);
     assert_eq!(error.public_class(), PublicFailureClass::ServiceUnavailable);
     assert_eq!(fixture.store.reads(), 0);
+    assert_eq!(fixture.store.deletes(), 1);
+    assert_eq!(fixture.executor.invocations(), 0);
+}
+
+#[tokio::test]
+async fn proving_progress_failure_stops_before_executor_and_removes_the_envelope() {
+    let fixture = WorkerFixture::new("proving-progress-failure", ExecutorBehavior::Complete);
+    let mut progress = RecordingProgress::failing_on(SupervisorProgressPhase::Proving);
+
+    let error = fixture
+        .processor
+        .process(fixture.reference, CancellationToken::new(), &mut progress)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.class(), SupervisorFailureClass::ProgressUnavailable);
+    assert_eq!(error.public_class(), PublicFailureClass::ServiceUnavailable);
+    assert_eq!(fixture.store.reads(), 1);
     assert_eq!(fixture.store.deletes(), 1);
     assert_eq!(fixture.executor.invocations(), 0);
 }
@@ -343,7 +370,13 @@ async fn active_cancellation_reaches_the_executor_before_cleanup() {
     assert_eq!(error.class(), SupervisorFailureClass::Cancelled);
     assert_eq!(error.public_class(), PublicFailureClass::Canceled);
     assert_eq!(error.public_class().redis_reason(), "CANCELED");
-    assert_eq!(progress.phases(), &[SupervisorProgressPhase::Executing]);
+    assert_eq!(
+        progress.phases(),
+        &[
+            SupervisorProgressPhase::Executing,
+            SupervisorProgressPhase::Proving,
+        ]
+    );
     assert_eq!(fixture.store.deletes(), 1);
     assert_eq!(fixture.executor.invocations(), 1);
 }
@@ -802,7 +835,7 @@ async fn live_worker_claims_one_job_and_retains_only_the_public_capability()
     assert_eq!(return_value["artifact_bytes"], 15);
     match retained.progress() {
         JobProgress::Object(value) => {
-            assert_eq!(value, &SupervisorProgressPhase::Executing.to_public_value())
+            assert_eq!(value, &SupervisorProgressPhase::Proving.to_public_value())
         }
         JobProgress::Number(_) => return Err("worker progress used an open numeric value".into()),
     }
@@ -816,4 +849,245 @@ async fn live_worker_claims_one_job_and_retains_only_the_public_capability()
     queue.close().await;
     println!("bullmq_supervisor_terminal_success=pass");
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the digest-pinned Redis conformance service"]
+async fn live_worker_cancels_waiting_and_active_jobs_with_retained_commands()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    let redis_url = std::env::var("RAZIEL_QUEUE_TEST_REDIS_URL")?;
+    let root = TestRoot::new("live-cancellation");
+    let prefix = format!(
+        "raziel-cancellation-live-{}-{}",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    );
+    let config = SupervisorConfig::from_values(
+        &redis_url,
+        &prefix,
+        root.path().to_str().ok_or("test root is not UTF-8")?,
+    )?;
+    let queue_config = QueueConfig::new(&redis_url, &prefix)?;
+    let proof_queue =
+        Queue::with_options(CAPABILITY_QUEUE_NAME, queue_config.queue_options()).await?;
+    let cancellation_queue =
+        Queue::with_options(CANCELLATION_QUEUE_NAME, queue_config.queue_options()).await?;
+    proof_queue.obliterate(true, 1_000).await?;
+    cancellation_queue.obliterate(true, 1_000).await?;
+
+    let store = PrivateEnvelopeStore::open(root.path())?;
+    let publisher = CapabilityJobPublisher::connect(store.clone(), &queue_config).await?;
+    let active = admitted_request(0xe1);
+    let waiting = admitted_request(0xe2);
+    publisher.publish(&active).await?;
+    publisher.publish(&waiting).await?;
+    let active_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", active.job_id()))?;
+    let waiting_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", waiting.job_id()))?;
+
+    let executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
+    let supervisor = ProofSupervisor::start_with_clock(
+        config,
+        Arc::clone(&executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
+        Arc::new(FixedClock(TRUSTED_NOW)),
+        super::ProofSupervisorActivation::library_plumbing(),
+    )
+    .await?;
+    tokio::time::timeout(Duration::from_secs(10), executor.wait_until_started()).await?;
+
+    let queued_response = publisher
+        .cancel(waiting.job_id())
+        .await
+        .map_err(|error| format!("waiting cancellation publication failed: {error:?}"))?;
+    assert!(matches!(
+        queued_response.state(),
+        PublicCapabilityJobState::Queued | PublicCapabilityJobState::Canceled
+    ));
+    let canceled_waiting = wait_for_public_state(
+        &publisher,
+        waiting.job_id(),
+        PublicCapabilityJobState::Canceled,
+    )
+    .await?;
+    assert!(canceled_waiting.capability().is_none());
+    assert!(proof_queue.get_job(waiting.job_id()).await?.is_none());
+    assert!(!root.envelope_path(&waiting_reference).exists());
+
+    let active_response = publisher
+        .cancel(active.job_id())
+        .await
+        .map_err(|error| format!("active cancellation publication failed: {error:?}"))?;
+    assert!(matches!(
+        active_response.state(),
+        PublicCapabilityJobState::Executing
+            | PublicCapabilityJobState::Proving
+            | PublicCapabilityJobState::Canceled
+    ));
+    let canceled_active = wait_for_public_state(
+        &publisher,
+        active.job_id(),
+        PublicCapabilityJobState::Canceled,
+    )
+    .await?;
+    assert!(canceled_active.capability().is_none());
+    assert!(!root.envelope_path(&active_reference).exists());
+    let active_job = proof_queue
+        .get_job(active.job_id())
+        .await?
+        .ok_or("active cancellation lost its proof record")?;
+    assert_eq!(active_job.failed_reason(), "CANCELED");
+
+    let duplicate = publisher
+        .cancel(active.job_id())
+        .await
+        .map_err(|error| format!("duplicate cancellation read failed: {error:?}"))?;
+    assert_eq!(duplicate.state(), PublicCapabilityJobState::Canceled);
+    wait_for_completed_commands(&cancellation_queue, 2).await?;
+    for job_id in [active.job_id(), waiting.job_id()] {
+        let command = cancellation_queue
+            .get_job(job_id)
+            .await?
+            .ok_or("retained cancellation command is missing")?;
+        let data = serde_json::to_string(command.data())?;
+        let result = command.returnvalue();
+        assert!(!data.contains(PRIVATE_CONTEXT_VALUE));
+        assert!(!result.contains(PRIVATE_CONTEXT_VALUE));
+        assert!(result.contains("CANCELED"));
+    }
+
+    store.stage(&waiting)?;
+    assert!(root.envelope_path(&waiting_reference).exists());
+    publisher
+        .reconcile_startup(SystemTime::now(), Duration::from_secs(10 * 60))
+        .await?;
+    assert!(!root.envelope_path(&waiting_reference).exists());
+
+    publisher.close().await;
+    supervisor.close().await?;
+    proof_queue.remove_global_concurrency().await?;
+    cancellation_queue.remove_global_concurrency().await?;
+    proof_queue.obliterate(true, 1_000).await?;
+    cancellation_queue.obliterate(true, 1_000).await?;
+    proof_queue.close().await;
+    cancellation_queue.close().await;
+    println!("bullmq_supervisor_cancellation=pass");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the digest-pinned Redis conformance service"]
+async fn live_cancellation_worker_recovers_retained_commands_before_and_after_target_removal()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    let redis_url = std::env::var("RAZIEL_QUEUE_TEST_REDIS_URL")?;
+    let root = TestRoot::new("live-cancellation-recovery");
+    let prefix = format!(
+        "raziel-cancellation-recovery-{}-{}",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    );
+    let config = SupervisorConfig::from_values(
+        &redis_url,
+        &prefix,
+        root.path().to_str().ok_or("test root is not UTF-8")?,
+    )?;
+    let queue_config = QueueConfig::new(&redis_url, &prefix)?;
+    let proof_queue =
+        Queue::with_options(CAPABILITY_QUEUE_NAME, queue_config.queue_options()).await?;
+    let cancellation_queue =
+        Queue::with_options(CANCELLATION_QUEUE_NAME, queue_config.queue_options()).await?;
+    proof_queue.obliterate(true, 1_000).await?;
+    cancellation_queue.obliterate(true, 1_000).await?;
+
+    let store = PrivateEnvelopeStore::open(root.path())?;
+    let publisher = CapabilityJobPublisher::connect(store, &queue_config).await?;
+    let before_removal = admitted_request(0xf1);
+    let after_removal = admitted_request(0xf2);
+    publisher.publish(&before_removal).await?;
+    publisher.publish(&after_removal).await?;
+    publisher.cancel(before_removal.job_id()).await?;
+    publisher.cancel(after_removal.job_id()).await?;
+    assert!(proof_queue.remove(after_removal.job_id()).await?);
+
+    let before_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", before_removal.job_id()))?;
+    let after_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", after_removal.job_id()))?;
+    assert!(root.envelope_path(&before_reference).exists());
+    assert!(root.envelope_path(&after_reference).exists());
+
+    let executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
+    let supervisor = ProofSupervisor::start_with_clock(
+        config,
+        Arc::clone(&executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
+        Arc::new(FixedClock(TRUSTED_NOW)),
+        super::ProofSupervisorActivation::library_plumbing(),
+    )
+    .await?;
+
+    wait_for_public_state(
+        &publisher,
+        before_removal.job_id(),
+        PublicCapabilityJobState::Canceled,
+    )
+    .await
+    .map_err(|error| format!("pre-removal command recovery failed: {error}"))?;
+    wait_for_public_state(
+        &publisher,
+        after_removal.job_id(),
+        PublicCapabilityJobState::Canceled,
+    )
+    .await
+    .map_err(|error| format!("post-removal command recovery failed: {error}"))?;
+    wait_for_completed_commands(&cancellation_queue, 2).await?;
+    assert!(!root.envelope_path(&before_reference).exists());
+    assert!(!root.envelope_path(&after_reference).exists());
+
+    publisher.close().await;
+    supervisor.close().await?;
+    proof_queue.remove_global_concurrency().await?;
+    cancellation_queue.remove_global_concurrency().await?;
+    proof_queue.obliterate(true, 1_000).await?;
+    cancellation_queue.obliterate(true, 1_000).await?;
+    proof_queue.close().await;
+    cancellation_queue.close().await;
+    println!("bullmq_cancellation_recovery=pass");
+    Ok(())
+}
+
+async fn wait_for_completed_commands(
+    queue: &Queue,
+    expected: u64,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        if queue.get_job_counts().await?.completed == expected {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err("timed out waiting for retained cancellation commands".into());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+async fn wait_for_public_state(
+    publisher: &CapabilityJobPublisher,
+    job_id: &str,
+    expected: PublicCapabilityJobState,
+) -> Result<crate::publication::RetainedCapabilityJob, Box<dyn Error + Send + Sync>> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        match publisher.get(job_id).await {
+            Ok(current) if current.state() == expected => return Ok(current),
+            Ok(_) | Err(CapabilityLifecycleError::QueueRecordMismatch) => {}
+            Err(error) => return Err(format!("lifecycle poll failed: {error:?}").into()),
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err("public lifecycle state did not converge".into());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }

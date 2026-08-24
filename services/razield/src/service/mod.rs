@@ -12,7 +12,7 @@ pub use clock::{ClockError, SystemClock, TrustedClock};
 pub use config::{
     MAX_SERVICE_MESSAGE_BYTES, ORPHAN_GRACE_PERIOD, ServiceConfig, ServiceConfigError,
 };
-pub use handler::{CapabilityPublisher, CapabilityServiceHandler, bounded_capability_service};
+pub use handler::{CapabilityJobAccess, CapabilityServiceHandler, bounded_capability_service};
 pub use runtime::{ServiceRuntimeError, run_from_env, run_until_shutdown};
 pub use snapshot_config::{SnapshotServiceConfig, SnapshotServiceConfigError};
 pub use snapshot_handler::{SnapshotOperations, SnapshotServiceHandler, bounded_snapshot_service};

@@ -1,5 +1,5 @@
 use bullmq::types::JobState;
-use bullmq::{Error as BullMqError, Job, JobOptions, Queue};
+use bullmq::{Error as BullMqError, Job, JobOptions, JobProgress, Queue};
 
 use super::CAPABILITY_JOB_NAME;
 use super::payload::{CapabilityJobPayload, PayloadError};
@@ -20,6 +20,9 @@ pub(super) struct RetainedQueueJob {
     pub timestamp_ms: u64,
     pub processed_on_ms: Option<u64>,
     pub finished_on_ms: Option<u64>,
+    pub progress: JobProgress,
+    pub failed_reason: String,
+    pub return_value: String,
 }
 
 impl RetainedQueueJob {
@@ -123,6 +126,9 @@ impl From<(Job, JobState)> for RetainedQueueJob {
             timestamp_ms: job.timestamp(),
             processed_on_ms: job.processed_on(),
             finished_on_ms: job.finished_on(),
+            progress: job.progress().clone(),
+            failed_reason: job.failed_reason().to_owned(),
+            return_value: job.returnvalue().to_owned(),
         }
     }
 }
@@ -131,7 +137,7 @@ fn job_policy_matches(job: &Job) -> bool {
     serde_json::to_value(job.opts()).ok() == serde_json::to_value(retained_job_options()).ok()
 }
 
-fn map_read_error(error: BullMqError) -> QueueReadError {
+pub(super) fn map_read_error(error: BullMqError) -> QueueReadError {
     match error {
         BullMqError::Serialization(_) | BullMqError::InvalidConfig(_) => {
             QueueReadError::CorruptRecord
@@ -140,7 +146,7 @@ fn map_read_error(error: BullMqError) -> QueueReadError {
     }
 }
 
-fn map_add_error(error: BullMqError) -> QueueAddError {
+pub(super) fn map_add_error(error: BullMqError) -> QueueAddError {
     match error {
         BullMqError::Serialization(_)
         | BullMqError::InvalidConfig(_)

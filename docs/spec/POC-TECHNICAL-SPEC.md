@@ -1107,7 +1107,9 @@ Status: active implementation. The maintainer accepted
 [ADR-0015](../decisions/0015-private-snapshot-and-one-shot-prover-boundary.md) on
 2026-08-23, then accepted
 [ADR-0016](../decisions/0016-runtime-snapshot-publication-and-spicedb-adapter.md)
-on 2026-08-24. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
+on 2026-08-24, then accepted
+[ADR-0017](../decisions/0017-durable-capability-cancellation-control.md) on
+2026-08-24. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
 Tonic `0.14.6` service contracts compile behind an explicit feature. The pure
 `razield` admission boundary now performs typed request conversion, raw-key Ed25519
 thumbprint derivation, exact commitment signature verification, deterministic job-ID
@@ -1174,8 +1176,12 @@ operations over a `0600` Unix socket, and atomically publishes a validated compl
 generation. `razield` reloads its read-only registry view before returning.
 `BuildSnapshot`, `GetSnapshot`, and `RevokeSnapshot` pass a live Compose lifecycle
 gate. The generated Authzed `v1.53.0` API passes against the pinned SpiceDB `v1.54.0`
-server. `GetCapability`, `CancelCapability`, and independent verifier behavior remain
-pending. The verification-only
+server. The B-0027 runtime strictly maps retained BullMQ proof state into
+`GetCapability`. `CancelCapability` publishes one durable public command before the
+supervisor removes a waiting job or signals active work. Duplicate commands retain
+one result. Terminal proof jobs remain immutable. Startup recovery completes cleanup
+for commands retained before or after target removal. Independent verifier behavior
+remains pending. The verification-only
 Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
 `6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and

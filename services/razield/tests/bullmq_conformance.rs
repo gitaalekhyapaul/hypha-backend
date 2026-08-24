@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use bullmq::types::{JobCounts, KeepJobs, RemoveOnFinish};
-use bullmq::worker::{CancellationToken, WorkerEvent};
+use bullmq::types::{JobCounts, JobState, KeepJobs, RemoveOnFinish};
+use bullmq::worker::CancellationToken;
 use bullmq::{Job, JobProgress, Queue, QueueEvent, QueueEvents, QueueEventsOptions, Worker};
 use razield::queue::{GLOBAL_CONCURRENCY, QueueConfig};
 use tokio::time::Instant;
@@ -232,31 +232,24 @@ async fn verify_lock_cancellation_progress_and_retention() -> TestResult {
     let deadline = Instant::now() + WAIT_TIMEOUT;
     let mut cancellation_requested = false;
     while !cancellation_seen.load(Ordering::SeqCst) {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
+        if Instant::now() >= deadline {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
                 "timed out waiting for active cancellation",
             )
             .into());
         }
-        let event = tokio::time::timeout(remaining, worker.next_event())
-            .await
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "timed out waiting for a worker event",
-                )
-            })?
-            .ok_or_else(|| io::Error::other("worker event channel closed"))?;
-
-        if let WorkerEvent::Active { job_id } = event
-            && job_id == "cancel-active-1"
-            && !cancellation_requested
-        {
-            assert!(worker.cancel_job(&job_id).await);
-            cancellation_requested = true;
+        if !cancellation_requested {
+            let job = queue
+                .get_job("cancel-active-1")
+                .await?
+                .ok_or_else(|| io::Error::other("active cancellation job is missing"))?;
+            if job.get_state().await? == JobState::Active {
+                assert!(worker.cancel_job("cancel-active-1").await);
+                cancellation_requested = true;
+            }
         }
+        tokio::time::sleep(POLL_INTERVAL).await;
     }
 
     let counts = wait_for_counts(&queue, "bounded completed-job retention", |counts| {

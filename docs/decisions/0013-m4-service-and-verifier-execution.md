@@ -12,6 +12,8 @@
   queue semantics through a filesystem spool
 - Maintainer amendment on 2026-08-12: use direct `sp1-verifier` Plonk verification
   instead of SDK `LightProver` in the isolated verifier build
+- Maintainer amendment on 2026-08-24: ADR-0017 defines the durable BullMQ
+  cancellation-command queue that implements this record and control contract
 
 ## Context
 

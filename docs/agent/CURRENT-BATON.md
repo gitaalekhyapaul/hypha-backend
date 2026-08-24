@@ -1,115 +1,114 @@
 # Current Engineering Baton
 
-- Baton ID: B-0027
+- Baton ID: B-0028
 - State: READY
-- Milestone: M4, capability lifecycle RPCs
+- Milestone: M4, proof resource profile reconciliation
 - Owner: unassigned
 - Started UTC: None
-- Last updated UTC: 2026-08-24T05:48:03Z
+- Last updated UTC: 2026-08-24T11:33:29Z
 - Branch: `main`
-- Worktree: B-0026 is archived. Inspect Git before claiming B-0027.
+- Worktree: B-0027 is archived. Inspect Git before claiming B-0028.
 
 ## Objective
 
-Implement authoritative `GetCapability` and `CancelCapability` behavior over the
-retained BullMQ job state. Return only validated public lifecycle data and propagate
-active cancellation through the existing proof supervisor.
+Adopt the validated eight-CPU SP1 Plonk profile across production Compose, proof
+checks, approved decisions, current documentation, and durable benchmark evidence.
 
 ## Acceptance Criteria
 
-- [ ] `GetCapability` validates the job identifier and returns the authoritative
-      queued, executing, failed, cancelled, or completed public state.
-- [ ] A completed response exposes only the retained bound `ProofCapability` and
-      approved aggregate metrics.
-- [ ] `CancelCapability` handles waiting and active jobs through the existing BullMQ
-      and supervisor cancellation contracts.
-- [ ] Duplicate cancellation is deterministic. Terminal jobs cannot be reopened or
-      altered.
-- [ ] Missing, malformed, stale, and queue-failure paths return stable generic RPC
-      errors with typed private causes.
-- [ ] No lifecycle response or Redis mutation exposes private envelopes, requests,
-      relationships, caveat values, salt, witness data, proof input, or paths.
-- [ ] Focused service, live Redis, worker, privacy, formatting, lint, and diff gates
-      pass without running SP1.
+- [ ] Production and benchmark proof profiles use CPUs `0-7`, `GOMAXPROCS=8`, and
+      `RAYON_NUM_THREADS=8`.
+- [ ] Proof controls retain the 56 GiB memory cap, zero swap, one-hour proof deadline,
+      and 75-minute capability admission window.
+- [ ] Host and Compose checks require eight visible proof CPUs and reject drift.
+- [ ] ADR-0012 and ADR-0015 record the approved resource-profile amendment.
+- [ ] The later VM benchmark is stored as durable public evidence with its source,
+      timing, peak memory, verification result, and zero-OOM result.
+- [ ] Current-state documentation no longer presents four CPUs as the approved
+      production profile.
+- [ ] Focused checks, formatting, lint, package tests, privacy scans, and diff gates
+      pass without generating another SP1 proof.
 
 ## Architecture Constraints
 
-- ADR-0013 fixes the API-job topology, queue lifecycle, cancellation, retry, timeout,
-  cleanup, and public retention rules.
-- ADR-0014 fixes request identity and job-ID derivation.
-- ADR-0015 fixes the one-shot cancellation acknowledgment and cleanup order.
-- ADR-0016 fixes snapshot publication and remains unchanged.
-- The API never reads a private envelope to answer Get or Cancel.
-- A completed capability must already have passed terminal proof and claim validation.
-- A real SP1 proof run remains separately approval-gated.
+- Proof semantics, public values, keys, artifacts, and witness handling do not change.
+- The existing 56 GiB memory and memory-plus-swap caps remain equal.
+- The proof process retains no network and runs with a read-only root filesystem.
+- The one-hour proof deadline and 75-minute admission window remain unchanged.
+- Existing operator-provided VM output is the evidence source. B-0028 does not run a
+  new SP1 proof.
+- No package, CLI, runtime, or system dependency is added.
 
 ## File Scope
 
-- Existing capability service handlers and lifecycle types under
-  `services/razield/src/service/`
-- Existing queue, publication, and worker cancellation APIs under
-  `services/razield/src/`
-- Focused capability lifecycle and live Redis tests
-- Current-state README, architecture, technical specification, and baton documents
+- Production and benchmark proof services in `docker-compose.yml`
+- Proof resource checks and cluster benchmark scripts
+- ADR-0012 and ADR-0015 amendments
+- Public SP1 benchmark evidence
+- Current-state README, architecture, runbook, specification, and baton documents
 
 ## Out of Scope
 
+- Capability lifecycle behavior completed in B-0027
 - Independent `verifierd` service behavior
-- Snapshot publication or registry-writer changes
-- Proof protocol, proof generation, guest, canonical hash, or public capability changes
-- M5 frontend and gateway work, M6 real-data acceptance, M7, or another scenario
+- Proof protocol, guest, canonical commitments, or capability format
+- New proof generation, dependency changes, M5, M6, M7, or another scenario
 
 ## Decisions
 
-- Inherited: ADR-0013 through ADR-0016.
-- Inherited: B-0025 stores only validated public terminal capability data in BullMQ.
-- Inherited: B-0026 completes the runtime SnapshotService lifecycle.
-- None made for B-0027.
+- Approved by the maintainer on 2026-08-24: adopt eight CPUs as the production proof
+  profile after B-0027.
+- Evidence supplied by the maintainer: the eight-CPU VM run completed proving in
+  929,660 ms, verification in 438 ms, and peaked at 45,592,842,240 bytes with no OOM
+  or swap use.
+- Inherited: the four-CPU run remains valid historical benchmark evidence.
 
 ## Open Questions and Blockers
 
-- None. Reconcile the exact ADR-0013 cancellation and terminal-state contract before
-  claiming the baton.
+- None. Confirm the source commit and complete metric set from the supplied VM output
+  before writing the benchmark record.
 
 ## Work Completed
 
-- B-0026 completed exact SpiceDB snapshot publication, private storage, signing,
-  atomic root registration, read, and revocation.
-- The current CapabilityService keeps Get and Cancel closed as unimplemented.
+- B-0027 completed and archived authoritative capability lifecycle RPCs.
+- The maintainer compared the later eight-CPU VM result with the checked-in four-CPU
+  benchmark and approved the resource-profile amendment.
+- The current repository still pins production and benchmark proving to CPUs `0-3`.
 
 ## Validation Plan
 
-- Inspect the generated CapabilityService contract and existing queue state mapping.
-- Implement the smallest lifecycle boundary over authoritative BullMQ records.
-- Test every public state, active and waiting cancellation, terminal idempotency,
-  malformed identifiers, queue failures, and private-data exclusion.
-- Run focused tests, live Redis conformance, affected service tests, formatting, lint,
-  privacy scans, and `git diff --check`.
+- Import the supplied VM evidence without changing its measured values.
+- Reconcile every current four-CPU resource setting and assertion.
+- Keep memory, swap, network, filesystem, timeout, and admission controls unchanged.
+- Run focused Compose and cluster checks, formatting, lint, package tests, privacy
+  scans, and `git diff --check`.
 - Do not run SP1.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0026 archive | PASS | Runtime snapshot publication and revocation | 2026-08-24T05:48:03Z |
-| B-0027 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T05:48:03Z |
+| B-0027 archive | PASS | Capability lifecycle RPCs | 2026-08-24T11:33:29Z |
+| Eight-CPU profile approval | PASS, accepted by maintainer | Production proof resource profile | 2026-08-24T11:33:29Z |
+| Eight-CPU VM proof result | PASS, operator-provided | Plonk prove, verify, resource, and OOM metrics | 2026-08-24T11:33:29Z |
+| B-0028 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T11:33:29Z |
 
 ## Privacy Checks
 
-- PASS: B-0026 public snapshot RPCs expose no private snapshot inputs.
-- NOT AVAILABLE: B-0027 lifecycle responses are not implemented.
-- NOT APPLICABLE: Independent verifier behavior belongs to a later baton.
+- PASS: the supplied benchmark output contains public toolchain and aggregate resource
+  evidence. It contains no witness, relationship, caveat, salt, or private envelope.
+- NOT APPLICABLE: no proof or private input will be generated in this baton.
 
 ## Risks and Private-Data Notes
 
-- Queue records are the authoritative lifecycle source. The API must not reconstruct
-  state from private envelopes.
-- Active cancellation must wait for the existing correlated child acknowledgment and
-  cleanup sequence before reporting terminal cancellation.
-- A queue transport failure must not be presented as a missing or cancelled job.
-- The final VM API E2E runbook follows lifecycle and verifier completion.
+- Eight CPUs reduce elapsed time but do not change the proof's security statement.
+- Higher parallelism can change peak memory for later fixtures. The fixed 56 GiB cap
+  remains the fail-closed boundary.
+- One QEMU VM run supports this PoC profile. It does not establish broad hardware
+  scaling behavior.
+- Historical four-CPU benchmark records must stay unchanged.
 
 ## Exact Next Action
 
-Read ADR-0013 and the current queue and handler implementations, claim B-0027, and map
-each retained BullMQ state to the generated public RPC response.
+Inspect Git and the supplied eight-CPU VM output, claim B-0028, and map every current
+four-CPU production assertion before editing.

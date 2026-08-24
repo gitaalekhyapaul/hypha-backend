@@ -13,7 +13,7 @@ use raziel_prover::{Sp1Verifier, TrustedProgramKey};
 use raziel_verifier::{
     LocalRegistry, RegistryLoader, default_registry_config, root_record_to_proto,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::admission::LOCAL_PLONK_ADMISSION_WINDOW_SECONDS;
@@ -163,6 +163,47 @@ impl TerminalCapabilityResult {
         serde_json::to_value(wire).map_err(|_| TerminalValidationError::Encoding)
     }
 
+    /// Strictly decodes the public terminal value retained by BullMQ.
+    pub(crate) fn from_public_value(
+        job_id: &str,
+        value: &Value,
+    ) -> Result<Self, TerminalValidationError> {
+        let bytes = serde_json::to_vec(value).map_err(|_| TerminalValidationError::Decoding)?;
+        if bytes.len() > MAX_TERMINAL_RESULT_JSON_BYTES {
+            return Err(TerminalValidationError::ResultTooLarge);
+        }
+        let wire: TerminalResultWireV1 =
+            serde_json::from_value(value.clone()).map_err(|_| TerminalValidationError::Decoding)?;
+        if wire.format_version != TERMINAL_RESULT_FORMAT_VERSION {
+            return Err(TerminalValidationError::Decoding);
+        }
+
+        let capability_bytes = decode_lowercase_hex(&wire.capability_protobuf_hex)?;
+        if capability_bytes.is_empty() || capability_bytes.len() > MAX_TERMINAL_CAPABILITY_BYTES {
+            return Err(TerminalValidationError::ResultTooLarge);
+        }
+        let capability = ProofCapability::decode(capability_bytes.as_slice())
+            .map_err(|_| TerminalValidationError::Decoding)?;
+        if capability.encode_to_vec() != capability_bytes
+            || capability.format_version != PROOF_CAPABILITY_FORMAT_VERSION
+            || capability.capability_id != job_id
+            || lowercase_hex(&capability.capability_request_commitment) != job_id
+            || wire.artifact_bytes != capability.zk_proof.len() as u64
+        {
+            return Err(TerminalValidationError::Decoding);
+        }
+
+        let metrics = OneShotMetrics {
+            execute_millis: wire.execute_millis,
+            prove_millis: wire.prove_millis,
+            artifact_bytes: wire.artifact_bytes,
+            peak_memory_bytes: wire.peak_memory_bytes,
+            peak_swap_bytes: wire.peak_swap_bytes,
+        };
+        validate_retained_metrics(metrics)?;
+        Self::new(capability, metrics)
+    }
+
     #[cfg(test)]
     pub(crate) fn for_test(
         capability: ProofCapability,
@@ -182,7 +223,8 @@ impl Debug for TerminalCapabilityResult {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct TerminalResultWireV1 {
     format_version: u32,
     capability_protobuf_hex: String,
@@ -372,6 +414,7 @@ pub enum TerminalValidationError {
     ProofRejected,
     ResultTooLarge,
     Encoding,
+    Decoding,
 }
 
 impl fmt::Display for TerminalValidationError {
@@ -399,6 +442,48 @@ fn lowercase_hex(bytes: &[u8]) -> String {
         write!(&mut encoded, "{byte:02x}").expect("writing to String cannot fail");
     }
     encoded
+}
+
+fn decode_lowercase_hex(encoded: &str) -> Result<Vec<u8>, TerminalValidationError> {
+    if !encoded.len().is_multiple_of(2)
+        || !encoded
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(TerminalValidationError::Decoding);
+    }
+    encoded
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = decode_hex_nibble(pair[0])?;
+            let low = decode_hex_nibble(pair[1])?;
+            Ok((high << 4) | low)
+        })
+        .collect()
+}
+
+const fn decode_hex_nibble(value: u8) -> Result<u8, TerminalValidationError> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        _ => Err(TerminalValidationError::Decoding),
+    }
+}
+
+fn validate_retained_metrics(metrics: OneShotMetrics) -> Result<(), TerminalValidationError> {
+    let maximum_duration_millis = u64::from(crate::one_shot::PROOF_DEADLINE_SECONDS) * 1_000;
+    let total_duration_millis = metrics
+        .execute_millis
+        .checked_add(metrics.prove_millis)
+        .ok_or(TerminalValidationError::Decoding)?;
+    if total_duration_millis > maximum_duration_millis
+        || metrics.peak_memory_bytes > crate::one_shot::PROOF_MEMORY_LIMIT_BYTES
+        || metrics.peak_swap_bytes != 0
+    {
+        return Err(TerminalValidationError::Decoding);
+    }
+    Ok(())
 }
 
 fn valid_absolute_path(path: &Path) -> bool {

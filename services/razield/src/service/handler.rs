@@ -15,39 +15,67 @@ use crate::admission::{
     AdmittedCapabilityRequest, MAX_PROTOBUF_TIMESTAMP_SECONDS, admit_create_capability_request,
 };
 use crate::publication::{
-    CapabilityJobPublisher, CapabilityPublicationError, PublicCapabilityJobState,
-    PublishedCapabilityJob,
+    CapabilityJobPublisher, CapabilityLifecycleError, CapabilityPublicationError,
+    PublicCapabilityJobState, PublishedCapabilityJob, RetainedCapabilityJob,
 };
+use crate::worker::PublicFailureClass;
 
-/// Narrow publication seam used by the RPC handler and deterministic tests.
+/// Narrow lifecycle seam used by the RPC handler and deterministic tests.
 #[tonic::async_trait]
-pub trait CapabilityPublisher: Send + Sync + 'static {
+pub trait CapabilityJobAccess: Send + Sync + 'static {
     async fn publish(
         &self,
         admitted: &AdmittedCapabilityRequest,
     ) -> Result<PublishedCapabilityJob, CapabilityPublicationError>;
+
+    async fn get(&self, job_id: &str) -> Result<RetainedCapabilityJob, CapabilityLifecycleError>;
+
+    async fn cancel(&self, job_id: &str)
+    -> Result<RetainedCapabilityJob, CapabilityLifecycleError>;
 }
 
 #[tonic::async_trait]
-impl CapabilityPublisher for CapabilityJobPublisher {
+impl CapabilityJobAccess for CapabilityJobPublisher {
     async fn publish(
         &self,
         admitted: &AdmittedCapabilityRequest,
     ) -> Result<PublishedCapabilityJob, CapabilityPublicationError> {
         CapabilityJobPublisher::publish(self, admitted).await
     }
+
+    async fn get(&self, job_id: &str) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        CapabilityJobPublisher::get(self, job_id).await
+    }
+
+    async fn cancel(
+        &self,
+        job_id: &str,
+    ) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        CapabilityJobPublisher::cancel(self, job_id).await
+    }
 }
 
 #[tonic::async_trait]
-impl<P> CapabilityPublisher for Arc<P>
+impl<P> CapabilityJobAccess for Arc<P>
 where
-    P: CapabilityPublisher,
+    P: CapabilityJobAccess,
 {
     async fn publish(
         &self,
         admitted: &AdmittedCapabilityRequest,
     ) -> Result<PublishedCapabilityJob, CapabilityPublicationError> {
         self.as_ref().publish(admitted).await
+    }
+
+    async fn get(&self, job_id: &str) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        self.as_ref().get(job_id).await
+    }
+
+    async fn cancel(
+        &self,
+        job_id: &str,
+    ) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        self.as_ref().cancel(job_id).await
     }
 }
 
@@ -73,7 +101,7 @@ pub fn bounded_capability_service<P, C>(
     handler: CapabilityServiceHandler<P, C>,
 ) -> CapabilityServiceServer<CapabilityServiceHandler<P, C>>
 where
-    P: CapabilityPublisher,
+    P: CapabilityJobAccess,
     C: TrustedClock,
 {
     CapabilityServiceServer::new(handler).max_decoding_message_size(MAX_SERVICE_MESSAGE_BYTES)
@@ -82,7 +110,7 @@ where
 #[tonic::async_trait]
 impl<P, C> CapabilityService for CapabilityServiceHandler<P, C>
 where
-    P: CapabilityPublisher,
+    P: CapabilityJobAccess,
     C: TrustedClock,
 {
     async fn create_capability(
@@ -106,20 +134,30 @@ where
 
     async fn get_capability(
         &self,
-        _request: Request<GetCapabilityRequest>,
+        request: Request<GetCapabilityRequest>,
     ) -> Result<Response<GetCapabilityResponse>, Status> {
-        Err(Status::unimplemented(
-            "capability operation is not implemented",
-        ))
+        let retained = self
+            .publisher
+            .get(&request.into_inner().job_id)
+            .await
+            .map_err(map_lifecycle_error)?;
+        Ok(Response::new(GetCapabilityResponse {
+            job: Some(proof_job_from_retained(retained)?),
+        }))
     }
 
     async fn cancel_capability(
         &self,
-        _request: Request<CancelCapabilityRequest>,
+        request: Request<CancelCapabilityRequest>,
     ) -> Result<Response<CancelCapabilityResponse>, Status> {
-        Err(Status::unimplemented(
-            "capability operation is not implemented",
-        ))
+        let retained = self
+            .publisher
+            .cancel(&request.into_inner().job_id)
+            .await
+            .map_err(map_lifecycle_error)?;
+        Ok(Response::new(CancelCapabilityResponse {
+            job: Some(proof_job_from_retained(retained)?),
+        }))
     }
 }
 
@@ -127,6 +165,12 @@ fn proof_job_from_publication(published: PublishedCapabilityJob) -> Result<Proof
     let state = match published.state() {
         PublicCapabilityJobState::Queued => ProofJobState::Queued,
         PublicCapabilityJobState::Executing => ProofJobState::Executing,
+        PublicCapabilityJobState::Proving => ProofJobState::Proving,
+        PublicCapabilityJobState::Succeeded
+        | PublicCapabilityJobState::Failed
+        | PublicCapabilityJobState::Canceled => {
+            return Err(Status::internal("capability service failed"));
+        }
     };
     Ok(ProofJob {
         job_id: published.job_id().to_owned(),
@@ -141,6 +185,39 @@ fn proof_job_from_publication(published: PublishedCapabilityJob) -> Result<Proof
         public_error_code: PublicErrorCode::Unspecified as i32,
         internal_error_ref: None,
         metrics: None,
+    })
+}
+
+fn proof_job_from_retained(retained: RetainedCapabilityJob) -> Result<ProofJob, Status> {
+    let state = match retained.state() {
+        PublicCapabilityJobState::Queued => ProofJobState::Queued,
+        PublicCapabilityJobState::Executing => ProofJobState::Executing,
+        PublicCapabilityJobState::Proving => ProofJobState::Proving,
+        PublicCapabilityJobState::Succeeded => ProofJobState::Succeeded,
+        PublicCapabilityJobState::Failed => ProofJobState::Failed,
+        PublicCapabilityJobState::Canceled => ProofJobState::Canceled,
+    };
+    let public_error_code = match retained.failure() {
+        None => PublicErrorCode::Unspecified,
+        Some(PublicFailureClass::InvalidRequest) => PublicErrorCode::InvalidRequest,
+        Some(PublicFailureClass::ServiceUnavailable) => PublicErrorCode::ServiceUnavailable,
+        Some(PublicFailureClass::Canceled) => {
+            return Err(Status::internal("capability service failed"));
+        }
+    };
+    Ok(ProofJob {
+        job_id: retained.job_id().to_owned(),
+        state: state as i32,
+        submitted_at: Some(timestamp_from_unix_millis(
+            retained.submitted_at_unix_millis(),
+        )?),
+        updated_at: Some(timestamp_from_unix_millis(
+            retained.updated_at_unix_millis(),
+        )?),
+        capability: retained.capability().cloned(),
+        public_error_code: public_error_code as i32,
+        internal_error_ref: None,
+        metrics: retained.metrics().cloned(),
     })
 }
 
@@ -165,6 +242,21 @@ fn map_publication_error(error: CapabilityPublicationError) -> Status {
         | CapabilityPublicationError::QueueRecordMissing
         | CapabilityPublicationError::QueueRecordMismatch
         | CapabilityPublicationError::QueueTerminalResultUnavailable => {
+            Status::internal("capability service failed")
+        }
+    }
+}
+
+fn map_lifecycle_error(error: CapabilityLifecycleError) -> Status {
+    match error {
+        CapabilityLifecycleError::InvalidJobId => {
+            Status::invalid_argument("invalid capability job")
+        }
+        CapabilityLifecycleError::NotFound => Status::not_found("capability job not found"),
+        CapabilityLifecycleError::QueueUnavailable
+        | CapabilityLifecycleError::CancellationPublicationUncertain => unavailable_status(),
+        CapabilityLifecycleError::QueueRecordMismatch
+        | CapabilityLifecycleError::CancellationPublicationRejected => {
             Status::internal("capability service failed")
         }
     }

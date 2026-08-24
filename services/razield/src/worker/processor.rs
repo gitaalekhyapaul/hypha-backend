@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use bullmq::Job;
 use bullmq::worker::CancellationToken;
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
@@ -72,6 +73,26 @@ impl SupervisorProgressPhase {
             "format_version": 1,
             "phase": phase,
         })
+    }
+
+    /// Strictly decodes the closed public progress object retained by BullMQ.
+    pub(crate) fn from_public_value(value: &Value) -> Result<Self, ()> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct ProgressWire {
+            format_version: u32,
+            phase: String,
+        }
+
+        let wire: ProgressWire = serde_json::from_value(value.clone()).map_err(|_| ())?;
+        if wire.format_version != 1 {
+            return Err(());
+        }
+        match wire.phase.as_str() {
+            "EXECUTING" => Ok(Self::Executing),
+            "PROVING" => Ok(Self::Proving),
+            _ => Err(()),
+        }
     }
 }
 
@@ -258,6 +279,19 @@ impl ClaimedJobProcessor {
                 .fail_after_cleanup(
                     reference,
                     SupervisorFailure::new(SupervisorFailureClass::Cancelled),
+                )
+                .await;
+        }
+
+        if progress
+            .publish(SupervisorProgressPhase::Proving)
+            .await
+            .is_err()
+        {
+            return self
+                .fail_after_cleanup(
+                    reference,
+                    SupervisorFailure::new(SupervisorFailureClass::ProgressUnavailable),
                 )
                 .await;
         }

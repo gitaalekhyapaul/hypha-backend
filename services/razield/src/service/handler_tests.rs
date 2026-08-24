@@ -21,13 +21,13 @@ use tonic::transport::Server;
 use tonic::{Code, Request};
 
 use super::{
-    CapabilityPublisher, CapabilityServiceHandler, ClockError, MAX_SERVICE_MESSAGE_BYTES,
+    CapabilityJobAccess, CapabilityServiceHandler, ClockError, MAX_SERVICE_MESSAGE_BYTES,
     TrustedClock, bounded_capability_service,
 };
 use crate::admission::{AdmittedCapabilityRequest, LOCAL_PLONK_ADMISSION_WINDOW_SECONDS};
 use crate::publication::{
-    CapabilityPublicationError, PublicCapabilityJobState, PublicationDisposition,
-    PublishedCapabilityJob,
+    CapabilityLifecycleError, CapabilityPublicationError, PublicCapabilityJobState,
+    PublicationDisposition, PublishedCapabilityJob, RetainedCapabilityJob,
 };
 
 const TRUSTED_NOW: i64 = 1_800_000_000;
@@ -154,7 +154,7 @@ async fn out_of_range_queue_timestamp_fails_closed() {
 }
 
 #[tokio::test]
-async fn get_and_cancel_fail_closed_until_their_lifecycle_baton() {
+async fn get_and_cancel_validate_identifiers_and_map_missing_jobs() {
     let service =
         CapabilityServiceHandler::new(RecordingPublisher::default(), FixedClock(Ok(TRUSTED_NOW)));
 
@@ -170,8 +170,19 @@ async fn get_and_cancel_fail_closed_until_their_lifecycle_baton() {
         }))
         .await
         .unwrap_err();
-    assert_eq!(get.code(), Code::Unimplemented);
-    assert_eq!(cancel.code(), Code::Unimplemented);
+    assert_eq!(get.code(), Code::NotFound);
+    assert_eq!(get.message(), "capability job not found");
+    assert_eq!(cancel.code(), Code::NotFound);
+    assert_eq!(cancel.message(), "capability job not found");
+
+    let malformed = service
+        .get_capability(Request::new(GetCapabilityRequest {
+            job_id: "AA".repeat(32),
+        }))
+        .await
+        .unwrap_err();
+    assert_eq!(malformed.code(), Code::InvalidArgument);
+    assert_eq!(malformed.message(), "invalid capability job");
     assert_eq!(service.publisher().calls(), 0);
 }
 
@@ -261,7 +272,7 @@ impl RecordingPublisher {
 }
 
 #[tonic::async_trait]
-impl CapabilityPublisher for RecordingPublisher {
+impl CapabilityJobAccess for RecordingPublisher {
     async fn publish(
         &self,
         admitted: &AdmittedCapabilityRequest,
@@ -277,6 +288,31 @@ impl CapabilityPublisher for RecordingPublisher {
             self.timestamp_ms,
             self.timestamp_ms,
         ))
+    }
+
+    async fn get(&self, job_id: &str) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        validate_mock_job_id(job_id)?;
+        Err(CapabilityLifecycleError::NotFound)
+    }
+
+    async fn cancel(
+        &self,
+        job_id: &str,
+    ) -> Result<RetainedCapabilityJob, CapabilityLifecycleError> {
+        validate_mock_job_id(job_id)?;
+        Err(CapabilityLifecycleError::NotFound)
+    }
+}
+
+fn validate_mock_job_id(job_id: &str) -> Result<(), CapabilityLifecycleError> {
+    if job_id.len() == 64
+        && job_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        Ok(())
+    } else {
+        Err(CapabilityLifecycleError::InvalidJobId)
     }
 }
 

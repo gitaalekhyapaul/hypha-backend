@@ -5,11 +5,14 @@ use std::fmt;
 use std::time::Duration;
 
 use bullmq::options::RedisConnectionOptions;
-use bullmq::types::{KeepJobs, RemoveOnFinish};
+use bullmq::types::{BackoffStrategy, KeepJobs, RemoveOnFinish};
 use bullmq::{JobOptions, QueueOptions, WorkerOptions};
 
 /// BullMQ queue shared by the capability publisher and proof supervisor.
 pub const CAPABILITY_QUEUE_NAME: &str = "proof-jobs";
+
+/// Durable internal control queue from ADR-0017.
+pub const CANCELLATION_QUEUE_NAME: &str = "cancellation-commands";
 
 /// The API and every proof worker use this queue-wide ceiling.
 pub const GLOBAL_CONCURRENCY: u64 = 1;
@@ -31,6 +34,10 @@ pub const WORKER_DRAIN_DELAY: Duration = Duration::from_secs(5);
 
 /// Proof jobs never retry after failure, lock loss, timeout, or process exit.
 pub const JOB_ATTEMPTS: u32 = 1;
+
+/// Control operations retry without ever retrying proof execution.
+pub const CANCELLATION_JOB_ATTEMPTS: u32 = 3;
+pub const CANCELLATION_RETRY_DELAY_MILLIS: u64 = 1_000;
 
 /// BullMQ rejects a second processor invocation after an internal stalled-job claim.
 pub const MAX_STARTED_ATTEMPTS: u32 = 1;
@@ -107,6 +114,27 @@ impl QueueConfig {
         retained_job_options().size_limit(MAX_PUBLIC_JOB_PAYLOAD_BYTES)
     }
 
+    /// Builds the retryable, retained policy for public cancellation commands.
+    pub fn cancellation_job_options(&self) -> JobOptions {
+        retained_cancellation_job_options().size_limit(MAX_PUBLIC_JOB_PAYLOAD_BYTES)
+    }
+
+    /// Builds the one-at-a-time worker policy for idempotent cancellation commands.
+    pub fn cancellation_worker_options(&self) -> WorkerOptions {
+        WorkerOptions::new()
+            .connection(self.connection_options())
+            .prefix(self.prefix.clone())
+            .concurrency(WORKER_CONCURRENCY)
+            .lock_duration(WORKER_LOCK_DURATION)
+            .lock_renew_time(WORKER_LOCK_RENEW_TIME)
+            .stalled_interval(WORKER_STALLED_INTERVAL)
+            .drain_delay(WORKER_DRAIN_DELAY)
+            .max_started_attempts(CANCELLATION_JOB_ATTEMPTS)
+            .max_stalled_count(CANCELLATION_JOB_ATTEMPTS - 1)
+            .remove_on_complete(terminal_retention())
+            .remove_on_fail(terminal_retention())
+    }
+
     fn connection_options(&self) -> RedisConnectionOptions {
         RedisConnectionOptions {
             url: self.redis_url.clone(),
@@ -126,6 +154,14 @@ fn terminal_retention() -> RemoveOnFinish {
 pub(crate) fn retained_job_options() -> JobOptions {
     JobOptions::new()
         .attempts(JOB_ATTEMPTS)
+        .remove_on_complete(terminal_retention())
+        .remove_on_fail(terminal_retention())
+}
+
+pub(crate) fn retained_cancellation_job_options() -> JobOptions {
+    JobOptions::new()
+        .attempts(CANCELLATION_JOB_ATTEMPTS)
+        .backoff(BackoffStrategy::Fixed(CANCELLATION_RETRY_DELAY_MILLIS))
         .remove_on_complete(terminal_retention())
         .remove_on_fail(terminal_retention())
 }
@@ -153,6 +189,11 @@ pub(crate) fn valid_claimed_job_options(options: &JobOptions) -> bool {
         && options.remove_dependency_on_failure.is_none()
         && options.continue_parent_on_failure.is_none()
         && options.size_limit.is_none()
+}
+
+pub(crate) fn valid_cancellation_job_options(options: &JobOptions) -> bool {
+    serde_json::to_value(options).ok()
+        == serde_json::to_value(retained_cancellation_job_options()).ok()
 }
 
 fn valid_terminal_retention(policy: Option<&RemoveOnFinish>) -> bool {
@@ -252,6 +293,27 @@ mod tests {
         let mut repeated = stored_job;
         repeated.repeat_job_key = Some("not-accepted".into());
         assert!(!valid_claimed_job_options(&repeated));
+    }
+
+    #[test]
+    fn cancellation_commands_retry_without_retrying_proofs() {
+        let config =
+            QueueConfig::new("redis://example.invalid", "raziel-test").expect("valid queue config");
+        let job = config.cancellation_job_options();
+        let worker = config.cancellation_worker_options();
+
+        assert_eq!(job.attempts, Some(CANCELLATION_JOB_ATTEMPTS));
+        assert!(matches!(
+            job.backoff,
+            Some(BackoffStrategy::Fixed(CANCELLATION_RETRY_DELAY_MILLIS))
+        ));
+        assert_eq!(worker.concurrency, WORKER_CONCURRENCY);
+        assert_eq!(worker.max_started_attempts, Some(CANCELLATION_JOB_ATTEMPTS));
+        assert_eq!(worker.max_stalled_count, CANCELLATION_JOB_ATTEMPTS - 1);
+        assert!(valid_cancellation_job_options(
+            &retained_cancellation_job_options()
+        ));
+        assert!(!valid_cancellation_job_options(&retained_job_options()));
     }
 
     fn assert_terminal_retention(policy: Option<&RemoveOnFinish>) {

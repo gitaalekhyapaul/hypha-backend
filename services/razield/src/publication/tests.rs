@@ -6,6 +6,7 @@ use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use bullmq::JobProgress;
 use bullmq::types::JobState;
 use ed25519_dalek::{Signer, SigningKey};
 use prost_types::Timestamp;
@@ -607,6 +608,9 @@ fn retained_job(reference: PrivateEnvelopeRef, state: JobState) -> RetainedQueue
         timestamp_ms: 1_800_000_000_000,
         processed_on_ms: None,
         finished_on_ms: None,
+        progress: JobProgress::Number(0.0),
+        failed_reason: String::new(),
+        return_value: String::new(),
     }
 }
 

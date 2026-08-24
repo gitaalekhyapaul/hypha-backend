@@ -1,5 +1,6 @@
 //! BullMQ claim boundary for the proof supervisor.
 
+mod cancellation;
 mod config;
 mod executor;
 mod processor;
@@ -22,6 +23,7 @@ pub use terminal::{
     TerminalValidationError, TerminalValidatorConfig,
 };
 
+pub(crate) use cancellation::{CancellationCommandProcessor, CancellationIntentRegistry};
 pub(crate) use processor::{ClaimedJobProcessor, ProgressPublisher};
 pub(crate) use terminal::{CapabilityResultValidator, TerminalIssuanceContext};
 
