@@ -5,6 +5,7 @@
 mod authority;
 mod encoding;
 mod policy;
+mod protected_request;
 mod relationship;
 
 use std::fmt::{self, Display, Formatter};
@@ -14,6 +15,12 @@ use sha2::{Digest, Sha256};
 
 pub use encoding::CanonicalEncoder;
 pub use policy::{CANONICAL_POLICY_ENCODING_VERSION, encode_policy};
+pub use protected_request::{
+    MAX_CANONICAL_REQUEST_TARGET_BYTES, PROTECTED_REQUEST_FORMAT_VERSION,
+    PROTECTED_REQUEST_SIGNATURE_DOMAIN, ProtectedRequestCanonicalError,
+    ProtectedRequestSignatureInputV1, canonicalize_request_method, canonicalize_request_target,
+    protected_request_signature_message,
+};
 pub use relationship::{
     CANONICAL_RELATIONSHIP_ENCODING_VERSION, RelationshipRecord, StoredCaveat, StoredContextEntry,
     compare_relationship_identity, encode_relationship,

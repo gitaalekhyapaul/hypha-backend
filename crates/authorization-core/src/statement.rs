@@ -13,8 +13,8 @@ use raziel_snapshot::{Digest, RelationshipWitnessSetV1, verify_witness_set};
 use crate::{
     AUTHORIZATION_GUEST_INPUT_VERSION, AUTHORIZATION_PUBLIC_VALUES_VERSION, AuthorizationError,
     AuthorizationGuestInputV1, AuthorizationPublicValuesV1, AuthorizationResult,
-    CapabilityRequestBindingV1, MAX_CANONICAL_POLICY_BYTES, TRUSTED_POLICY_CEILINGS,
-    TRUSTED_SNAPSHOT_LIMITS, encode_public_values,
+    CapabilityRequestBindingV1, CapabilityScopeBindingV1, MAX_CANONICAL_POLICY_BYTES,
+    TRUSTED_POLICY_CEILINGS, TRUSTED_SNAPSHOT_LIMITS, encode_public_values,
 };
 
 pub const CAPABILITY_REQUEST_DOMAIN: &[u8] = b"raziel/capability-request/v1";
@@ -125,17 +125,34 @@ pub fn capability_scope_hash(
     issued_at_unix_seconds: i64,
     expires_at_unix_seconds: i64,
 ) -> Result<Digest, AuthorizationError> {
+    capability_scope_hash_from_binding(&CapabilityScopeBindingV1 {
+        format_version: request.format_version,
+        agent_key_thumbprint: request.agent_key_thumbprint,
+        task_id: request.task_id.clone(),
+        purpose: request.purpose.clone(),
+        action: request.action.clone(),
+        resource_type: request.resource_type.clone(),
+        resource_scope: request.resource_scope.clone(),
+        snapshot_id: request.snapshot_id.clone(),
+        issued_at_unix_seconds,
+        expires_at_unix_seconds,
+    })
+}
+
+pub fn capability_scope_hash_from_binding(
+    binding: &CapabilityScopeBindingV1,
+) -> Result<Digest, AuthorizationError> {
     let mut encoder = CanonicalEncoder::new();
-    encoder.write_u32(request.format_version);
-    write_digest(&mut encoder, &request.agent_key_thumbprint)?;
-    write_string(&mut encoder, &request.task_id)?;
-    write_string(&mut encoder, &request.purpose)?;
-    write_string(&mut encoder, &request.action)?;
-    write_string(&mut encoder, &request.resource_type)?;
-    write_string(&mut encoder, &request.resource_scope)?;
-    write_string(&mut encoder, &request.snapshot_id)?;
-    encoder.write_i64(issued_at_unix_seconds);
-    encoder.write_i64(expires_at_unix_seconds);
+    encoder.write_u32(binding.format_version);
+    write_digest(&mut encoder, &binding.agent_key_thumbprint)?;
+    write_string(&mut encoder, &binding.task_id)?;
+    write_string(&mut encoder, &binding.purpose)?;
+    write_string(&mut encoder, &binding.action)?;
+    write_string(&mut encoder, &binding.resource_type)?;
+    write_string(&mut encoder, &binding.resource_scope)?;
+    write_string(&mut encoder, &binding.snapshot_id)?;
+    encoder.write_i64(binding.issued_at_unix_seconds);
+    encoder.write_i64(binding.expires_at_unix_seconds);
     framed_hash(CAPABILITY_SCOPE_DOMAIN, &encoder.finish())
         .map_err(|_| AuthorizationError::CanonicalEncoding)
 }

@@ -7,5 +7,14 @@ license.workspace = true
 publish = false
 
 [dependencies]
+ed25519-dalek.workspace = true
+prost.workspace = true
+prost-reflect.workspace = true
+prost-types.workspace = true
+raziel-authority.workspace = true
+raziel-authorization-core.workspace = true
+raziel-canonical.workspace = true
 raziel-proto = { workspace = true, features = ["services"] }
 raziel-prover = { workspace = true, features = ["verification"] }
+raziel-verifier = { path = "../../crates/verifier" }
+sha2.workspace = true

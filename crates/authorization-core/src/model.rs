@@ -52,6 +52,24 @@ impl Debug for CapabilityRequestBindingV1 {
     }
 }
 
+/// Public capability fields used by the proof-bound scope hash.
+///
+/// This model lets an independent verifier reconstruct the scope hash without
+/// inventing private issuance nonce or caveat-context values.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityScopeBindingV1 {
+    pub format_version: u32,
+    pub agent_key_thumbprint: Digest,
+    pub task_id: String,
+    pub purpose: String,
+    pub action: String,
+    pub resource_type: String,
+    pub resource_scope: String,
+    pub snapshot_id: String,
+    pub issued_at_unix_seconds: i64,
+    pub expires_at_unix_seconds: i64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AuthorizationPublicValuesV1 {
     pub format_version: u32,

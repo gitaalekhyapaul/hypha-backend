@@ -85,7 +85,8 @@ The following decisions must be closed before their milestone begins:
 | --- | --- | --- |
 | O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
-| O-007 | Approve the protected-request signature envelope in ADR-0002 | Before gateway integration |
+
+O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
 
 ## Actors and entities
 
@@ -1180,13 +1181,17 @@ server. The B-0027 runtime strictly maps retained BullMQ proof state into
 `GetCapability`. `CancelCapability` publishes one durable public command before the
 supervisor removes a waiting job or signals active work. Duplicate commands retain
 one result. Terminal proof jobs remain immutable. Startup recovery completes cleanup
-for commands retained before or after target removal. Independent verifier behavior
-remains pending. The verification-only
-Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
-`6.3.1` Plonk
-verification and excludes SDK proving, core execution, native Gnark, JIT, and
-outbound SP1 client packages. This build result does not replace the later retained
-real-proof worker gate.
+for commands retained before or after target removal. ADR-0002 is accepted. The
+B-0029 `verifierd` admission boundary strictly decodes the public request against a
+frozen descriptor, validates the agent key and exact protected-request signature,
+applies trusted time and registry checks, and rebuilds the complete ADR-0011 expected
+public journal. It sends only bounded public proof input to the next worker boundary.
+The verification-only Rust feature and dependency-tree gate use direct
+`sp1-verifier` `6.3.1` Plonk verification and exclude SDK proving, core execution,
+native Gnark, JIT, and outbound SP1 client packages. The isolated verifier worker and
+live service binding remain pending. Gateway nonce consumption and the matching
+TypeScript canonical vector remain M5 work. These build and admission results do not
+replace the later retained real-proof worker gate.
 
 Deliver:
 

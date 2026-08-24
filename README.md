@@ -18,8 +18,12 @@ Plonk proof. The approved eight-CPU profile records a 2,537-byte proof,
 
 M4 is in active implementation under accepted ADR-0013 through ADR-0017. `razield`
 now runs bounded CapabilityService and SnapshotService Tonic ingress. `verifierd`
-remains a process shell. The BullMQ
-`1.2.3` and Redis `8.2.8` conformance gate passes. The pure `razield` admission
+now has a strict public admission boundary under accepted ADR-0002. It rejects
+unknown and noncanonical Protobuf, validates the agent key and exact protected-request
+signature, checks trusted time and local registry state, and reconstructs the complete
+expected proof journal. It does not decode the proof or return verified claims. The
+isolated verifier worker and service binding remain pending. The BullMQ `1.2.3` and
+Redis `8.2.8` conformance gate passes. The pure `razield` admission
 boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
 request commitment, derives the deterministic job ID, and enforces the 75-minute

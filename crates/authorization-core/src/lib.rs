@@ -13,7 +13,7 @@ pub use limits::{MAX_CANONICAL_POLICY_BYTES, TRUSTED_POLICY_CEILINGS, TRUSTED_SN
 pub use model::{
     AUTHORIZATION_GUEST_INPUT_VERSION, AUTHORIZATION_PUBLIC_VALUES_VERSION,
     AuthorizationGuestInputV1, AuthorizationPublicValuesV1, AuthorizationResult,
-    CapabilityRequestBindingV1,
+    CapabilityRequestBindingV1, CapabilityScopeBindingV1,
 };
 pub use public_values::{
     AUTHORIZATION_PUBLIC_VALUES_DOMAIN, decode_public_values, encode_public_values,
@@ -21,5 +21,6 @@ pub use public_values::{
 pub use statement::{
     CAPABILITY_REQUEST_DOMAIN, CAPABILITY_SCOPE_DOMAIN, ISSUANCE_NULLIFIER_DOMAIN, agent_subject,
     authorization_evaluation_request, authorize, capability_request_commitment,
-    capability_scope_hash, issuance_nullifier, validate_capability_request_binding,
+    capability_scope_hash, capability_scope_hash_from_binding, issuance_nullifier,
+    validate_capability_request_binding,
 };

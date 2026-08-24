@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service, identity, snapshot-publication, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, exact SpiceDB snapshot lifecycle, registry writer, positive-path witness builder, trusted input assembly, one-shot child, fixed launcher, proof sandbox, terminal capability, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service, identity, snapshot-publication, private proving, and request-signature contracts, plus passing issuer admission, private-envelope, queue, snapshot, prover, lifecycle, and independent-verifier admission gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -187,6 +187,15 @@ feature. The default message-only crate and authorization guest dependency graph
 exclude Tonic, Tokio, HTTP, Hyper, Tower, and the Prost service codec. This compiles
 wire contracts only. It does not add handlers, listeners, transport policy, or service
 behavior.
+
+The independent `verifierd` admission boundary applies a strict 2 MiB raw-Protobuf
+decoder against a frozen descriptor. It validates the public capability, raw Ed25519
+agent key, ADR-0002 protected-request signature, trusted whole-second time, and exact
+verifier-local registry state. It reconstructs the full ADR-0011 public journal and
+passes only the bounded proof artifact, expected public values, and trusted program
+key to the next worker boundary. Admission does not decode the proof and cannot
+return claims as verified. The isolated verifier worker and live Tonic binding remain
+pending.
 
 The pure `razield` admission boundary implements
 [ADR-0014](docs/decisions/0014-agent-key-thumbprint-and-issuance-identity.md). It maps
@@ -688,7 +697,7 @@ request carries the agent public key. The gateway recomputes its thumbprint and 
 the capability claim before signature verification. Cold requests pass the same
 envelope to `verifierd`. Cache hits verify the envelope in the gateway and skip only
 proof verification. [ADR-0002](docs/decisions/0002-protected-request-signature-envelope.md)
-defines the proposed canonical rules.
+defines the accepted canonical rules.
 
 The exact request commitment identifies duplicate BullMQ jobs. The issuance nullifier
 remains a proof-bound conflicting-issuance identifier and is not consumed on first

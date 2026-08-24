@@ -5,7 +5,7 @@
 - Accepted: 2026-08-12
 - Milestone: M4
 - Related decisions: ADR-0002, ADR-0010, ADR-0011, ADR-0012
-- Related open decision: O-007
+- Related resolved decision: O-007, closed by ADR-0002 on 2026-08-24
 - Maintainer direction on 2026-08-12: retain the Rust API-job server topology and
   defer NestJS for the PoC
 - Maintainer direction on 2026-08-12: use a maintained job queue and do not implement
@@ -16,6 +16,8 @@
   cancellation-command queue that implements this record and control contract
 - Maintainer amendment on 2026-08-24: ADR-0012's validated eight-CPU proof profile
   supplies the current M4 proof-worker measurements
+- Maintainer amendment on 2026-08-24: ADR-0002 fixes the protected-request signature,
+  canonical target, freshness, and gateway replay-ownership rules
 
 ## Context
 
@@ -223,9 +225,9 @@ proof deadline = 60 minutes
 artifact maximum = 1048576 bytes
 memory hard limit = 60129542144 bytes
 swap = 0 bytes
-visible CPUs = 4
-Rust workers = 4
-Go maximum processes = 4
+visible CPUs = 8
+Rust workers = 8
+Go maximum processes = 8
 Go soft heap target = 24 GiB
 network = none
 root filesystem = read-only
@@ -271,10 +273,9 @@ Request data cannot provide or select either representation. This replaces runti
 ELF setup in the verifier worker and does not change the guest program, proof bytes,
 public values, or Raziel key identifier.
 
-Protected-request signature canonicalization remains governed by proposed ADR-0002
-and O-007. The proof-only worker contract does not depend on HTTP target
-canonicalization. M4 cannot claim the stolen-capability exit gate until ADR-0002 is
-accepted and its envelope checks pass.
+Protected-request signature canonicalization is governed by accepted ADR-0002. The
+proof-only worker contract does not depend on HTTP target canonicalization. M4 cannot
+claim the stolen-capability exit gate until its envelope checks pass.
 
 The worker uses a Unix-domain socket on an owner-only volume. The socket protocol has
 one versioned, length-prefixed request and one bounded response. A worker abort, OOM,
@@ -302,7 +303,8 @@ expires_at <= requested, policy, snapshot, delegation, and key expiry
 Job admission requires every upper-bound expiry to cover the 75-minute window. The
 default requested expiry changes from 15 minutes to 75 minutes for the local Plonk
 profile. A proof that reaches its 60-minute deadline yields no capability. The
-measured 29-minute run leaves about 46 minutes for verification and protected use.
+measured 15-minute 30-second run leaves about 59 minutes for verification and
+protected use.
 
 This is a security tradeoff. The proof binds a longer validity interval so the
 expensive proof can finish. Revocation, verifier-local status, agent request
@@ -474,5 +476,5 @@ The maintainer separately approved BullMQ `1.2.3`, Tonic `0.14.6`, Tokio `1.53.1
 `tonic-prost` `0.14.6`, the pinned Redis `8.2.8` runtime, and the `raziel-prover`
 feature split on the same date. The maintainer amended the split to use direct
 `sp1-verifier` `6.3.1` after source inspection showed that SDK `LightProver` always
-links `sp1-prover` and `sp1-core-executor`. ADR-0002 and a later synthetic Plonk
-fixture run remain separate decisions.
+links `sp1-prover` and `sp1-core-executor`. The maintainer later accepted ADR-0002 on
+2026-08-24. A synthetic Plonk fixture run remains a separate decision.

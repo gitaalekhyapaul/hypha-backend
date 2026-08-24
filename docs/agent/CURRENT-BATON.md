@@ -1,120 +1,113 @@
 # Current Engineering Baton
 
-- Baton ID: B-0029
+- Baton ID: B-0030
 - State: READY
-- Milestone: M4, independent verifier admission
+- Milestone: M4, isolated verifier worker and service activation
 - Owner: unassigned
-- Started UTC: None
-- Last updated UTC: 2026-08-24T11:50:17Z
+- Started UTC: Not started
+- Last updated UTC: 2026-08-24T12:43:48Z
 - Branch: `main`
-- Worktree: B-0028 is archived. Inspect Git before claiming B-0029.
+- Worktree: B-0029 implementation and archive are ready for a scoped commit on top of
+  `8670c9a`.
 
 ## Objective
 
-Close the protected-request signature decision, then implement the strict public
-admission boundary that prepares one capability for independent verification without
-calling `razield` or reading private graph data.
+Connect strict verifier admission to a resource-isolated local proof-verification
+worker and expose the bounded `VerificationService` without any `razield` dependency.
 
 ## Acceptance Criteria
 
-- [ ] ADR-0002 is reviewed and explicitly accepted before its signature rules enter
-      production code.
-- [ ] `VerifyCapabilityRequest` applies the 2 MiB service ceiling and rejects missing,
-      malformed, oversized, unknown, and noncanonical public fields.
-- [ ] Admission validates agent-key thumbprint binding and the exact protected-request
-      Ed25519 signature envelope from ADR-0002.
-- [ ] Trusted time, capability expiry, request timestamp, nonce, method, target, and
-      body-hash checks fail closed with typed private causes and generic public errors.
-- [ ] Verifier-owned registries resolve the exact policy, snapshot, authority keys,
-      and program-key identity without a `razield` endpoint.
-- [ ] Admission reconstructs the complete expected ADR-0011 public-value bytes and
-      emits only a bounded public worker request.
-- [ ] Focused canonical, verifier, service, mutation, privacy, formatting, lint, and
-      diff gates pass without running SP1.
+- [ ] Live verifier ingress cannot bypass the frozen-descriptor 2 MiB strict decoder.
+- [ ] `verifierd` loads fixed local registry and paired program-key configuration with
+      no `razield` endpoint.
+- [ ] A versioned, bounded owner-only local protocol sends only proof bytes, expected
+      public values, and trusted program-key identity to the verifier worker.
+- [ ] The worker runs direct SP1 Plonk verification under the accepted provisional 2
+      GiB, zero-swap, no-network, read-only-root, bounded-tmpfs, 60-second profile.
+- [ ] Worker crash, timeout, malformed output, and resource exhaustion return typed
+      failures without crashing `verifierd` or releasing candidate claims.
+- [ ] Only successful worker output promotes admitted candidates to verified claims.
+- [ ] Focused protocol, process, service, feature-tree, privacy, formatting, lint,
+      type, and default workspace gates pass without generating a new proof.
 
 ## Architecture Constraints
 
-- `verifierd` never calls `razield`.
-- The capability carries `policy_hash`, not PolicyIR. The verifier resolves the exact
-  approved policy from its read-only local registry.
-- No relationship, caveat value, salt, opening, path, witness, or private envelope
-  enters verifier admission.
-- Request data cannot select proof mode, setup, verification key, registry path,
-  worker endpoint, or resource profile.
-- ADR-0011 fixes proof public values. B-0029 cannot change them.
-- The isolated verifier worker and its cgroup activation remain a later bounded baton.
-- No package, CLI, runtime, or system dependency is approved by this baton.
+- `verifierd` and its worker never call `razield` or read private graph data.
+- Request data cannot select a socket, executable, proof mode, key, registry path, or
+  resource profile.
+- The worker receives no PolicyIR, relationship, caveat, salt, opening, path, witness,
+  private envelope, or agent signing material.
+- ADR-0011 public values and ADR-0002 request-signature semantics remain fixed.
+- Direct `sp1-verifier 6.3.1` remains the verification engine. Proving and network
+  dependencies stay excluded from the verifier build.
+- No real SP1 proof may run or enter Git without separate maintainer approval.
 
 ## File Scope
 
-- ADR-0002 and O-007 status documentation
-- Existing canonical, authority, verifier, prover verification, and Protobuf contracts
-- `services/verifierd` pure admission and focused tests
+- `services/verifierd/`
+- Existing verifier-only crates and generated `VerificationService` contracts
+- Verifier process and Compose configuration
+- Focused scripts and tests for the verifier boundary
 - Current-state README, architecture, specification, and baton documents
 
-## Out of Scope
+## Out Of Scope
 
-- Isolated verifier worker process, socket, cgroup, and real retained-proof run
-- `razield` lifecycle, queue, prover, witness, or snapshot changes
-- Gateway replay database and capability cache
+- A new SP1 proof run or retained proof artifact
+- `razield`, BullMQ, witness, prover, or snapshot behavior changes
+- Gateway nonce storage, cache, and TypeScript canonicalization
 - M5 frontend, M6 real-data acceptance, M7, or another scenario
 
 ## Decisions
 
-- Inherited: ADR-0010, ADR-0011, ADR-0012, and ADR-0013.
-- Pending maintainer review: ADR-0002 protected-request signature envelope.
-- Inherited: B-0028 fixes the eight-CPU proof profile. Verifier admission does not
-  alter that profile.
+- Inherited: accepted ADR-0002, ADR-0011, ADR-0012, and ADR-0013.
+- Inherited: B-0029 strict admission emits candidate claims and a bounded public
+  worker request.
+- Inherited: the verifier profile has a provisional 2 GiB memory cap, zero swap, no
+  network, read-only root, bounded tmpfs, and a 60-second deadline.
+- Made: None.
 
-## Open Questions and Blockers
+## Open Questions And Blockers
 
-- ADR-0002 remains proposed. Its exact method, target, body-hash, nonce, timestamp,
-  capability-ID, and domain-separation rules need maintainer approval before coding.
-- O-007 remains open until that approval is recorded.
+- None for controlled implementation and tests.
+- A later positive retained-proof gate needs explicit maintainer approval.
 
 ## Work Completed
 
-- B-0027 completed and archived capability lifecycle RPCs.
-- B-0028 completed and archived the validated eight-CPU proof profile.
-- `services/verifierd` remains a shell with the approved verification-only dependency
-  graph.
-- Generated `VerificationService` request and response contracts already compile.
+- B-0029 completed and archived independent verifier admission.
+- The verification-only dependency graph and generated service contracts compile.
+- No isolated verifier process or live service binding exists yet.
 
 ## Validation Plan
 
-- Review ADR-0002 against the current Protobuf request and ADR-0013 verifier boundary.
-- Request explicit maintainer approval with a short field-by-field explanation.
-- After approval, implement the smallest pure admission path before service or worker
-  process activation.
-- Run canonical mutation, key binding, time, registry, privacy, formatting, lint, and
-  default workspace tests.
+- Inspect generated Tonic codec boundaries before selecting the strict ingress hook.
+- Add controlled worker protocol, launcher, and failure tests without SP1.
+- Run verifier feature-tree, service, privacy, formatting, lint, type, and default
+  workspace checks.
 - Do not run SP1.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0028 archive | PASS | Eight-CPU proof resource profile | 2026-08-24T11:50:17Z |
-| ADR-0002 status | BLOCKED, maintainer approval needed | Protected-request signature semantics | 2026-08-24T11:50:17Z |
-| B-0029 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T11:50:17Z |
+| B-0029 archive | PASS | Strict verifier admission and ADR-0002 | 2026-08-24T12:43:48Z |
+| Isolated verifier worker | NOT AVAILABLE | B-0030 not started | 2026-08-24T12:43:48Z |
 
 ## Privacy Checks
 
-- NOT AVAILABLE: B-0029 has not started.
-- REQUIRED: verifier admission must process public capability and request-envelope
-  data only.
+- PASS: B-0029 admission accepts public request and capability fields only.
+- REQUIRED: the worker request must remain public proof material only.
+- REQUIRED: no proof or candidate claim can become verified before direct SP1
+  verification succeeds.
 
-## Risks and Private-Data Notes
+## Risks And Private-Data Notes
 
-- A signature that omits method or canonical target permits cross-route replay.
-- Target canonicalization must have one byte representation across the TypeScript
-  gateway and Rust verifier.
-- Capability proof verification does not replace per-request signature and replay
-  checks.
-- Replay storage belongs to the gateway in a later baton. B-0029 validates the signed
-  replay inputs but does not claim nonce consumption.
+- The generated Tonic server hardcodes its Prost codec. Strict raw-byte validation
+  needs a service-edge design that cannot be bypassed by typed decoding.
+- Process isolation must supply hard memory and deadline controls. Rust error handling
+  alone cannot contain an OOM.
+- The 2 GiB worker cap remains provisional until a real retained proof is measured.
 
 ## Exact Next Action
 
-Read ADR-0002 against the generated verifier request, claim B-0029, and ask the
-maintainer to approve or amend the exact protected-request signature envelope.
+Commit the completed B-0029 admission boundary, then claim B-0030 and inspect the
+generated Tonic service codec and existing one-shot launcher patterns.

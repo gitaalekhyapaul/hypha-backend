@@ -1,6 +1,6 @@
 use raziel_authorization_core::{
-    CapabilityRequestBindingV1, capability_request_commitment, capability_scope_hash,
-    issuance_nullifier,
+    CapabilityRequestBindingV1, CapabilityScopeBindingV1, capability_request_commitment,
+    capability_scope_hash, capability_scope_hash_from_binding, issuance_nullifier,
 };
 use raziel_policy_ir::{CaveatValue, ContextEntry};
 
@@ -81,6 +81,28 @@ fn scope_hash_binds_only_the_public_issued_scope() {
     assert_scope_unchanged(&request, ISSUED_AT, EXPIRES_AT, |value| {
         value.request_context[0].value = CaveatValue::Int(81);
     });
+}
+
+#[test]
+fn public_scope_binding_matches_the_guest_request_hash() {
+    let request = request();
+    let public = CapabilityScopeBindingV1 {
+        format_version: request.format_version,
+        agent_key_thumbprint: request.agent_key_thumbprint,
+        task_id: request.task_id.clone(),
+        purpose: request.purpose.clone(),
+        action: request.action.clone(),
+        resource_type: request.resource_type.clone(),
+        resource_scope: request.resource_scope.clone(),
+        snapshot_id: request.snapshot_id.clone(),
+        issued_at_unix_seconds: ISSUED_AT,
+        expires_at_unix_seconds: EXPIRES_AT,
+    };
+
+    assert_eq!(
+        capability_scope_hash(&request, ISSUED_AT, EXPIRES_AT).unwrap(),
+        capability_scope_hash_from_binding(&public).unwrap()
+    );
 }
 
 #[test]
