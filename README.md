@@ -16,8 +16,9 @@ Plonk proof on 2026-08-11. The public benchmark records a 2,537-byte proof,
 46,301,016,064-byte memory peak. See the
 [`cluster-20260810T174732Z-76324` benchmark](docs/benchmarks/sp1-plonk/cluster-20260810T174732Z-76324.md).
 
-M4 is in active implementation under accepted ADR-0013, ADR-0014, and ADR-0015. `razield` now
-runs a bounded internal Tonic ingress. `verifierd` remains a process shell. The BullMQ
+M4 is in active implementation under accepted ADR-0013 through ADR-0016. `razield`
+now runs bounded CapabilityService and SnapshotService Tonic ingress. `verifierd`
+remains a process shell. The BullMQ
 `1.2.3` and Redis `8.2.8` conformance gate passes. The pure `razield` admission
 boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
@@ -79,15 +80,24 @@ direct Plonk verification, checks every public claim against the request and tru
 registry, then retains only the public capability and aggregate metrics in BullMQ.
 Controlled process tests do not run SP1.
 
+The B-0026 snapshot path resolves one approved PolicyIR record and active snapshot
+authority key, reflects and reads one exact SpiceDB revision, generates a fresh
+32-byte salt, and publishes the immutable private snapshot before any public root.
+`razield` asks a separate networkless `raziel-registry-writer` process to append or
+revoke only snapshot-root records. The writer owns the writable registry mount and
+atomically advances a fully validated generation. `razield` keeps a read-only mount.
+`BuildSnapshot`, `GetSnapshot`, and `RevokeSnapshot` pass a live Compose lifecycle
+gate against SpiceDB `v1.54.0` through the pinned Authzed `v1.53.0` generated API.
+
 Live and focused tests cover
 startup cleanup, exact duplicates, bound mutations, request ceilings, publication,
 queue lifecycle, worker claim and cleanup, stalled failure, Redis restart recovery,
 positive-path selection, caveated relationships, denial, snapshot mismatch, trusted
 input assembly, private snapshot persistence, strict child transport, fixed cgroup
 checks, launcher cancellation and exit, terminal capability publication, rendered
-sandbox controls, and expiry bounds. `GetCapability`, `CancelCapability`, private
-snapshot publication, and the retained-proof independent-verifier gate remain
-pending.
+sandbox controls, exact-revision snapshot publication, atomic root registration,
+revocation, and expiry bounds. `GetCapability`, `CancelCapability`, and the
+retained-proof independent-verifier gate remain pending.
 
 ## Read first
 
@@ -150,6 +160,11 @@ Start the local application and service shells with:
 ./scripts/compose --profile apps --profile services up --build
 ```
 
+The `services` profile fails closed until `.env` points to a valid published registry,
+snapshot authority key, SpiceDB bearer-token file, and exact ZedToken file. The two
+token files must contain one value with no trailing newline and no group or public
+permission bits.
+
 The 64 GiB proof VM uses the separate `proof` profile. It requires at least
 66,571,993,088 host bytes, the downloaded Plonk setup, a populated pinned Cargo
 cache, and the two approved SP1 program-key values in `.env`. Check the rendered
@@ -175,7 +190,10 @@ chmod 0400 policy-authority.pk8 snapshot-authority.pk8
 ```
 
 Copy `.env.example` to `.env`. Set `HOST_UID` from `id -u` and `HOST_GID` from
-`id -g`. Set both key paths to absolute host paths.
+`id -g`. Set both key paths and both token paths to absolute host paths. The SpiceDB
+token file contains the configured preshared key. The ZedToken file contains the
+exact revision returned after the approved relationship import. Do not add a newline
+or commit either file.
 
 Run the admin image as a one-off command. This example creates a public policy-key
 record:
@@ -218,3 +236,8 @@ revoke-record
 `publish-registry` requires a new output directory for each generation. Draft and
 revocation outputs cannot replace existing files. The manifest changes only after the
 complete candidate generation passes verifier validation.
+
+At runtime, `raziel-registry-writer` is the only service with a writable registry
+mount. Its owner-only Unix socket accepts signed snapshot append and one-way snapshot
+revocation operations. Policy and authority-key changes still require the offline
+admin commands above and a writer restart.

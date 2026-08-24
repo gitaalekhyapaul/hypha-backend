@@ -1,120 +1,115 @@
 # Current Engineering Baton
 
-- Baton ID: B-0026
+- Baton ID: B-0027
 - State: READY
-- Milestone: M4, private snapshot publication
+- Milestone: M4, capability lifecycle RPCs
 - Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-08-23T05:35:06Z
+- Started UTC: None
+- Last updated UTC: 2026-08-24T05:48:03Z
 - Branch: `main`
-- Worktree: B-0025 is complete and ready to commit. Its archive is
-  `docs/agent/history/B-0025-isolated-prover-launcher-and-terminal-validation.md`.
+- Worktree: B-0026 is archived. Inspect Git before claiming B-0027.
 
 ## Objective
 
-Implement the trusted administrative publication path that reads one exact SpiceDB
-revision, creates the blinded relationship snapshot, stores the immutable private
-record, and publishes the signed public snapshot record used by capability requests
-and proof generation.
+Implement authoritative `GetCapability` and `CancelCapability` behavior over the
+retained BullMQ job state. Return only validated public lifecycle data and propagate
+active cancellation through the existing proof supervisor.
 
 ## Acceptance Criteria
 
-- [ ] The build path reads relationships at one exact SpiceDB revision and records
-      the returned consistency token without exposing it to agents.
-- [ ] One fresh 32-byte secret salt creates the ADR-0009 relationship root and never
-      enters public RPC output, Redis, logs, or the signed descriptor.
-- [ ] The immutable ADR-0015 private snapshot is published before the public registry
-      record and stays bound to the exact snapshot ID, root, and policy.
-- [ ] Public publication signs the approved snapshot descriptor with the configured
-      authority key and performs an atomic trusted-registry update.
-- [ ] Duplicate, stale epoch, policy mismatch, SpiceDB error, private-store error,
-      signing error, and public-registry error paths fail closed with typed private
-      errors and generic RPC errors.
-- [ ] Focused adapter, publication, service, registry, privacy, formatting, lint, and
-      diff gates pass without running SP1.
+- [ ] `GetCapability` validates the job identifier and returns the authoritative
+      queued, executing, failed, cancelled, or completed public state.
+- [ ] A completed response exposes only the retained bound `ProofCapability` and
+      approved aggregate metrics.
+- [ ] `CancelCapability` handles waiting and active jobs through the existing BullMQ
+      and supervisor cancellation contracts.
+- [ ] Duplicate cancellation is deterministic. Terminal jobs cannot be reopened or
+      altered.
+- [ ] Missing, malformed, stale, and queue-failure paths return stable generic RPC
+      errors with typed private causes.
+- [ ] No lifecycle response or Redis mutation exposes private envelopes, requests,
+      relationships, caveat values, salt, witness data, proof input, or paths.
+- [ ] Focused service, live Redis, worker, privacy, formatting, lint, and diff gates
+      pass without running SP1.
 
 ## Architecture Constraints
 
-- ADR-0009 fixes blinded relationship leaves, tree ordering, salt size, and public
-  descriptor fields.
-- ADR-0010 fixes signed snapshot authority and local registry trust.
-- ADR-0015 fixes the immutable private snapshot record, root-derived lookup, owner
-  modes, and publication order.
-- The agent never receives relationships, caveat values, salt, tree openings,
-  PolicyIR, or the SpiceDB consistency token.
-- Raw Protobuf bytes never become commitment inputs.
-- `razield` cannot approve its own PolicyIR. Snapshot publication must resolve an
-  already approved policy record.
-- No new dependency, package version, toolchain, proof run, or architecture change is
-  approved by this baton.
+- ADR-0013 fixes the API-job topology, queue lifecycle, cancellation, retry, timeout,
+  cleanup, and public retention rules.
+- ADR-0014 fixes request identity and job-ID derivation.
+- ADR-0015 fixes the one-shot cancellation acknowledgment and cleanup order.
+- ADR-0016 fixes snapshot publication and remains unchanged.
+- The API never reads a private envelope to answer Get or Cancel.
+- A completed capability must already have passed terminal proof and claim validation.
+- A real SP1 proof run remains separately approval-gated.
 
 ## File Scope
 
-- Existing `SnapshotService` handlers and service composition under
+- Existing capability service handlers and lifecycle types under
+  `services/razield/src/service/`
+- Existing queue, publication, and worker cancellation APIs under
   `services/razield/src/`
-- Existing private snapshot, authority, registry, snapshot, and SpiceDB adapter APIs
-- Focused snapshot publication tests and current-state documentation
-- `docker-compose.yml` only for the private snapshot volume needed by `razield`
-- `docs/agent/CURRENT-BATON.md`
+- Focused capability lifecycle and live Redis tests
+- Current-state README, architecture, technical specification, and baton documents
 
 ## Out of Scope
 
-- `GetCapability` and `CancelCapability`
 - Independent `verifierd` service behavior
-- A proof run, proof-protocol change, new public proof value, or capability change
+- Snapshot publication or registry-writer changes
+- Proof protocol, proof generation, guest, canonical hash, or public capability changes
 - M5 frontend and gateway work, M6 real-data acceptance, M7, or another scenario
-- At-rest encryption, a database-backed private snapshot store, or remote proving
 
 ## Decisions
 
-- Inherited: ADR-0009, ADR-0010, ADR-0013, and ADR-0015.
-- Inherited: B-0024 provides the strict private snapshot codec and immutable store.
-- Inherited: B-0025 provides the fixed proof sandbox and terminal capability path.
-- Made: None.
+- Inherited: ADR-0013 through ADR-0016.
+- Inherited: B-0025 stores only validated public terminal capability data in BullMQ.
+- Inherited: B-0026 completes the runtime SnapshotService lifecycle.
+- None made for B-0027.
 
 ## Open Questions and Blockers
 
-- None recorded. Reconcile the existing SnapshotService shell and SpiceDB adapter
-  before claiming this baton.
+- None. Reconcile the exact ADR-0013 cancellation and terminal-state contract before
+  claiming the baton.
 
 ## Work Completed
 
-- B-0025 completed the isolated launcher, sandbox, terminal verification, and public
-  BullMQ result boundary.
-- The user requested exact VM Docker and API E2E instructions after snapshot,
-  lifecycle, worker, and verifier endpoints form a complete backend flow.
+- B-0026 completed exact SpiceDB snapshot publication, private storage, signing,
+  atomic root registration, read, and revocation.
+- The current CapabilityService keeps Get and Cancel closed as unimplemented.
 
 ## Validation Plan
 
-- Inspect the generated SnapshotService contract, current handlers, SpiceDB clients,
-  authority APIs, registry publisher, and private snapshot store.
-- Add the smallest production publication path that composes those approved parts.
-- Run focused snapshot and service tests, then affected authority, registry, Compose,
-  privacy, formatting, lint, and diff gates.
+- Inspect the generated CapabilityService contract and existing queue state mapping.
+- Implement the smallest lifecycle boundary over authoritative BullMQ records.
+- Test every public state, active and waiting cancellation, terminal idempotency,
+  malformed identifiers, queue failures, and private-data exclusion.
+- Run focused tests, live Redis conformance, affected service tests, formatting, lint,
+  privacy scans, and `git diff --check`.
 - Do not run SP1.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0025 archive | PASS | Launcher, sandbox, worker, terminal verification, and public result | 2026-08-23T05:35:06Z |
-| B-0026 implementation | NOT AVAILABLE | Not started | 2026-08-23T05:35:06Z |
+| B-0026 archive | PASS | Runtime snapshot publication and revocation | 2026-08-24T05:48:03Z |
+| B-0027 implementation | NOT AVAILABLE | Baton not claimed | 2026-08-24T05:48:03Z |
 
 ## Privacy Checks
 
-- NOT APPLICABLE: B-0026 has not started.
+- PASS: B-0026 public snapshot RPCs expose no private snapshot inputs.
+- NOT AVAILABLE: B-0027 lifecycle responses are not implemented.
+- NOT APPLICABLE: Independent verifier behavior belongs to a later baton.
 
 ## Risks and Private-Data Notes
 
-- Publication ordering matters. A public accepted root without its private snapshot
-  leaves queued proofs unable to resolve the witness source.
-- A private snapshot published without a public record is safe but orphan cleanup
-  must not delete data referenced by an active publication attempt.
-- SpiceDB pagination and consistency must not mix revisions.
-- The final VM E2E runbook must use only public admin and capability APIs. It must not
-  require manual private-volume edits.
+- Queue records are the authoritative lifecycle source. The API must not reconstruct
+  state from private envelopes.
+- Active cancellation must wait for the existing correlated child acknowledgment and
+  cleanup sequence before reporting terminal cancellation.
+- A queue transport failure must not be presented as a missing or cancelled job.
+- The final VM API E2E runbook follows lifecycle and verifier completion.
 
 ## Exact Next Action
 
-Commit B-0025, then claim B-0026 and inspect the existing snapshot service and
-SpiceDB publication APIs before editing production code.
+Read ADR-0013 and the current queue and handler implementations, claim B-0027, and map
+each retained BullMQ state to the generated public RPC response.

@@ -99,9 +99,11 @@ services:
   spicedb:
     image: ${SPICEDB_IMAGE}
     command:
-      - serve-testing
+      - serve
       - --grpc-preshared-key=${SPICEDB_PRESHARED_KEY:-raziel-local-development-only}
       - --http-enabled=true
+      - --skip-release-check
+      - --telemetry-endpoint=
     ports:
       - "50051:50051"
       - "8443:8443"
@@ -181,10 +183,18 @@ services:
           -o "$$RAZIEL_PRIVATE_UID" \
           -g "$$RAZIEL_PRIVATE_GID" \
           -m 0700 \
-          /var/lib/raziel/private-envelopes
-        test "$$(stat --format=%a /var/lib/raziel/private-envelopes)" = 700
-        test "$$(stat --format=%u /var/lib/raziel/private-envelopes)" = "$$RAZIEL_PRIVATE_UID"
-        test "$$(stat --format=%g /var/lib/raziel/private-envelopes)" = "$$RAZIEL_PRIVATE_GID"
+          /var/lib/raziel/private-envelopes \
+          /var/lib/raziel/private-snapshots \
+          /run/raziel-registry
+        for private_root in \
+          /var/lib/raziel/private-envelopes \
+          /var/lib/raziel/private-snapshots \
+          /run/raziel-registry
+        do
+          test "$$(stat --format=%a "$$private_root")" = 700
+          test "$$(stat --format=%u "$$private_root")" = "$$RAZIEL_PRIVATE_UID"
+          test "$$(stat --format=%g "$$private_root")" = "$$RAZIEL_PRIVATE_GID"
+        done
     environment:
       RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
       RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
@@ -201,6 +211,8 @@ services:
       - no-new-privileges:true
     volumes:
       - razield-private-envelopes:/var/lib/raziel/private-envelopes
+      - razield-private-snapshots:/var/lib/raziel/private-snapshots
+      - raziel-registry-ipc:/run/raziel-registry
     profiles: ["services", "proof"]
 
   razield-proof-build:
@@ -240,16 +252,10 @@ services:
           -o "$$RAZIEL_PRIVATE_UID" \
           -g "$$RAZIEL_PRIVATE_GID" \
           -m 0700 \
-          /var/lib/raziel/private-snapshots \
           /run/raziel-proof
-        for private_root in \
-          /var/lib/raziel/private-snapshots \
-          /run/raziel-proof
-        do
-          test "$$(stat --format=%a "$$private_root")" = 700
-          test "$$(stat --format=%u "$$private_root")" = "$$RAZIEL_PRIVATE_UID"
-          test "$$(stat --format=%g "$$private_root")" = "$$RAZIEL_PRIVATE_GID"
-        done
+        test "$$(stat --format=%a /run/raziel-proof)" = 700
+        test "$$(stat --format=%u /run/raziel-proof)" = "$$RAZIEL_PRIVATE_UID"
+        test "$$(stat --format=%g /run/raziel-proof)" = "$$RAZIEL_PRIVATE_GID"
     environment:
       RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
       RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
@@ -265,7 +271,6 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - razield-private-snapshots:/var/lib/raziel/private-snapshots
       - razield-proof-ipc:/run/raziel-proof
     profiles: ["proof"]
 
@@ -328,6 +333,8 @@ services:
         condition: service_completed_successfully
       razield-proof-init:
         condition: service_completed_successfully
+      razield-private-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD-SHELL
@@ -388,7 +395,7 @@ services:
 
   razield:
     <<: *secure-rust-service
-    command: ["cargo", "run", "--locked", "--offline", "-p", "razield"]
+    command: ["cargo", "run", "--locked", "--offline", "-p", "razield", "--bin", "razield"]
     environment:
       CARGO_HOME: /usr/local/cargo
       CARGO_NET_OFFLINE: "true"
@@ -396,24 +403,37 @@ services:
       HOME: /tmp/raziel-home
       RAZIEL_BIND_ADDRESS: 0.0.0.0:50052
       RAZIEL_PRIVATE_ENVELOPE_ROOT: /var/lib/raziel/private-envelopes
+      RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
       RAZIEL_QUEUE_PREFIX: ${RAZIEL_QUEUE_PREFIX:-raziel-capabilities}
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry/writer.sock
       RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
       RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
+      RAZIEL_SPICEDB_AUTH_TOKEN_PATH: /run/secrets/raziel/spicedb-token
+      RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
+      RAZIEL_SPICEDB_ENDPOINT_REF: ${RAZIEL_SPICEDB_ENDPOINT_REF:-owner-spicedb}
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RAZIEL_ZED_TOKEN_PATH: /run/secrets/raziel/zed-token
+      RAZIEL_ZED_TOKEN_SECRET_REF: ${RAZIEL_ZED_TOKEN_SECRET_REF:-reconciliation-revision}
       RUSTUP_TOOLCHAIN: "1.97.1"
     volumes:
       - .:/workspace:ro
       - cargo-registry:/usr/local/cargo/registry:ro
       - cargo-git:/usr/local/cargo/git:ro
       - razield-private-envelopes:/var/lib/raziel/private-envelopes
+      - razield-private-snapshots:/var/lib/raziel/private-snapshots
+      - raziel-registry-ipc:/run/raziel-registry
       - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
       - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
+      - ${RAZIEL_SPICEDB_AUTH_TOKEN_PATH:-/dev/null}:/run/secrets/raziel/spicedb-token:ro
+      - ${RAZIEL_ZED_TOKEN_PATH:-/dev/null}:/run/secrets/raziel/zed-token:ro
     depends_on:
       redis:
         condition: service_healthy
       razield-private-init:
         condition: service_completed_successfully
+      raziel-registry-writer:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD-SHELL
@@ -425,6 +445,54 @@ services:
     networks:
       - default
       - owner-internal
+    profiles: ["services"]
+
+  raziel-registry-writer:
+    <<: *secure-rust-service
+    command:
+      - cargo
+      - run
+      - --locked
+      - --offline
+      - -p
+      - raziel-admin
+      - --bin
+      - raziel-registry-writer
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry/writer.sock
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - raziel-registry-ipc:/run/raziel-registry
+      - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry
+    depends_on:
+      razield-private-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -S /run/raziel-registry/writer.sock &&
+          test "$$(stat --format=%a /run/raziel-registry/writer.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-registry/writer.sock)" = "${HOST_UID:-1000}"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
     profiles: ["services"]
 
   bullmq-conformance:
@@ -542,6 +610,7 @@ volumes:
   razield-proof-build-cache:
   razield-proof-ipc:
   razield-proof-runtime:
+  raziel-registry-ipc:
 
 networks:
   owner-internal:

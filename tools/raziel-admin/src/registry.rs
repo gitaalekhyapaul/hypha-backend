@@ -112,7 +112,10 @@ pub fn publish(arguments: &Arguments) -> Result<(), AdminError> {
     Ok(())
 }
 
-fn create_generation_directory(root: &Path, relative_path: &str) -> Result<(), AdminError> {
+pub(crate) fn create_generation_directory(
+    root: &Path,
+    relative_path: &str,
+) -> Result<(), AdminError> {
     validate_relative_path(relative_path)?;
     let parts: Vec<_> = relative_path.split('/').collect();
     let mut current = root.to_path_buf();
@@ -286,7 +289,7 @@ fn copy_root_records(
     Ok(entries)
 }
 
-fn write_generation_record(
+pub(crate) fn write_generation_record(
     root: &Path,
     output_directory: &str,
     kind: &str,

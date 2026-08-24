@@ -2,7 +2,7 @@
 
 Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service, identity, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, positive-path witness builder, trusted input assembly, private snapshot, one-shot child, fixed launcher, proof sandbox, terminal capability, queue-conformance, generated-contract, and isolated-verifier build gates |
+| M4 | Active implementation | Accepted service, identity, snapshot-publication, and private proving contracts, passing admission, private-envelope, atomic-publication, Create-ingress, BullMQ supervisor, exact SpiceDB snapshot lifecycle, registry writer, positive-path witness builder, trusted input assembly, one-shot child, fixed launcher, proof sandbox, terminal capability, queue-conformance, generated-contract, and isolated-verifier build gates |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -126,6 +126,7 @@ flowchart LR
         Q["BullMQ and Redis\nowner-only queue state"]
         B["Private envelope store\nbounded owner-only blobs"]
         D["Private snapshot store\nroot-keyed owner-only records"]
+        RW["Registry writer\nowner-only Unix socket"]
         W["Rust proof supervisor\nBullMQ worker and terminal verifier"]
         L["Fixed proof launcher\nowner-only Unix socket"]
         E["One-shot prover child\nnetworkless CpuProver"]
@@ -134,7 +135,10 @@ flowchart LR
         C --> PA
         PA --> PR
         S --> R
-        PR --> R
+        PR -->|"read-only approved state"| R
+        R -->|"publish immutable snapshot"| D
+        R -->|"append or revoke signed root"| RW
+        RW -->|"atomic validated generation"| PR
         R -->|"publish and query"| Q
         R -->|"write private envelope"| B
         Q <-->|"claim, renew, finish"| W
@@ -270,8 +274,17 @@ caps, four-CPU affinity, no network, read-only root, fixed trusted mounts, owner
 socket, and bounded tmpfs. The production supervisor runs direct verification and
 retains a public `ProofCapability` plus aggregate metrics only after cleanup. Live
 Redis tests confirm one completed terminal result, no private context in Redis, zero
-proof retry, and restart recovery. Lifecycle RPCs, private snapshot publication, and
-independent retained-proof verification remain pending.
+proof retry, and restart recovery.
+
+The B-0026 SnapshotService resolves an exact approved policy and active snapshot key
+before any SpiceDB call. It reflects the requested revision, reads each PolicyIR
+resource type at that same revision, rejects unsupported relationship forms, and
+generates one fresh 32-byte salt. It stores the immutable private snapshot first.
+The networkless registry writer then validates the signed descriptor and atomically
+publishes a complete next generation through an owner-only Unix socket. `razield`
+reloads its read-only registry view before returning. Build, read, revoke, and live
+SpiceDB compatibility gates pass. Capability lifecycle RPCs and independent
+retained-proof verification remain pending.
 
 ## Main components
 
@@ -366,8 +379,10 @@ sequenceDiagram
     actor O as Data owner
     participant S as SpiceDB
     participant C as Compiler adapter (Go)
-    participant P as Policy registry
+    participant P as Trusted registry
     participant R as razield (Rust)
+    participant D as Private snapshot store
+    participant W as Registry writer
 
     O->>S: Write schema and relationships
     S-->>O: ZedToken
@@ -380,11 +395,15 @@ sequenceDiagram
     O->>R: BuildSnapshot at ZedToken and policy_hash
     R->>P: Load approved policy record
     P-->>R: Canonical PolicyIR and approval signature
-    R->>S: Read relationships at ZedToken
+    R->>S: Reflect and read each policy type at exact ZedToken
     S-->>R: Tuples, caveat context, revision
     R->>R: Canonicalize tuples
     R->>R: Build blinded relationship tree
     R->>R: Sign snapshot descriptor
+    R->>D: Publish immutable private snapshot
+    R->>W: Append signed root at expected generation
+    W->>P: Validate and atomically publish next generation
+    P-->>R: Reload exact accepted root
     R-->>O: Snapshot ID, roots, revision, expiry
 ```
 

@@ -6,6 +6,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use super::clock::system_time_to_unix_seconds;
 use super::{
     ClockError, MAX_SERVICE_MESSAGE_BYTES, ORPHAN_GRACE_PERIOD, ServiceConfig, ServiceConfigError,
+    SnapshotServiceConfig, SnapshotServiceConfigError,
 };
 
 #[test]
@@ -157,4 +158,75 @@ fn environment_loader_requires_all_explicit_owner_settings() {
             .flatten()
     });
     assert_eq!(missing_prefix, Err(ServiceConfigError::InvalidQueuePrefix));
+}
+
+#[test]
+fn snapshot_configuration_uses_fixed_refs_and_redacts_secret_paths() {
+    let values = snapshot_values();
+    let config =
+        SnapshotServiceConfig::from_lookup(|key| values.get(key).map(ToString::to_string)).unwrap();
+
+    assert_eq!(config.spicedb_endpoint_ref(), "owner-spicedb");
+    assert_eq!(config.spicedb_endpoint(), "http://spicedb:50051");
+    assert_eq!(config.zed_token_secret_ref(), "reconciliation-revision");
+    assert_eq!(config.trust_domain_id(), "raziel-test");
+    let debug = format!("{config:?}");
+    assert!(!debug.contains("spicedb-token"));
+    assert!(!debug.contains("zed-token"));
+    assert_eq!(debug.matches("<redacted>").count(), 1);
+}
+
+#[test]
+fn snapshot_configuration_rejects_remote_tls_and_unsafe_paths() {
+    let values = snapshot_values();
+    let invalid_endpoint = SnapshotServiceConfig::from_lookup(|key| {
+        if key == "RAZIEL_SPICEDB_ENDPOINT" {
+            Some("https://remote.example:443".into())
+        } else {
+            values.get(key).map(ToString::to_string)
+        }
+    });
+    assert_eq!(
+        invalid_endpoint,
+        Err(SnapshotServiceConfigError::InvalidSpiceDbEndpoint)
+    );
+
+    let relative_socket = SnapshotServiceConfig::from_lookup(|key| {
+        if key == "RAZIEL_REGISTRY_WRITER_SOCKET_PATH" {
+            Some("relative/writer.sock".into())
+        } else {
+            values.get(key).map(ToString::to_string)
+        }
+    });
+    assert_eq!(
+        relative_socket,
+        Err(SnapshotServiceConfigError::InvalidRegistryWriterSocket)
+    );
+}
+
+fn snapshot_values() -> HashMap<&'static str, &'static str> {
+    HashMap::from([
+        ("RAZIEL_SPICEDB_ENDPOINT_REF", "owner-spicedb"),
+        ("RAZIEL_SPICEDB_ENDPOINT", "http://spicedb:50051"),
+        (
+            "RAZIEL_SPICEDB_AUTH_TOKEN_PATH",
+            "/run/secrets/raziel/spicedb-token",
+        ),
+        ("RAZIEL_ZED_TOKEN_SECRET_REF", "reconciliation-revision"),
+        ("RAZIEL_ZED_TOKEN_PATH", "/run/secrets/raziel/zed-token"),
+        (
+            "RAZIEL_PRIVATE_SNAPSHOT_ROOT",
+            "/var/lib/raziel/private-snapshots",
+        ),
+        (
+            "RAZIEL_REGISTRY_WRITER_SOCKET_PATH",
+            "/run/raziel-registry/writer.sock",
+        ),
+        ("RAZIEL_REGISTRY_PATH", "/var/lib/raziel/registry"),
+        (
+            "RAZIEL_SNAPSHOT_KEY_PATH",
+            "/run/secrets/raziel/snapshot-authority.pk8",
+        ),
+        ("RAZIEL_TRUST_DOMAIN_ID", "raziel-test"),
+    ])
 }

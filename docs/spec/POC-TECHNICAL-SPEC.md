@@ -1105,7 +1105,9 @@ Status: active implementation. The maintainer accepted
 [ADR-0014](../decisions/0014-agent-key-thumbprint-and-issuance-identity.md) on
 2026-08-12, then accepted
 [ADR-0015](../decisions/0015-private-snapshot-and-one-shot-prover-boundary.md) on
-2026-08-23. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
+2026-08-23, then accepted
+[ADR-0016](../decisions/0016-runtime-snapshot-publication-and-spicedb-adapter.md)
+on 2026-08-24. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. Generated
 Tonic `0.14.6` service contracts compile behind an explicit feature. The pure
 `razield` admission boundary now performs typed request conversion, raw-key Ed25519
 thumbprint derivation, exact commitment signature verification, deterministic job-ID
@@ -1163,8 +1165,17 @@ The Compose proof profile applies the accepted 60,129,542,144-byte cap, zero swa
 four CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
 bounded tmpfs. The supervisor deletes the private envelope before direct Plonk and
 exact public-claim validation. Only then does BullMQ retain the public capability and
-aggregate metrics. `GetCapability`, `CancelCapability`, private snapshot publication,
-and independent verifier behavior remain pending. The verification-only
+aggregate metrics. The B-0026 runtime now resolves one exact approved policy and
+active snapshot authority key, reflects and reads every PolicyIR resource type at one
+exact SpiceDB revision, creates a freshly salted blinded tree, and publishes the
+immutable private snapshot before the signed public root. A separate networkless
+registry writer owns the writable mount, accepts only append-root and revoke-root
+operations over a `0600` Unix socket, and atomically publishes a validated complete
+generation. `razield` reloads its read-only registry view before returning.
+`BuildSnapshot`, `GetSnapshot`, and `RevokeSnapshot` pass a live Compose lifecycle
+gate. The generated Authzed `v1.53.0` API passes against the pinned SpiceDB `v1.54.0`
+server. `GetCapability`, `CancelCapability`, and independent verifier behavior remain
+pending. The verification-only
 Rust feature and dependency-tree gate pass. That build uses direct `sp1-verifier`
 `6.3.1` Plonk
 verification and excludes SDK proving, core execution, native Gnark, JIT, and

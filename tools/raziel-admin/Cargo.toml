@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
+default-run = "raziel-admin"
 
 [dependencies]
 prost.workspace = true
@@ -19,3 +20,7 @@ sha2.workspace = true
 
 [dev-dependencies]
 raziel-snapshot.workspace = true
+
+[[bin]]
+name = "raziel-registry-writer"
+path = "src/bin/raziel-registry-writer.rs"

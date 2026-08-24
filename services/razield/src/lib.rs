@@ -10,4 +10,5 @@ pub mod private_snapshot;
 pub mod publication;
 pub mod queue;
 pub mod service;
+pub mod spicedb;
 pub mod worker;

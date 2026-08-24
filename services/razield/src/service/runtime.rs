@@ -6,7 +6,9 @@ use std::time::SystemTime;
 use tonic::transport::Server;
 
 use super::{
-    ORPHAN_GRACE_PERIOD, ServiceConfig, ServiceConfigError, SystemClock, bounded_capability_service,
+    ORPHAN_GRACE_PERIOD, ServiceConfig, ServiceConfigError, SnapshotCoordinator,
+    SnapshotOperationError, SnapshotServiceConfig, SnapshotServiceConfigError, SystemClock,
+    bounded_capability_service, bounded_snapshot_service,
 };
 use crate::private_envelope::{PrivateEnvelopeError, PrivateEnvelopeStore};
 use crate::publication::{
@@ -17,7 +19,40 @@ use crate::queue::{QueueConfig, QueueConfigError};
 /// Runs the owner service from its explicit environment contract.
 pub async fn run_from_env() -> Result<(), ServiceRuntimeError> {
     let config = ServiceConfig::from_env()?;
-    run_until_shutdown(config, shutdown_signal()).await
+    let snapshot_config = SnapshotServiceConfig::from_env()?;
+    run_all_until_shutdown(config, snapshot_config, shutdown_signal()).await
+}
+
+async fn run_all_until_shutdown<F>(
+    config: ServiceConfig,
+    snapshot_config: SnapshotServiceConfig,
+    shutdown: F,
+) -> Result<(), ServiceRuntimeError>
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    let store_root = config.private_envelope_root().to_owned();
+    let store = tokio::task::spawn_blocking(move || PrivateEnvelopeStore::open(store_root))
+        .await
+        .map_err(|_| ServiceRuntimeError::BlockingTaskFailed)??;
+    let queue_config = QueueConfig::new(config.redis_url(), config.queue_prefix())?;
+    let publisher = CapabilityJobPublisher::connect(store, &queue_config).await?;
+    publisher
+        .reconcile_startup(SystemTime::now(), ORPHAN_GRACE_PERIOD)
+        .await?;
+    let snapshot = tokio::task::spawn_blocking(move || SnapshotCoordinator::open(snapshot_config))
+        .await
+        .map_err(|_| ServiceRuntimeError::BlockingTaskFailed)??;
+
+    let capability_service =
+        bounded_capability_service(super::CapabilityServiceHandler::new(publisher, SystemClock));
+    let snapshot_service = bounded_snapshot_service(super::SnapshotServiceHandler::new(snapshot));
+    Server::builder()
+        .add_service(capability_service)
+        .add_service(snapshot_service)
+        .serve_with_shutdown(config.bind_address(), shutdown)
+        .await
+        .map_err(|_| ServiceRuntimeError::Transport)
 }
 
 /// Runs startup reconciliation before binding and serves until shutdown resolves.
@@ -75,6 +110,8 @@ async fn shutdown_signal() {
 #[derive(Debug)]
 pub enum ServiceRuntimeError {
     Configuration(ServiceConfigError),
+    SnapshotConfiguration(SnapshotServiceConfigError),
+    SnapshotOperation(SnapshotOperationError),
     QueueConfiguration(QueueConfigError),
     PrivateEnvelope(PrivateEnvelopeError),
     Publication(CapabilityPublicationError),
@@ -87,6 +124,8 @@ impl fmt::Display for ServiceRuntimeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Configuration(_) => "razield configuration is invalid",
+            Self::SnapshotConfiguration(_) => "razield snapshot configuration is invalid",
+            Self::SnapshotOperation(_) => "razield snapshot startup failed",
             Self::QueueConfiguration(_) => "razield queue configuration is invalid",
             Self::PrivateEnvelope(_) => "razield private storage failed",
             Self::Publication(_) => "razield queue startup failed",
@@ -101,6 +140,8 @@ impl Error for ServiceRuntimeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Configuration(error) => Some(error),
+            Self::SnapshotConfiguration(error) => Some(error),
+            Self::SnapshotOperation(error) => Some(error),
             Self::QueueConfiguration(error) => Some(error),
             Self::PrivateEnvelope(error) => Some(error),
             Self::Publication(error) => Some(error),
@@ -113,6 +154,18 @@ impl Error for ServiceRuntimeError {
 impl From<ServiceConfigError> for ServiceRuntimeError {
     fn from(error: ServiceConfigError) -> Self {
         Self::Configuration(error)
+    }
+}
+
+impl From<SnapshotServiceConfigError> for ServiceRuntimeError {
+    fn from(error: SnapshotServiceConfigError) -> Self {
+        Self::SnapshotConfiguration(error)
+    }
+}
+
+impl From<SnapshotOperationError> for ServiceRuntimeError {
+    fn from(error: SnapshotOperationError) -> Self {
+        Self::SnapshotOperation(error)
     }
 }
 
