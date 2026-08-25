@@ -208,7 +208,7 @@ mkdir -p .sp1/benchmarks
   printf 'sp1_plonk_setup_archive_sha256=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n'
   printf 'source_manifest_sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n'
   printf 'run_bundle_manifest_sha256=1111111111111111111111111111111111111111111111111111111111111111\n'
-  printf 'adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=424312, execute_ms=306\n'
+  printf 'adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=520000, execute_ms=306\n'
   printf 'adr_0012_prove: proof_mode=plonk, prove_ms=120000, artifact_bytes=4096, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
   printf 'test local_plonk_verification_passes_the_adr_0012_gate ... adr_0012_verify: proof_mode=plonk, verify_ms=300, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
   printf 'adr_0012_mutations=pass\n'
@@ -313,6 +313,18 @@ sed 's/^benchmark_profile=cluster-56g-8cpu$/benchmark_profile=cluster-64g/' \
   "$raw_report" >"$wrong_profile_report"
 if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
   echo "public benchmark result accepted a different resource profile" >&2
+  exit 1
+fi
+sed 's/instructions=520000/instructions=520001/' \
+  "$raw_report" >"$wrong_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted instruction-count budget drift" >&2
+  exit 1
+fi
+sed 's/artifact_bytes=4096/artifact_bytes=0/' \
+  "$raw_report" >"$wrong_profile_report"
+if ./scripts/cluster/render-sp1-plonk-result "$wrong_profile_report" >/dev/null 2>&1; then
+  echo "public benchmark result accepted an empty proof artifact" >&2
   exit 1
 fi
 sed \

@@ -12,6 +12,7 @@
 - Eight-CPU validation passed: 2026-08-13
 - Eight-CPU profile approved by maintainer: 2026-08-24
 - Fixed disk floor removed by maintainer: 2026-08-26
+- Bounded instruction regression gate approved by maintainer: 2026-08-26
 - 30 GiB diagnostic approved by maintainer: 2026-07-27
 - Resolution: O-003 is closed. D-019 selects local Plonk for final demo proof
   artifacts.
@@ -312,10 +313,17 @@ manifest SHA-256 was
 temporary input was deleted, and no proof artifact or retained witness was written.
 Peak memory was 48,537,600 bytes, with zero swap and no OOM event.
 
-The current B-0031 direct-fixture pin is 424,312 instructions. Historical M3 records
-remain unchanged at 422,138 instructions. The new measurement stays below the
-approved 520,000-instruction direct-path bound and does not change a proof ceiling,
-resource profile, proof statement, or public encoding.
+The current B-0031 direct-fixture measurement is 424,312 instructions. Historical M3
+records remain unchanged at 422,138 instructions. Both measurements stay below the
+approved 520,000-instruction direct-path bound.
+
+The maintainer approved replacing exact instruction-count equality with a positive
+count capped at 520,000 on 2026-08-26. The test and report renderer still fail before
+proof acceptance when the fixture exceeds that bound. They record the exact measured
+count without treating it as protocol data. The source commit, source tree, guest ELF
+digest, source manifest, and run-bundle digest already bind benchmark identity. This
+amendment does not change the 100,000,000-cycle prover safety limit, resource profile,
+proof statement, public values, or verifier behavior.
 
 ### Fixed disk-floor removal
 

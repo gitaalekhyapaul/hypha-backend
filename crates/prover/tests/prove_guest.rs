@@ -25,7 +25,7 @@ const AGENT_PUBLIC_KEY: [u8; 32] = [
     0x0e, 0xe1, 0x72, 0xf3, 0xda, 0xa6, 0x23, 0x25, 0xaf, 0x02, 0x1a, 0x68, 0xf7, 0x07, 0x51, 0x1a,
 ];
 
-const B0031_SIGNABLE_DIRECT_FIXTURE_INSTRUCTIONS: u64 = 424_312;
+const B0031_SIGNABLE_DIRECT_FIXTURE_MAX_INSTRUCTIONS: u64 = 520_000;
 const PROOF_DEADLINE: Duration = Duration::from_secs(60 * 60);
 const VERIFICATION_DEADLINE: Duration = Duration::from_secs(60);
 const UNSAFE_ENV_HELPER: &str = "RAZIEL_UNSAFE_SP1_ENV_HELPER";
@@ -104,9 +104,10 @@ fn local_plonk_execute_records_the_adr_0012_fixture_metrics() {
         .execute(&guest_elf, &prepared)
         .expect("direct fixture must execute");
     let execute_elapsed = execute_started.elapsed();
-    assert_eq!(
-        execution.instruction_count, B0031_SIGNABLE_DIRECT_FIXTURE_INSTRUCTIONS,
-        "direct fixture instruction count changed"
+    assert!(
+        (1..=B0031_SIGNABLE_DIRECT_FIXTURE_MAX_INSTRUCTIONS).contains(&execution.instruction_count),
+        "direct fixture instruction count {} exceeds its approved bound",
+        execution.instruction_count,
     );
 
     eprintln!(

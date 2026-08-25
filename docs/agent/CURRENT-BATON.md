@@ -5,10 +5,10 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T18:17:44Z
+- Last updated UTC: 2026-08-25T18:30:28Z
 - Branch: `main`
-- Worktree: Clean at pushed commit `fd9ecd6` before correcting the stale public
-  benchmark parser.
+- Worktree: Clean at pushed commit `35db270` before the maintainer-approved bounded
+  instruction regression gate.
 
 ## Objective
 
@@ -69,12 +69,15 @@ every `razield` role stopped, then measure the verification-only resource profil
 - Made: The maintainer approved removal of the unmeasured fixed 60 GiB free-disk
   preflight on 2026-08-26. Available disk remains diagnostic output. CPU, memory,
   swap, network, proof deadline, and artifact-size gates remain fixed.
+- Made: The maintainer approved replacing the exact synthetic-fixture instruction
+  equality with a positive count capped at 520,000 on 2026-08-26. Exact counts remain
+  benchmark measurements and do not enter runtime authorization or proof semantics.
 
 ## Open Questions And Blockers
 
 - The NUS VM completed the B-0031 proof benchmark with zero OOM events. Public report
-  rendering then rejected the new 424,312-instruction line against its stale
-  422,138-only pattern. The parser defect is corrected and validated locally. The
+  rendering then rejected the new 424,312-instruction line against its stale exact
+  pattern. The parser now applies the approved 520,000-instruction bound. The
   temporary public export was deleted, so one VM rerun remains required.
 
 ## Work Completed
@@ -95,13 +98,17 @@ every `razield` role stopped, then measure the verification-only resource profil
 - The NUS VM operator runbook records the exact proof and verifier commands.
 - The NUS VM passed the host, run-bundle, Plonk-setup, cgroup, and execute preflight.
   The current direct fixture measured 424,312 instructions before proof generation.
-- The host test now pins that measurement as the B-0031 signable direct fixture.
+- The host test records that measurement and enforces the 520,000-instruction bound.
 - Commit `1492613` contains the measured instruction-pin correction.
 - The fixed 60 GiB disk rejection is removed. Host preflight still records exact
   available worktree bytes for diagnostics.
 - Commit `950601b` contains the disk-floor removal and corrected runbooks.
-- The benchmark parser now accepts the validated historical M3 count and current
-  B-0031 count. Its current-fixture plumbing vector uses 424,312 instructions.
+- The benchmark parser records any positive count through 520,000. Its plumbing gate
+  rejects 520,001 before accepting benchmark evidence.
+- The wider hard-coded-value audit found no other exact real-run measurement gate.
+  Exact protocol, profile, queue, encoding, and supply-chain checks remain exact. The
+  renderer now requires proof artifact size in `1..=1,048,576` and tests the exact
+  instruction ceiling rather than the incidental current measurement.
 - No retained public proof fixture exists yet.
 
 ## Validation Plan
@@ -137,6 +144,7 @@ every `razield` role stopped, then measure the verification-only resource profil
 | `./scripts/cluster/check-sp1-plonk-plumbing` | PASS | Locked profile, Compose, exporter, and retained-artifact staging | 2026-08-25T18:01:53Z |
 | B-0031 VM proof benchmark | PASS, host post-processing failed | Proof completed with zero OOM events; stale execute-line parser rejected 424,312 instructions; public export deleted | 2026-08-25T17:53:21Z |
 | Shell syntax, `git diff --check`, and cluster plumbing | PASS | Current and historical execute-line parser formats plus retained-artifact staging | 2026-08-25T18:17:44Z |
+| Hard-coded-value audit and cluster plumbing | PASS | Instruction count and proof size use positive bounds; exact protocol and profile checks retained | 2026-08-25T18:30:28Z |
 
 ## Privacy Checks
 
@@ -153,6 +161,10 @@ every `razield` role stopped, then measure the verification-only resource profil
   audit.
 - The provisional 2 GiB cap lacks a real verification-only peak measurement.
 - The proof rerun is computationally expensive and belongs on the NUS VM.
+- The unused generic local benchmark entrypoint still defaults to the known-failing
+  30 GiB diagnostic profile. The approved cluster path overrides it with the fixed
+  56 GiB profile. Retiring or requiring explicit selection for the generic path is a
+  separate maintenance change.
 - Security review SR-B0031-1: the direct synthetic fixture changes its agent
   thumbprint to the digest of a public test key. This changes fixture commitments and
   requires a fresh proof. It does not change the public-value schema, hash algorithm,
@@ -160,5 +172,5 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Validate and push the corrected benchmark parser, then refresh the prepared NUS VM
-bundle and rerun the retained proof command once.
+Commit and push the bounded benchmark gates, then refresh the prepared NUS VM bundle
+and rerun the retained proof command once.
