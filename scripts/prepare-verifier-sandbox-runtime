@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+umask 022
+
+runtime_root=${RAZIEL_VERIFIER_RUNTIME_ROOT:-/opt/raziel-verifier-runtime}
+target_root=${CARGO_TARGET_DIR:-/var/cache/raziel-verifier-build}
+
+cargo build \
+  --locked \
+  --offline \
+  --release \
+  -p verifierd \
+  --bin verifierd-worker \
+  --bin verifierd-verifier
+
+test -x "$target_root/release/verifierd-worker"
+test -x "$target_root/release/verifierd-verifier"
+
+install -d -m 0755 "$runtime_root"
+install -m 0555 "$target_root/release/verifierd-worker" "$runtime_root/verifierd-worker"
+install -m 0555 "$target_root/release/verifierd-verifier" "$runtime_root/verifierd-verifier"
+
+manifest="$runtime_root/manifest.sha256"
+temporary_manifest="$runtime_root/.manifest.sha256.tmp"
+(
+  cd "$runtime_root"
+  sha256sum verifierd-worker verifierd-verifier >"$temporary_manifest"
+)
+chmod 0444 "$temporary_manifest"
+mv -f "$temporary_manifest" "$manifest"

@@ -158,6 +158,8 @@ flowchart LR
     A -->|"scoped API request"| G["Next.js gateway / PEP"]
     G -->|"local verification"| V["verifierd\nindependent Rust sidecar"]
     PR --> V
+    V -->|"bounded proof and journal"| VW["networkless one-shot\nverifier worker"]
+    VW -->|"verified or rejected"| V
     V -->|"verified claims"| G
     G -->|"authorized query"| P["Payments API and data adapter"]
     P -->|"transaction result"| G
@@ -178,8 +180,10 @@ remain inside the data-owner trust boundary. The one-shot prover has no hosted-p
 or SP1-network path. The verification-only `raziel-prover` feature uses direct
 `sp1-verifier` Plonk verification against a trusted paired program-key record. Its
 checked dependency graph excludes the SDK, prover, core executor, native Gnark, JIT,
-and outbound SP1 clients. A retained real proof must still pass through the isolated
-worker before M4 can claim verifier behavior.
+and outbound SP1 clients. B-0030 now runs that verifier behind a fixed owner-only
+launcher. The one-shot child has a 2 GiB hard limit, zero swap, no network, a
+read-only root, bounded tmpfs, and a 60-second deadline. A retained real proof must
+still pass through this worker before M4 can claim verifier behavior.
 
 Generated Snapshot, Capability, and Verification clients and servers compile through
 the opt-in `raziel-proto` `services` feature. Both Rust service crates select that
@@ -193,9 +197,10 @@ decoder against a frozen descriptor. It validates the public capability, raw Ed2
 agent key, ADR-0002 protected-request signature, trusted whole-second time, and exact
 verifier-local registry state. It reconstructs the full ADR-0011 public journal and
 passes only the bounded proof artifact, expected public values, and trusted program
-key to the next worker boundary. Admission does not decode the proof and cannot
-return claims as verified. The isolated verifier worker and live Tonic binding remain
-pending.
+key to the worker boundary. A crate-owned Tonic codec applies the strict decoder at
+live ingress. The worker calls direct SP1 Plonk verification and only a matching
+success promotes candidate claims. Controlled process tests cover rejection, crash,
+malformed output, and timeout without generating a proof.
 
 The pure `razield` admission boundary implements
 [ADR-0014](docs/decisions/0014-agent-key-thumbprint-and-issuance-identity.md). It maps

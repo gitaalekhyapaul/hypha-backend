@@ -533,14 +533,134 @@ services:
       - no-new-privileges:true
     profiles: ["queue-conformance"]
 
+  verifierd-worker-build:
+    <<: *toolchain-service
+    user: "0:0"
+    command: ["./scripts/prepare-verifier-sandbox-runtime"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /var/cache/raziel-verifier-build
+      HOME: /tmp/raziel-home
+      RAZIEL_VERIFIER_RUNTIME_ROOT: /opt/raziel-verifier-runtime
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=268435456
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - verifierd-worker-build-cache:/var/cache/raziel-verifier-build
+      - verifierd-worker-runtime:/opt/raziel-verifier-runtime
+    profiles: ["services"]
+
+  verifierd-worker-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d \
+          -o "$$RAZIEL_PRIVATE_UID" \
+          -g "$$RAZIEL_PRIVATE_GID" \
+          -m 0700 \
+          /run/raziel-verifier
+        test "$$(stat --format=%a /run/raziel-verifier)" = 700
+        test "$$(stat --format=%u /run/raziel-verifier)" = "$$RAZIEL_PRIVATE_UID"
+        test "$$(stat --format=%g /run/raziel-verifier)" = "$$RAZIEL_PRIVATE_GID"
+    environment:
+      RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
+      RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - verifierd-worker-ipc:/run/raziel-verifier
+    profiles: ["services"]
+
+  verifierd-worker-sandbox:
+    <<: *toolchain-service
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    command: ["/opt/raziel-verifier-runtime/verifierd-worker"]
+    environment:
+      HOME: /tmp
+      RAZIEL_VERIFIER_CHILD_PATH: /opt/raziel-verifier-runtime/verifierd-verifier
+      RAZIEL_VERIFIER_CHILD_SOCKET_PATH: /run/raziel-verifier/child.sock
+      RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock
+    mem_limit: "2147483648"
+    memswap_limit: "2147483648"
+    network_mode: none
+    read_only: true
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=0700,size=67108864,uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}
+    volumes:
+      - type: volume
+        source: verifierd-worker-runtime
+        target: /opt/raziel-verifier-runtime
+        read_only: true
+      - type: volume
+        source: verifierd-worker-ipc
+        target: /run/raziel-verifier
+    depends_on:
+      verifierd-worker-build:
+        condition: service_completed_successfully
+      verifierd-worker-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -S /run/raziel-verifier/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-verifier/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-verifier/launcher.sock)" = "${HOST_UID:-1000}"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    restart: unless-stopped
+    profiles: ["services"]
+
   verifierd:
     <<: *secure-rust-service
     command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RAZIEL_VERIFIER_BIND_ADDRESS: 0.0.0.0:50053
+      RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock
+      RUSTUP_TOOLCHAIN: "1.97.1"
     volumes:
       - .:/workspace:ro
       - cargo-registry:/usr/local/cargo/registry:ro
       - cargo-git:/usr/local/cargo/git:ro
       - ${RAZIEL_REGISTRY_PATH:-./.raziel/state/registry}:/var/lib/raziel/registry:ro
+      - verifierd-worker-ipc:/run/raziel-verifier
+    depends_on:
+      verifierd-worker-sandbox:
+        condition: service_healthy
     profiles: ["services"]
 
   raziel-admin-policy:
@@ -611,6 +731,9 @@ volumes:
   razield-proof-ipc:
   razield-proof-runtime:
   raziel-registry-ipc:
+  verifierd-worker-build-cache:
+  verifierd-worker-ipc:
+  verifierd-worker-runtime:
 
 networks:
   owner-internal:

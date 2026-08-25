@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+compose_output=$(mktemp)
+sandbox_output=$(mktemp)
+api_output=$(mktemp)
+trap 'rm -f "$compose_output" "$sandbox_output" "$api_output"' EXIT
+
+cd "$repo_root"
+HOST_UID=${HOST_UID:-$(id -u)} \
+HOST_GID=${HOST_GID:-$(id -g)} \
+RAZIEL_EXPECTED_VERIFICATION_KEY_ID=sp1-vk-v1:abababababababababababababababababababababababababababababababab \
+RAZIEL_EXPECTED_SP1_VKEY_HASH=0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff \
+  ./scripts/compose --profile services config >"$compose_output"
+
+extract_service() {
+  service_name=$1
+  output=$2
+  awk -v service="  $service_name:" '
+    $0 == service { found = 1; next }
+    found && /^  [a-zA-Z0-9_-]+:/ { exit }
+    found { print }
+    END { if (!found) exit 1 }
+  ' "$compose_output" >"$output"
+}
+
+extract_service verifierd-worker-sandbox "$sandbox_output"
+extract_service verifierd "$api_output"
+
+for exact_setting in \
+  'mem_limit: "2147483648"' \
+  'memswap_limit: "2147483648"' \
+  'network_mode: none' \
+  'pids_limit: 64' \
+  'read_only: true' \
+  'source: verifierd-worker-ipc' \
+  'source: verifierd-worker-runtime' \
+  'target: /opt/raziel-verifier-runtime' \
+  'target: /run/raziel-verifier' \
+  'tmpfs:' \
+  'size=67108864'
+do
+  grep -Fq "$exact_setting" "$sandbox_output"
+done
+
+grep -Fq 'RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock' "$api_output"
+grep -Fq 'source: verifierd-worker-ipc' "$api_output"
+grep -Fq 'target: /run/raziel-verifier' "$api_output"
+
+for forbidden_setting in \
+  '/var/run/docker.sock' \
+  'privileged: true' \
+  'network_mode: host'
+do
+  if grep -Fq "$forbidden_setting" "$sandbox_output" "$api_output"; then
+    echo "verifier services contain a forbidden Compose setting" >&2
+    exit 1
+  fi
+done
+
+printf 'verifier_sandbox_compose=pass\n'

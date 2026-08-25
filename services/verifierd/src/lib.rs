@@ -1,5 +1,7 @@
-//! Public admission policy for Raziel's independent verifier service.
+//! Independent capability admission and isolated SP1 verification.
 
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod service;
+pub mod worker;

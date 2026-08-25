@@ -20,7 +20,9 @@ use raziel_proto::raziel::v1::{
     VerifyCapabilityRequest,
 };
 use raziel_prover::{MAX_PROOF_ARTIFACT_BYTES, TrustedProgramKey};
-use raziel_verifier::{LocalRegistry, RegistryError, root_record_to_proto};
+use raziel_verifier::{
+    InstallOutcome, LocalRegistry, RegistryError, RegistryGenerationV1, root_record_to_proto,
+};
 use sha2::{Digest, Sha256};
 
 pub use error::VerificationAdmissionError;
@@ -50,6 +52,13 @@ impl LocalVerificationTrust {
             registry,
             trusted_program_key,
         }
+    }
+
+    pub fn install_generation(
+        &mut self,
+        generation: RegistryGenerationV1,
+    ) -> Result<InstallOutcome, RegistryError> {
+        self.registry.install_generation(generation)
     }
 }
 

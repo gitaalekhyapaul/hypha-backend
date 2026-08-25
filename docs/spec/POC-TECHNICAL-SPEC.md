@@ -1188,10 +1188,13 @@ applies trusted time and registry checks, and rebuilds the complete ADR-0011 exp
 public journal. It sends only bounded public proof input to the next worker boundary.
 The verification-only Rust feature and dependency-tree gate use direct
 `sp1-verifier` `6.3.1` Plonk verification and exclude SDK proving, core execution,
-native Gnark, JIT, and outbound SP1 client packages. The isolated verifier worker and
-live service binding remain pending. Gateway nonce consumption and the matching
-TypeScript canonical vector remain M5 work. These build and admission results do not
-replace the later retained real-proof worker gate.
+native Gnark, JIT, and outbound SP1 client packages. B-0030 binds the strict decoder
+to the live Tonic edge and sends one bounded request through an owner-only launcher
+to a one-shot direct verifier. Its Compose sandbox applies the provisional 2 GiB,
+zero-swap, no-network, read-only-root, bounded-tmpfs, 60-second profile. Controlled
+tests contain child rejection, crash, malformed output, and timeout. Gateway nonce
+consumption and the matching TypeScript canonical vector remain M5 work. These build
+and controlled-process results do not replace the retained real-proof worker gate.
 
 Deliver:
 

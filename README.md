@@ -18,12 +18,15 @@ Plonk proof. The approved eight-CPU profile records a 2,537-byte proof,
 
 M4 is in active implementation under accepted ADR-0013 through ADR-0017. `razield`
 now runs bounded CapabilityService and SnapshotService Tonic ingress. `verifierd`
-now has a strict public admission boundary under accepted ADR-0002. It rejects
+now has a live strict public service boundary under accepted ADR-0002. It rejects
 unknown and noncanonical Protobuf, validates the agent key and exact protected-request
 signature, checks trusted time and local registry state, and reconstructs the complete
-expected proof journal. It does not decode the proof or return verified claims. The
-isolated verifier worker and service binding remain pending. The BullMQ `1.2.3` and
-Redis `8.2.8` conformance gate passes. The pure `razield` admission
+expected proof journal. It sends only bounded public proof input to a networkless
+one-shot verifier under a 2 GiB, zero-swap, read-only, 60-second sandbox. Only direct
+SP1 verification success promotes candidate claims. Controlled crash, malformed
+output, timeout, and rejection tests pass. A retained real-proof worker run remains
+the next M4 gate. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. The
+pure `razield` admission
 boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
 request commitment, derives the deterministic job ID, and enforces the 75-minute
@@ -188,9 +191,9 @@ boundary before startup:
 ./scripts/compose --env-file .env --profile services --profile proof up --build
 ```
 
-Startup builds the fixed proof runtime. It does not generate a proof until a valid
-capability job reaches the worker. The complete API proof-flow runbook remains
-pending with the M4 lifecycle and verifier endpoints.
+Startup builds the fixed proof and verifier runtimes. It does not generate a proof
+until a valid capability job reaches the proof worker. The complete API proof-flow
+runbook remains pending with the M4 retained-proof and lifecycle gates.
 
 ## Authority administration
 

@@ -1,113 +1,105 @@
 # Current Engineering Baton
 
-- Baton ID: B-0030
+- Baton ID: B-0031
 - State: READY
-- Milestone: M4, isolated verifier worker and service activation
+- Milestone: M4, retained proof through the independent verifier
 - Owner: unassigned
-- Started UTC: Not started
-- Last updated UTC: 2026-08-24T12:43:48Z
+- Started UTC: not started
+- Last updated UTC: 2026-08-25T07:22:35Z
 - Branch: `main`
-- Worktree: B-0029 implementation and archive are ready for a scoped commit on top of
-  `8670c9a`.
+- Worktree: No B-0031 implementation changes. B-0030 is the prior scoped commit.
 
 ## Objective
 
-Connect strict verifier admission to a resource-isolated local proof-verification
-worker and expose the bounded `VerificationService` without any `razield` dependency.
+Verify one retained public synthetic Plonk artifact through the isolated worker with
+every `razield` role stopped, then measure the verification-only resource profile.
 
 ## Acceptance Criteria
 
-- [ ] Live verifier ingress cannot bypass the frozen-descriptor 2 MiB strict decoder.
-- [ ] `verifierd` loads fixed local registry and paired program-key configuration with
-      no `razield` endpoint.
-- [ ] A versioned, bounded owner-only local protocol sends only proof bytes, expected
-      public values, and trusted program-key identity to the verifier worker.
-- [ ] The worker runs direct SP1 Plonk verification under the accepted provisional 2
-      GiB, zero-swap, no-network, read-only-root, bounded-tmpfs, 60-second profile.
-- [ ] Worker crash, timeout, malformed output, and resource exhaustion return typed
-      failures without crashing `verifierd` or releasing candidate claims.
-- [ ] Only successful worker output promotes admitted candidates to verified claims.
-- [ ] Focused protocol, process, service, feature-tree, privacy, formatting, lint,
-      type, and default workspace gates pass without generating a new proof.
+- [ ] The maintainer explicitly approves one synthetic Plonk rerun and retention of
+      its public zero-knowledge proof artifact.
+- [ ] The approved VM profile produces the proof without retaining witness, private
+      journal input, or debug traces.
+- [ ] `verifierd` verifies the retained proof through its isolated worker with all
+      `razield` roles stopped.
+- [ ] Mutated proof, public journal, key identity, policy, root, scope, expiry, and
+      request-signature cases fail closed.
+- [ ] Verification-only peak memory stays under the provisional 2 GiB cap or a new
+      decision records the measured requirement.
+- [ ] Durable public evidence records source commit, artifact checksum, key ID,
+      timing, peak memory, and zero swap.
 
 ## Architecture Constraints
 
-- `verifierd` and its worker never call `razield` or read private graph data.
-- Request data cannot select a socket, executable, proof mode, key, registry path, or
-  resource profile.
-- The worker receives no PolicyIR, relationship, caveat, salt, opening, path, witness,
-  private envelope, or agent signing material.
-- ADR-0011 public values and ADR-0002 request-signature semantics remain fixed.
-- Direct `sp1-verifier 6.3.1` remains the verification engine. Proving and network
-  dependencies stay excluded from the verifier build.
-- No real SP1 proof may run or enter Git without separate maintainer approval.
+- `verifierd` never calls `razield`.
+- Retain only the public Plonk proof artifact. Delete all witness and private inputs.
+- Use direct `sp1-verifier 6.3.1` in the fixed one-shot worker.
+- Do not change public values, canonical hashes, proof mode, or resource limits inside
+  the measurement task.
 
 ## File Scope
 
-- `services/verifierd/`
-- Existing verifier-only crates and generated `VerificationService` contracts
-- Verifier process and Compose configuration
-- Focused scripts and tests for the verifier boundary
-- Current-state README, architecture, specification, and baton documents
+- Retained public proof fixture and provenance manifest
+- Isolated-verifier integration and mutation tests
+- Verifier benchmark evidence
+- M4 current-state and baton documents
 
 ## Out Of Scope
 
-- A new SP1 proof run or retained proof artifact
-- `razield`, BullMQ, witness, prover, or snapshot behavior changes
 - Gateway nonce storage, cache, and TypeScript canonicalization
-- M5 frontend, M6 real-data acceptance, M7, or another scenario
+- M5 frontend and synthetic transaction workflow
+- M6 real transaction acceptance
+- M7 or another scenario
 
 ## Decisions
 
-- Inherited: accepted ADR-0002, ADR-0011, ADR-0012, and ADR-0013.
-- Inherited: B-0029 strict admission emits candidate claims and a bounded public
-  worker request.
-- Inherited: the verifier profile has a provisional 2 GiB memory cap, zero swap, no
-  network, read-only root, bounded tmpfs, and a 60-second deadline.
-- Made: None.
+- Inherited: accepted ADR-0012 and ADR-0013 permit local Plonk only.
+- Inherited: B-0030 supplies the strict live service and isolated verifier worker.
+- Pending: explicit maintainer approval for one synthetic Plonk rerun and public
+  artifact retention.
 
 ## Open Questions And Blockers
 
-- None for controlled implementation and tests.
-- A later positive retained-proof gate needs explicit maintainer approval.
+- BLOCKER: the proof rerun and retained public artifact need explicit maintainer
+  approval before B-0031 can become active.
 
 ## Work Completed
 
-- B-0029 completed and archived independent verifier admission.
-- The verification-only dependency graph and generated service contracts compile.
-- No isolated verifier process or live service binding exists yet.
+- B-0030 completed the strict live verifier service and controlled isolated worker.
+- The verification-only release binaries build and run in the approved Compose
+  sandbox.
+- No retained public proof fixture exists yet.
 
 ## Validation Plan
 
-- Inspect generated Tonic codec boundaries before selecting the strict ingress hook.
-- Add controlled worker protocol, launcher, and failure tests without SP1.
-- Run verifier feature-tree, service, privacy, formatting, lint, type, and default
-  workspace checks.
-- Do not run SP1.
+- Run the approved proof once on the NUS VM profile.
+- Transfer only the public artifact and public provenance evidence.
+- Verify positive and mutation cases through the isolated worker with `razield`
+  stopped.
+- Rerun feature-tree, privacy, formatting, lint, workspace, and Compose gates.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0029 archive | PASS | Strict verifier admission and ADR-0002 | 2026-08-24T12:43:48Z |
-| Isolated verifier worker | NOT AVAILABLE | B-0030 not started | 2026-08-24T12:43:48Z |
+| B-0030 archive | PASS | Strict live verifier and isolated worker | 2026-08-25T07:22:35Z |
+| Retained real proof | NOT AVAILABLE | Maintainer approval required | 2026-08-25T07:22:35Z |
 
 ## Privacy Checks
 
-- PASS: B-0029 admission accepts public request and capability fields only.
-- REQUIRED: the worker request must remain public proof material only.
-- REQUIRED: no proof or candidate claim can become verified before direct SP1
-  verification succeeds.
+- PASS: the planned retained artifact is public zero-knowledge proof material only.
+- REQUIRED: no witness, private snapshot, path, opening, salt, or caveat value enters
+  the fixture or logs.
+- REQUIRED: verifier success must occur with every `razield` role stopped.
 
 ## Risks And Private-Data Notes
 
-- The generated Tonic server hardcodes its Prost codec. Strict raw-byte validation
-  needs a service-edge design that cannot be bypassed by typed decoding.
-- Process isolation must supply hard memory and deadline controls. Rust error handling
-  alone cannot contain an OOM.
-- The 2 GiB worker cap remains provisional until a real retained proof is measured.
+- The public proof artifact is safe to retain only after a no-witness and no-debug
+  audit.
+- The provisional 2 GiB cap lacks a real verification-only peak measurement.
+- The proof rerun is computationally expensive and belongs on the NUS VM.
 
 ## Exact Next Action
 
-Commit the completed B-0029 admission boundary, then claim B-0030 and inspect the
-generated Tonic service codec and existing one-shot launcher patterns.
+Obtain explicit maintainer approval for one synthetic Plonk rerun and retention of
+the public proof artifact, then claim B-0031.

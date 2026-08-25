@@ -1,11 +1,11 @@
-//! Independent Raziel verifier service shell.
-//!
-//! M0 defines a standalone process boundary with no `razield` dependency or client.
-//! Proof verification, registry access, request validation, and serving are absent.
+//! Independent Raziel verifier service.
 
 #![forbid(unsafe_code)]
 
-fn main() {}
+#[tokio::main]
+async fn main() -> Result<(), verifierd::service::VerifierdRuntimeError> {
+    verifierd::service::run_from_env().await
+}
 
 #[cfg(test)]
 mod tests {

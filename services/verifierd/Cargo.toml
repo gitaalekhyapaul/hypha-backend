@@ -18,3 +18,14 @@ raziel-proto = { workspace = true, features = ["services"] }
 raziel-prover = { workspace = true, features = ["verification"] }
 raziel-verifier = { path = "../../crates/verifier" }
 sha2.workspace = true
+tokio.workspace = true
+tonic = { workspace = true, features = ["router"] }
+tonic-prost.workspace = true
+
+[[bin]]
+name = "verifierd-worker"
+path = "src/bin/verifierd-worker.rs"
+
+[[bin]]
+name = "verifierd-verifier"
+path = "src/bin/verifierd-verifier.rs"
