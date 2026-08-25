@@ -10,6 +10,16 @@ if [ ! -d "$fixture_path" ] || [ -L "$fixture_path" ]; then
   echo "run the approved retained Plonk proof step before verifier acceptance" >&2
   exit 1
 fi
+for generated_contract in \
+  gen/rust/raziel/v1/raziel.v1.rs \
+  gen/rust-services/raziel/v1/raziel.v1.tonic.rs
+do
+  if [ ! -f "$generated_contract" ] || [ -L "$generated_contract" ]; then
+    echo "generated protocol contract is missing: $generated_contract" >&2
+    echo "rerun ./scripts/cluster/prepare-sp1-plonk before verifier acceptance" >&2
+    exit 1
+  fi
+done
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "verifier acceptance requires no tracked source changes" >&2
   exit 1
@@ -69,8 +79,14 @@ cleanup_verifier_run() {
 trap cleanup_verifier_run EXIT HUP INT TERM
 
 compose stop verifierd verifierd-worker-sandbox >/dev/null 2>&1 || true
-compose up -d --force-recreate verifierd-worker-sandbox
+compose run --rm --no-deps verifierd-test-build-init
 sandbox_started=1
+compose up \
+  --detach \
+  --wait \
+  --wait-timeout 60 \
+  --force-recreate \
+  verifierd-worker-sandbox
 container_id=$(compose ps -q verifierd-worker-sandbox)
 if [ -z "$container_id" ]; then
   echo "isolated verifier sandbox did not start" >&2
@@ -161,10 +177,10 @@ required_line() {
 
 verify_gate=$(required_line \
   b0031_retained_verify: \
-  retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
+  admission::retained_proof_tests::retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
 mutation_gate=$(required_line \
   b0031_retained_mutations: \
-  retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
+  admission::retained_proof_tests::retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
 if ! printf '%s\n' "$verify_gate" | grep -Eq '^b0031_retained_verify: verify_ms=[0-9]+, artifact_sha256=[0-9a-f]{64}, verification_key_id=sp1-vk-v1:[0-9a-f]{64}$' ||
   [ "$mutation_gate" != 'b0031_retained_mutations: proof=reject, public_journal=reject, key_identity=reject, policy=reject, root=reject, scope=reject, expiry=reject, request_signature=reject' ]
 then

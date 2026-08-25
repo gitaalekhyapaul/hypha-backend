@@ -249,6 +249,12 @@ grep -Fqx 'classification=public-zero-knowledge-test-fixture' \
   "$retained_fixture/PROVENANCE"
 grep -Fqx 'private_witness_retained=false' "$retained_fixture/PROVENANCE"
 grep -Fqx 'debug_trace_retained=false' "$retained_fixture/PROVENANCE"
+if [ "$(find "$retained_fixture" -maxdepth 0 -type d -perm 0755 -print)" != \
+  "$retained_fixture" ]
+then
+  echo "retained public fixture directory is not traversable by the isolated verifier" >&2
+  exit 1
+fi
 
 printf 'not public\n' >"$retained_output/unapproved-private-file"
 if RAZIEL_CLUSTER_PLUMBING_SELF_TEST=1 \

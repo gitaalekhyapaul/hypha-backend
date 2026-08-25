@@ -50,7 +50,8 @@ export RAZIEL_CLUSTER_RUNTIME=docker
 ```
 
 Preparation can download pinned dependencies and the pinned Plonk setup archive. It
-does not create a witness or proof. The later proof phase runs without a network.
+generates the ignored Protobuf bindings through the pinned Buf plugins. It does not
+create a witness or proof. The later proof phase runs without a network.
 
 ## Create The Retained Public Fixture
 

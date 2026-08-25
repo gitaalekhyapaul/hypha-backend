@@ -44,6 +44,14 @@ case "$runtime" in
       pnpm bootstrap:check
     docker compose \
       --env-file tools/toolchain-versions.env \
+      run --rm \
+      --user "$HOST_UID:$HOST_GID" \
+      --env HOME=/tmp/raziel-home \
+      --env XDG_CACHE_HOME=/tmp/raziel-cache \
+      toolchain \
+      pnpm generate
+    docker compose \
+      --env-file tools/toolchain-versions.env \
       run --rm toolchain \
       cargo fetch --locked
     docker compose \
@@ -86,6 +94,7 @@ case "$runtime" in
         --bind "$pnpm_store:/pnpm/store:rw" \
         --pwd /workspace \
         --env HOME=/tmp/raziel-home \
+        --env XDG_CACHE_HOME=/tmp/raziel-cache \
         --env RUSTUP_TOOLCHAIN="$RUST_VERSION" \
         "$RAZIEL_SP1_TOOLCHAIN_SIF" \
         "$@"
@@ -95,6 +104,7 @@ case "$runtime" in
       env RAZIEL_SP1_SETUP_DOWNLOAD_ONLY=1 \
       ./scripts/setup-sp1-plonk-artifacts
     run_build_step pnpm bootstrap:check
+    run_build_step pnpm generate
     run_build_step cargo fetch --locked
     run_build_step ./scripts/setup-sp1-plonk-artifacts
     run_build_step ./scripts/check-sp1-features

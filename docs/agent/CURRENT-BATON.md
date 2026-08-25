@@ -5,10 +5,11 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T18:30:28Z
+- Last updated UTC: 2026-08-25T19:24:23Z
 - Branch: `main`
-- Worktree: Clean at pushed commit `35db270` before the maintainer-approved bounded
-  instruction regression gate.
+- Worktree: Local fixes for retained-fixture permissions, generated-contract
+  preparation, verifier-client identity, and worker readiness are uncommitted on
+  pushed commit `0f9954f`. The retained VM proof is bound to `35db270`.
 
 ## Objective
 
@@ -19,13 +20,13 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 - [x] The maintainer explicitly approves one synthetic Plonk rerun and retention of
       its public zero-knowledge proof artifact.
-- [ ] The approved VM profile produces the proof without retaining witness, private
+- [x] The approved VM profile produces the proof without retaining witness, private
       journal input, or debug traces.
-- [ ] `verifierd` verifies the retained proof through its isolated worker with all
+- [x] `verifierd` verifies the retained proof through its isolated worker with all
       `razield` roles stopped.
-- [ ] Mutated proof, public journal, key identity, policy, root, scope, expiry, and
+- [x] Mutated proof, public journal, key identity, policy, root, scope, expiry, and
       request-signature cases fail closed.
-- [ ] Verification-only peak memory stays under the provisional 2 GiB cap or a new
+- [x] Verification-only peak memory stays under the provisional 2 GiB cap or a new
       decision records the measured requirement.
 - [ ] Durable public evidence records source commit, artifact checksum, key ID,
       timing, peak memory, and zero swap.
@@ -75,10 +76,14 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Open Questions And Blockers
 
-- The NUS VM completed the B-0031 proof benchmark with zero OOM events. Public report
-  rendering then rejected the new 424,312-instruction line against its stale exact
-  pattern. The parser now applies the approved 520,000-instruction bound. The
-  temporary public export was deleted, so one VM rerun remains required.
+- The NUS VM retained the public proof at source commit `35db270`. The first verifier
+  attempt lacked ignored generated Rust protocol bindings. The second exposed a
+  `0700` public-fixture directory that the capability-dropped test could not traverse.
+  The third loaded the fixture but exposed a verifier-client UID mismatch and missing
+  worker-health wait. The source-preserving compatibility run passed verification,
+  all mutations, and public report rendering after matching Cargo's full
+  module-qualified test name. The public fixture and reports remain uncommitted on
+  the VM.
 
 ## Work Completed
 
@@ -109,7 +114,18 @@ every `razield` role stopped, then measure the verification-only resource profil
   Exact protocol, profile, queue, encoding, and supply-chain checks remain exact. The
   renderer now requires proof artifact size in `1..=1,048,576` and tests the exact
   instruction ceiling rather than the incidental current measurement.
-- No retained public proof fixture exists yet.
+- The retained public proof fixture exists on the NUS VM with proof SHA-256
+  `d2014a6d012fc8b8013d87c226a2e54822bdd6a47f13405d676fc334a49558f9`.
+- The preparation path now generates ignored Protobuf bindings with a writable Buf
+  cache. The verifier runner rejects missing generated bindings before Cargo starts.
+- The public fixture stager now writes its directory as `0755`; all six public files
+  remain non-writable to other users.
+- The acceptance client now shares the private IPC owner UID without Linux
+  capabilities. A one-shot init owns its disposable Cargo cache, and Compose waits
+  for the verifier worker to become healthy.
+- The final retained-proof run verified in 447 ms. All eight mutation cases rejected.
+  The isolated worker peaked at 8,146,944 bytes with zero swap and OOM events.
+- The report parser now matches Cargo's full retained-test name.
 
 ## Validation Plan
 
@@ -145,22 +161,30 @@ every `razield` role stopped, then measure the verification-only resource profil
 | B-0031 VM proof benchmark | PASS, host post-processing failed | Proof completed with zero OOM events; stale execute-line parser rejected 424,312 instructions; public export deleted | 2026-08-25T17:53:21Z |
 | Shell syntax, `git diff --check`, and cluster plumbing | PASS | Current and historical execute-line parser formats plus retained-artifact staging | 2026-08-25T18:17:44Z |
 | Hard-coded-value audit and cluster plumbing | PASS | Instruction count and proof size use positive bounds; exact protocol and profile checks retained | 2026-08-25T18:30:28Z |
+| B-0031 retained Plonk proof | PASS | Public proof retained; zero proof OOM and swap events; proof SHA-256 `d2014a6d...58f9` | 2026-08-25T18:23:53Z |
+| First retained-verifier attempt | FAIL | Missing ignored generated Rust protocol contract | 2026-08-25T18:58:05Z |
+| Second retained-verifier attempt | FAIL | Public fixture directory was `0700`; strict loader failed closed | 2026-08-25T19:01:16Z |
+| Local verifier UID and socket check | PASS | Healthy worker; capability-dropped host UID can access private `0700` IPC and owned test cache | 2026-08-25T19:08:00Z |
+| Retained-fixture unit tests | PASS, 2 tests | Exact file allowlist, checksums, provenance, and mutation rejection | 2026-08-25T19:08:00Z |
+| Shell syntax, Compose gate, and cluster plumbing | PASS | Preparation, public fixture mode, verifier identity, and readiness changes | 2026-08-25T19:08:00Z |
+| B-0031 isolated retained verifier | PASS, report parser failed | Real proof verified in 442 ms; eight mutations rejected; 9,355,264-byte peak; zero swap and OOM; no network; read-only root | 2026-08-25T19:21:30Z |
+| Verifier report parser syntax | PASS | Full Cargo module-qualified test name replaces stale short name | 2026-08-25T19:21:30Z |
+| B-0031 final isolated verifier | PASS | Real proof verified in 447 ms; eight mutations rejected; 8,146,944-byte peak; zero swap and OOM; no network; read-only root; all `razield` roles stopped | 2026-08-25T19:22:14Z |
 
 ## Privacy Checks
 
 - PASS: the planned retained artifact is public zero-knowledge proof material only.
 - PASS: staging rejects any file outside the four public payloads and writes only
   checksums plus public provenance.
-- REQUIRED: no witness, private snapshot, path, opening, salt, or caveat value enters
+- PASS: no witness, private snapshot, path, opening, salt, or caveat value enters
   the fixture or logs.
-- REQUIRED: verifier success must occur with every `razield` role stopped.
+- PASS: verifier succeeded with every `razield` role stopped.
 
 ## Risks And Private-Data Notes
 
-- The public proof artifact is safe to retain only after a no-witness and no-debug
-  audit.
-- The provisional 2 GiB cap lacks a real verification-only peak measurement.
-- The proof rerun is computationally expensive and belongs on the NUS VM.
+- The public proof artifact passed the no-witness and no-debug staging audit.
+- The provisional 2 GiB verifier cap has more than 1.99 GiB of headroom against the
+  measured 8,146,944-byte peak.
 - The unused generic local benchmark entrypoint still defaults to the known-failing
   30 GiB diagnostic profile. The approved cluster path overrides it with the fixed
   56 GiB profile. Retiring or requiring explicit selection for the generic path is a
@@ -172,5 +196,6 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Commit and push the bounded benchmark gates, then refresh the prepared NUS VM bundle
-and rerun the retained proof command once.
+Commit and push the permanent verifier orchestration fixes. Then fast-forward the VM
+and commit the retained public fixture plus the Plonk and verifier benchmark reports.
+No proof or verifier rerun remains.

@@ -291,6 +291,9 @@ chmod 0644 "$staging_path/SHA256SUMS"
   printf 'debug_trace_retained=false\n'
 } >"$staging_path/PROVENANCE"
 chmod 0644 "$staging_path/PROVENANCE"
+# The retained fixture is public. The capability-dropped verifier test needs to
+# traverse this directory without gaining host-file privileges.
+chmod 0755 "$staging_path"
 mv "$staging_path" "$fixture_path"
 staging_path=
 

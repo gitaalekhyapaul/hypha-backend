@@ -637,6 +637,39 @@ services:
     restart: unless-stopped
     profiles: ["services"]
 
+  verifierd-test-build-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d -m 0700 /var/cache/raziel-verifier-test
+        chown -R \
+          "$$RAZIEL_PRIVATE_UID:$$RAZIEL_PRIVATE_GID" \
+          /var/cache/raziel-verifier-test
+        test "$$(stat --format=%a /var/cache/raziel-verifier-test)" = 700
+        test "$$(stat --format=%u /var/cache/raziel-verifier-test)" = "$$RAZIEL_PRIVATE_UID"
+        test "$$(stat --format=%g /var/cache/raziel-verifier-test)" = "$$RAZIEL_PRIVATE_GID"
+    environment:
+      RAZIEL_PRIVATE_GID: "${HOST_GID:-1000}"
+      RAZIEL_PRIVATE_UID: "${HOST_UID:-1000}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - verifierd-test-build-cache:/var/cache/raziel-verifier-test
+    profiles: ["verifier-acceptance"]
+
   verifierd:
     <<: *secure-rust-service
     command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd"]
@@ -665,8 +698,8 @@ services:
 
   verifierd-retained-proof-test:
     <<: *toolchain-service
-    # Root owns the disposable Cargo target volume. The measured worker stays non-root.
-    user: "0:0"
+    # The client shares the private IPC owner identity but receives no Linux capabilities.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     command:
       - cargo
       - test
@@ -704,6 +737,8 @@ services:
       - verifierd-test-build-cache:/var/cache/raziel-verifier-test
       - verifierd-worker-ipc:/run/raziel-verifier
     depends_on:
+      verifierd-test-build-init:
+        condition: service_completed_successfully
       verifierd-worker-sandbox:
         condition: service_healthy
     profiles: ["verifier-acceptance"]

@@ -5,8 +5,9 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 compose_output=$(mktemp)
 sandbox_output=$(mktemp)
 api_output=$(mktemp)
+test_init_output=$(mktemp)
 test_output=$(mktemp)
-trap 'rm -f "$compose_output" "$sandbox_output" "$api_output" "$test_output"' EXIT
+trap 'rm -f "$compose_output" "$sandbox_output" "$api_output" "$test_init_output" "$test_output"' EXIT
 
 cd "$repo_root"
 HOST_UID=${HOST_UID:-$(id -u)} \
@@ -31,6 +32,7 @@ extract_service() {
 
 extract_service verifierd-worker-sandbox "$sandbox_output"
 extract_service verifierd "$api_output"
+extract_service verifierd-test-build-init "$test_init_output"
 extract_service verifierd-retained-proof-test "$test_output"
 
 for exact_setting in \
@@ -57,6 +59,16 @@ for exact_setting in \
   "user: '0:0'" \
   'network_mode: none' \
   'read_only: true' \
+  'source: verifierd-test-build-cache' \
+  'target: /var/cache/raziel-verifier-test'
+do
+  grep -Fq "$exact_setting" "$test_init_output"
+done
+
+for exact_setting in \
+  "user: '$(id -u):$(id -g)'" \
+  'network_mode: none' \
+  'read_only: true' \
   'RAZIEL_RETAINED_PLONK_FIXTURE_PATH: /workspace/services/verifierd/tests/fixtures/retained-plonk-v1' \
   'RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock' \
   'source: verifierd-test-build-cache' \
@@ -67,6 +79,7 @@ for exact_setting in \
 do
   grep -Fq "$exact_setting" "$test_output"
 done
+grep -Fq 'condition: service_completed_successfully' "$test_output"
 if grep -Eq 'razield-private|/var/lib/raziel|owner-internal' "$test_output"; then
   echo "retained verifier test can reach a private issuer resource" >&2
   exit 1
@@ -77,7 +90,13 @@ for forbidden_setting in \
   'privileged: true' \
   'network_mode: host'
 do
-  if grep -Fq "$forbidden_setting" "$sandbox_output" "$api_output" "$test_output"; then
+  if grep -Fq \
+    "$forbidden_setting" \
+    "$sandbox_output" \
+    "$api_output" \
+    "$test_init_output" \
+    "$test_output"
+  then
     echo "verifier services contain a forbidden Compose setting" >&2
     exit 1
   fi
