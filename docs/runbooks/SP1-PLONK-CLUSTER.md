@@ -285,8 +285,14 @@ resource limits, CPU-affinity count, active Go memory diagnostics, peak memory, 
 versions, setup hash, source hashes, and the allowlisted run-bundle manifest hash. It
 omits hostnames, usernames, scheduler job IDs, account names, and internal paths.
 
-Review and commit only the Markdown result. Do not commit the SIF, setup archive,
-proof artifact, public-journal file, or scheduler log.
+Review and commit only the Markdown result for a normal M3 benchmark. Do not commit
+the SIF, setup archive, proof artifact, public-journal file, or scheduler log.
+
+B-0031 is the single approved exception. Its separate
+[retained-proof verifier runbook](B-0031-RETAINED-PLONK-VERIFIER.md) sets an explicit
+retention approval flag, exports an exact public-only allowlist after every proof gate
+passes, and stages the fixture with checksums and provenance. The default command
+still deletes the proof artifact.
 
 The exporter rejects duplicate required fields, unknown execution-path combinations,
 profile drift, malformed digests, unsafe Markdown values, mismatched proof and

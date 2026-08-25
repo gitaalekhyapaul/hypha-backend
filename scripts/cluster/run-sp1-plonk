@@ -11,6 +11,15 @@ export RAZIEL_CLUSTER_NAME=${RAZIEL_CLUSTER_NAME:-nus}
 export RAZIEL_CLUSTER_PREFLIGHT_PHASE=prove
 umask 077
 
+retain_public_artifact=${RAZIEL_SP1_RETAIN_PUBLIC_ARTIFACT_APPROVED:-0}
+case "$retain_public_artifact" in
+  0 | 1) ;;
+  *)
+    echo "retained public artifact approval flag must be 0 or 1" >&2
+    exit 1
+    ;;
+esac
+
 if [ "${RAZIEL_SP1_CLUSTER_GATE_APPROVED:-0}" != 1 ]; then
   echo "the approved 56 GiB ADR-0012 cluster gate requires its approval flag" >&2
   exit 1
@@ -41,7 +50,14 @@ if ! mkdir "$operation_lock"; then
   echo "another SP1 Plonk preparation or proof operation is active" >&2
   exit 1
 fi
-trap 'rmdir "$operation_lock"' EXIT HUP INT TERM
+public_export_in_progress=
+cleanup_run() {
+  if [ -n "$public_export_in_progress" ]; then
+    rm -rf "$public_export_in_progress"
+  fi
+  rmdir "$operation_lock"
+}
+trap cleanup_run EXIT HUP INT TERM
 prepared_path=.sp1/cluster/sp1-plonk-prepared
 if [ ! -f "$prepared_path" ] || [ -L "$prepared_path" ]; then
   echo "run ./scripts/cluster/prepare-sp1-plonk before submitting the proof job" >&2
@@ -119,6 +135,12 @@ report_pass="$report_directory/$report_id.pass.log"
 report_fail="$report_directory/$report_id.fail.log"
 mkdir -p "$report_directory"
 chmod 700 "$report_directory"
+if [ "$retain_public_artifact" = 1 ]; then
+  public_export_parent="$repo_root/.sp1/retained-public"
+  public_export_in_progress="$public_export_parent/$report_id.in-progress"
+  mkdir -p "$public_export_parent" "$public_export_in_progress"
+  chmod 700 "$public_export_parent" "$public_export_in_progress"
+fi
 
 run_offline_benchmark() {
   printf 'cluster_name=%s\n' "$RAZIEL_CLUSTER_NAME"
@@ -140,13 +162,31 @@ run_offline_benchmark() {
       export HOST_UID=$(id -u)
       export HOST_GID=$(id -g)
       export RAZIEL_SP1_WORKSPACE_SOURCE="$run_bundle"
-      docker compose \
-        --env-file tools/toolchain-versions.env \
-        --profile benchmark \
-        run --rm sp1-plonk-benchmark
+      if [ "$retain_public_artifact" = 1 ]; then
+        docker compose \
+          --env-file tools/toolchain-versions.env \
+          --profile benchmark \
+          run --rm \
+          --env RAZIEL_SP1_RETAIN_PUBLIC_ARTIFACT=1 \
+          --env RAZIEL_SP1_PUBLIC_EXPORT_DIRECTORY=/public-output \
+          --volume "$public_export_in_progress:/public-output:rw" \
+          sp1-plonk-benchmark
+      else
+        docker compose \
+          --env-file tools/toolchain-versions.env \
+          --profile benchmark \
+          run --rm sp1-plonk-benchmark
+      fi
       ;;
     apptainer | singularity)
       setup_path="$repo_root/.sp1/circuits/plonk/v6.1.0"
+      set --
+      if [ "$retain_public_artifact" = 1 ]; then
+        set -- \
+          --bind "$public_export_in_progress:/public-output:rw" \
+          --env RAZIEL_SP1_RETAIN_PUBLIC_ARTIFACT=1 \
+          --env RAZIEL_SP1_PUBLIC_EXPORT_DIRECTORY=/public-output
+      fi
       "$runtime" exec \
         --cleanenv \
         --containall \
@@ -158,6 +198,7 @@ run_offline_benchmark() {
         --memory-swap "$RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES" \
         --bind "$run_bundle:/workspace:ro" \
         --bind "$setup_path:/opt/sp1/circuits/plonk/v6.1.0:ro" \
+        "$@" \
         --pwd /workspace \
         --env CARGO_NET_OFFLINE=true \
         --env GODEBUG=gctrace=1 \
@@ -190,6 +231,13 @@ if [ "$status" -eq 0 ]; then
   mv "$report_in_progress" "$report_pass"
   printf 'benchmark_report=%s\n' "$report_pass"
   ./scripts/cluster/render-sp1-plonk-result "$report_pass"
+  if [ "$retain_public_artifact" = 1 ]; then
+    ./scripts/cluster/stage-retained-sp1-plonk \
+      "$report_pass" \
+      "$public_export_in_progress"
+    rm -rf "$public_export_in_progress"
+    public_export_in_progress=
+  fi
 else
   mv "$report_in_progress" "$report_fail"
   printf 'benchmark_report=%s\n' "$report_fail"

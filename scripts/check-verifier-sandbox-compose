@@ -5,14 +5,18 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 compose_output=$(mktemp)
 sandbox_output=$(mktemp)
 api_output=$(mktemp)
-trap 'rm -f "$compose_output" "$sandbox_output" "$api_output"' EXIT
+test_output=$(mktemp)
+trap 'rm -f "$compose_output" "$sandbox_output" "$api_output" "$test_output"' EXIT
 
 cd "$repo_root"
 HOST_UID=${HOST_UID:-$(id -u)} \
 HOST_GID=${HOST_GID:-$(id -g)} \
 RAZIEL_EXPECTED_VERIFICATION_KEY_ID=sp1-vk-v1:abababababababababababababababababababababababababababababababab \
 RAZIEL_EXPECTED_SP1_VKEY_HASH=0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff \
-  ./scripts/compose --profile services config >"$compose_output"
+  ./scripts/compose \
+  --profile services \
+  --profile verifier-acceptance \
+  config >"$compose_output"
 
 extract_service() {
   service_name=$1
@@ -27,6 +31,7 @@ extract_service() {
 
 extract_service verifierd-worker-sandbox "$sandbox_output"
 extract_service verifierd "$api_output"
+extract_service verifierd-retained-proof-test "$test_output"
 
 for exact_setting in \
   'mem_limit: "2147483648"' \
@@ -48,12 +53,31 @@ grep -Fq 'RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.so
 grep -Fq 'source: verifierd-worker-ipc' "$api_output"
 grep -Fq 'target: /run/raziel-verifier' "$api_output"
 
+for exact_setting in \
+  "user: '0:0'" \
+  'network_mode: none' \
+  'read_only: true' \
+  'RAZIEL_RETAINED_PLONK_FIXTURE_PATH: /workspace/services/verifierd/tests/fixtures/retained-plonk-v1' \
+  'RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock' \
+  'source: verifierd-test-build-cache' \
+  'source: verifierd-worker-ipc' \
+  'target: /run/raziel-verifier' \
+  'target: /workspace' \
+  'read_only: true'
+do
+  grep -Fq "$exact_setting" "$test_output"
+done
+if grep -Eq 'razield-private|/var/lib/raziel|owner-internal' "$test_output"; then
+  echo "retained verifier test can reach a private issuer resource" >&2
+  exit 1
+fi
+
 for forbidden_setting in \
   '/var/run/docker.sock' \
   'privileged: true' \
   'network_mode: host'
 do
-  if grep -Fq "$forbidden_setting" "$sandbox_output" "$api_output"; then
+  if grep -Fq "$forbidden_setting" "$sandbox_output" "$api_output" "$test_output"; then
     echo "verifier services contain a forbidden Compose setting" >&2
     exit 1
   fi

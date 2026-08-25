@@ -489,4 +489,6 @@ const fn timestamp(seconds: i64) -> Timestamp {
 }
 
 #[cfg(test)]
+mod retained_proof_tests;
+#[cfg(test)]
 mod tests;

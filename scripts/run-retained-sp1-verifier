@@ -1,0 +1,224 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+umask 077
+
+fixture_path=services/verifierd/tests/fixtures/retained-plonk-v1
+if [ ! -d "$fixture_path" ] || [ -L "$fixture_path" ]; then
+  echo "run the approved retained Plonk proof step before verifier acceptance" >&2
+  exit 1
+fi
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "verifier acceptance requires no tracked source changes" >&2
+  exit 1
+fi
+
+provenance_value() {
+  key=$1
+  value=$(
+    awk -v prefix="$key=" '
+      index($0, prefix) == 1 {
+        value = substr($0, length(prefix) + 1)
+        count += 1
+      }
+      END {
+        if (count != 1 || value == "") exit 1
+        print value
+      }
+    ' "$fixture_path/PROVENANCE"
+  ) || {
+    echo "retained fixture has an invalid $key field" >&2
+    exit 1
+  }
+  printf '%s\n' "$value"
+}
+
+fixture_source_commit=$(provenance_value source_git_commit)
+fixture_sha256=$(provenance_value proof_artifact_sha256)
+verification_key_id=$(provenance_value verification_key_id)
+verifier_source_commit=$(git rev-parse HEAD)
+if [ "$fixture_source_commit" != "$verifier_source_commit" ]; then
+  echo "retained proof and verifier must use the same reviewed source commit" >&2
+  exit 1
+fi
+
+export HOST_UID=${HOST_UID:-$(id -u)}
+export HOST_GID=${HOST_GID:-$(id -g)}
+compose() {
+  ./scripts/compose \
+    --profile services \
+    --profile proof \
+    --profile verifier-acceptance \
+    "$@"
+}
+
+running_services=$(compose ps --status running --services)
+if printf '%s\n' "$running_services" | grep -Eq '^razield($|-)'; then
+  echo "stop every running razield role before independent verifier acceptance" >&2
+  exit 1
+fi
+
+sandbox_started=0
+cleanup_verifier_run() {
+  if [ "$sandbox_started" = 1 ]; then
+    compose stop verifierd-worker-sandbox >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup_verifier_run EXIT HUP INT TERM
+
+compose stop verifierd verifierd-worker-sandbox >/dev/null 2>&1 || true
+compose up -d --force-recreate verifierd-worker-sandbox
+sandbox_started=1
+container_id=$(compose ps -q verifierd-worker-sandbox)
+if [ -z "$container_id" ]; then
+  echo "isolated verifier sandbox did not start" >&2
+  exit 1
+fi
+
+container_memory_limit=$(docker inspect --format '{{.HostConfig.Memory}}' "$container_id")
+container_memory_swap=$(docker inspect --format '{{.HostConfig.MemorySwap}}' "$container_id")
+container_network=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_id")
+container_read_only=$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container_id")
+if [ "$container_memory_limit" != 2147483648 ] ||
+  [ "$container_memory_swap" != 2147483648 ] ||
+  [ "$container_network" != none ] ||
+  [ "$container_read_only" != true ]
+then
+  echo "isolated verifier sandbox does not match the approved profile" >&2
+  exit 1
+fi
+
+report_id="verifier-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+raw_directory=.sp1/benchmarks
+raw_in_progress="$raw_directory/$report_id.in-progress.log"
+raw_pass="$raw_directory/$report_id.pass.log"
+raw_fail="$raw_directory/$report_id.fail.log"
+mkdir -p "$raw_directory"
+chmod 700 "$raw_directory"
+
+set +e
+compose run --rm --no-deps verifierd-retained-proof-test >"$raw_in_progress" 2>&1
+test_status=$?
+set -e
+
+memory_max=$(docker exec "$container_id" cat /sys/fs/cgroup/memory.max)
+memory_peak=$(docker exec "$container_id" cat /sys/fs/cgroup/memory.peak)
+swap_max=$(docker exec "$container_id" cat /sys/fs/cgroup/memory.swap.max)
+swap_peak=$(docker exec "$container_id" cat /sys/fs/cgroup/memory.swap.peak)
+memory_events=$(docker exec "$container_id" cat /sys/fs/cgroup/memory.events)
+oom_count=$(printf '%s\n' "$memory_events" | awk '$1 == "oom" { print $2 }')
+oom_kill_count=$(printf '%s\n' "$memory_events" | awk '$1 == "oom_kill" { print $2 }')
+{
+  printf 'verifier_source_git_commit=%s\n' "$verifier_source_commit"
+  printf 'fixture_source_git_commit=%s\n' "$fixture_source_commit"
+  printf 'fixture_proof_sha256=%s\n' "$fixture_sha256"
+  printf 'fixture_verification_key_id=%s\n' "$verification_key_id"
+  printf 'all_razield_roles_stopped=true\n'
+  printf 'verifier_container_memory_max_bytes=%s\n' "$memory_max"
+  printf 'verifier_container_memory_peak_bytes=%s\n' "$memory_peak"
+  printf 'verifier_container_swap_max_bytes=%s\n' "$swap_max"
+  printf 'verifier_container_swap_peak_bytes=%s\n' "$swap_peak"
+  printf 'verifier_container_oom_count=%s\n' "$oom_count"
+  printf 'verifier_container_oom_kill_count=%s\n' "$oom_kill_count"
+  printf 'verifier_container_network=%s\n' "$container_network"
+  printf 'verifier_container_read_only=%s\n' "$container_read_only"
+} >>"$raw_in_progress"
+
+if [ "$test_status" -ne 0 ]; then
+  mv "$raw_in_progress" "$raw_fail"
+  cat "$raw_fail"
+  printf 'verifier_benchmark_report=%s\n' "$raw_fail"
+  exit "$test_status"
+fi
+
+required_line() {
+  prefix=$1
+  test_name=$2
+  test_harness_prefix="test $test_name ... "
+  line=$(
+    awk -v prefix="$prefix" -v test_harness_prefix="$test_harness_prefix" '
+      index($0, prefix) == 1 {
+        value = $0
+        count += 1
+      }
+      index($0, test_harness_prefix prefix) == 1 {
+        value = substr($0, length(test_harness_prefix) + 1)
+        count += 1
+      }
+      END {
+        if (count != 1 || value == "") exit 1
+        print value
+      }
+    ' "$raw_in_progress"
+  ) || {
+    echo "verifier result has a missing or duplicated $prefix gate" >&2
+    exit 1
+  }
+  printf '%s\n' "$line"
+}
+
+verify_gate=$(required_line \
+  b0031_retained_verify: \
+  retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
+mutation_gate=$(required_line \
+  b0031_retained_mutations: \
+  retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed)
+if ! printf '%s\n' "$verify_gate" | grep -Eq '^b0031_retained_verify: verify_ms=[0-9]+, artifact_sha256=[0-9a-f]{64}, verification_key_id=sp1-vk-v1:[0-9a-f]{64}$' ||
+  [ "$mutation_gate" != 'b0031_retained_mutations: proof=reject, public_journal=reject, key_identity=reject, policy=reject, root=reject, scope=reject, expiry=reject, request_signature=reject' ]
+then
+  echo "verifier result contains a malformed acceptance gate" >&2
+  exit 1
+fi
+verify_ms=$(printf '%s\n' "$verify_gate" | sed -E 's/.*verify_ms=([0-9]+),.*/\1/')
+reported_fixture_sha=$(printf '%s\n' "$verify_gate" | sed -E 's/.*artifact_sha256=([0-9a-f]+),.*/\1/')
+reported_key_id=${verify_gate##*verification_key_id=}
+case "$verify_ms:$memory_max:$memory_peak:$swap_max:$swap_peak:$oom_count:$oom_kill_count" in
+  *[!0-9:]*) echo "verifier result contains a non-integer measurement" >&2; exit 1 ;;
+esac
+if [ "$verify_ms" -gt 60000 ] ||
+  [ "$reported_fixture_sha" != "$fixture_sha256" ] ||
+  [ "$reported_key_id" != "$verification_key_id" ] ||
+  [ "$memory_max" != 2147483648 ] ||
+  [ "$memory_peak" -gt "$memory_max" ] ||
+  [ "$swap_max" != 0 ] ||
+  [ "$swap_peak" != 0 ] ||
+  [ "$oom_count" != 0 ] ||
+  [ "$oom_kill_count" != 0 ]
+then
+  echo "verifier result does not meet the B-0031 acceptance profile" >&2
+  exit 1
+fi
+
+mv "$raw_in_progress" "$raw_pass"
+public_directory=docs/benchmarks/sp1-verifier
+public_report="$public_directory/$report_id.md"
+mkdir -p "$public_directory"
+{
+  printf '# SP1 Retained-Proof Verifier: %s\n\n' "$report_id"
+  printf -- '- Status: pass\n'
+  printf -- '- Verifier source commit: `%s`\n' "$verifier_source_commit"
+  printf -- '- Proof source commit: `%s`\n' "$fixture_source_commit"
+  printf -- '- Proof artifact SHA-256: `%s`\n' "$fixture_sha256"
+  printf -- '- Verification-key ID: `%s`\n\n' "$verification_key_id"
+  printf '## Isolation Evidence\n\n'
+  printf '| Field | Value |\n'
+  printf '| --- | --- |\n'
+  printf '| All `razield` roles stopped | `true` |\n'
+  printf '| Worker network | `%s` |\n' "$container_network"
+  printf '| Read-only root | `%s` |\n' "$container_read_only"
+  printf '| Memory limit bytes | `%s` |\n' "$memory_max"
+  printf '| Peak memory bytes | `%s` |\n' "$memory_peak"
+  printf '| Swap limit bytes | `%s` |\n' "$swap_max"
+  printf '| Peak swap bytes | `%s` |\n' "$swap_peak"
+  printf '| OOM events | `%s` |\n' "$oom_count"
+  printf '| OOM kills | `%s` |\n\n' "$oom_kill_count"
+  printf '## Verification Gates\n\n'
+  printf '```text\n%s\n%s\n```\n' "$verify_gate" "$mutation_gate"
+} >"$public_report"
+chmod 0644 "$public_report"
+
+cat "$raw_pass"
+printf 'verifier_benchmark_report=%s\n' "$raw_pass"
+printf 'public_verifier_result=%s\n' "$public_report"

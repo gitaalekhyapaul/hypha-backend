@@ -15,6 +15,8 @@ expected_go_memory_limit=${RAZIEL_SP1_EXPECTED_GO_MEMORY_LIMIT:-24GiB}
 expected_go_debug=${RAZIEL_SP1_EXPECTED_GO_DEBUG:-gctrace=1}
 expected_visible_cpus=${RAZIEL_SP1_EXPECTED_VISIBLE_CPUS:-8}
 benchmark_profile=${RAZIEL_SP1_BENCHMARK_PROFILE:-local-30g}
+retain_public_artifact=${RAZIEL_SP1_RETAIN_PUBLIC_ARTIFACT:-0}
+public_export_directory=${RAZIEL_SP1_PUBLIC_EXPORT_DIRECTORY:-}
 cgroup_relative_path=$(awk -F: '$1 == "0" { print $3; found = 1 } END { exit found ? 0 : 1 }' /proc/self/cgroup)
 case "$cgroup_relative_path" in
   /*) ;;
@@ -55,6 +57,24 @@ esac
 case "$expected_visible_cpus" in
   *[!0-9]* | "" | 0)
     echo "expected visible CPU count must be a positive integer" >&2
+    exit 1
+    ;;
+esac
+case "$retain_public_artifact" in
+  0)
+    if [ -n "$public_export_directory" ]; then
+      echo "public export directory requires retained-artifact approval" >&2
+      exit 1
+    fi
+    ;;
+  1)
+    if [ "$public_export_directory" != /public-output ]; then
+      echo "retained public output must use the fixed container path" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "retained public artifact flag must be 0 or 1" >&2
     exit 1
     ;;
 esac
@@ -158,6 +178,16 @@ if [ "$visible_cpus" != "$expected_visible_cpus" ]; then
   exit 1
 fi
 
+if [ "$retain_public_artifact" = 1 ]; then
+  if [ ! -d "$public_export_directory" ] ||
+    [ -L "$public_export_directory" ] ||
+    [ ! -w "$public_export_directory" ] ||
+    find "$public_export_directory" -mindepth 1 -print -quit | grep -q .
+  then
+    echo "retained public output must be an empty writable directory" >&2
+    exit 1
+  fi
+fi
 artifact_directory=$(mktemp -d /tmp/raziel-sp1-plonk.XXXXXX)
 export RAZIEL_SP1_BENCHMARK_DIRECTORY="$artifact_directory"
 mkdir -p "$HOME"
@@ -175,6 +205,8 @@ report_peak_memory() {
     "$(awk '$1 == "oom_kill" { print $2 }' "$memory_events_path")"
   rm -f \
     "$artifact_directory/plonk-proof.bin" \
+    "$artifact_directory/public-values.bin" \
+    "$artifact_directory/sp1-vkey-hash.txt" \
     "$artifact_directory/verification-key-id.txt"
   rmdir "$artifact_directory"
   exit "$status"
@@ -225,6 +257,7 @@ sha256sum \
   crates/prover/src/*.rs \
   crates/prover/tests/prove_guest.rs \
   crates/prover/tests/support/authorization_fixture.rs \
+  crates/prover/tests/support/mod.rs \
   "$test_executable" \
   target/elf-compilation/riscv64im-succinct-zkvm-elf/release/raziel-authorization-guest \
   >"$source_hash_manifest"
@@ -265,3 +298,24 @@ timeout --signal=TERM --kill-after=30s 5m \
   --nocapture \
   --test-threads=1
 printf 'adr_0012_mutations=pass\n'
+
+if [ "$retain_public_artifact" = 1 ]; then
+  if find "$public_export_directory" -mindepth 1 -print -quit | grep -q .; then
+    echo "retained public output changed during proof execution" >&2
+    exit 1
+  fi
+  for public_file in \
+    plonk-proof.bin \
+    public-values.bin \
+    sp1-vkey-hash.txt \
+    verification-key-id.txt
+  do
+    source_file="$artifact_directory/$public_file"
+    if [ ! -f "$source_file" ] || [ -L "$source_file" ]; then
+      echo "approved public proof output is missing or linked: $public_file" >&2
+      exit 1
+    fi
+    install -m 0600 "$source_file" "$public_export_directory/$public_file"
+  done
+  printf 'b0031_public_export=pass\n'
+fi

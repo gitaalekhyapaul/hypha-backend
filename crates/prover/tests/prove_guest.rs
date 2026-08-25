@@ -10,6 +10,7 @@ use raziel_prover::{
     FORBIDDEN_SP1_ENV_VARS, MAX_PROOF_ARTIFACT_BYTES, ProverError, Sp1Executor, Sp1Prover,
     Sp1Verifier, decode_proof_artifact, encode_proof_artifact, prepare_guest_input,
 };
+use sha2::{Digest, Sha256};
 use sp1_sdk::SP1Proof;
 
 #[path = "support/authorization_fixture.rs"]
@@ -17,7 +18,12 @@ mod authorization_fixture;
 mod support;
 
 use authorization_fixture::authorization_inputs;
-use support::guest_elf_path;
+use support::{KEY_THUMBPRINT, guest_elf_path};
+
+const AGENT_PUBLIC_KEY: [u8; 32] = [
+    0xd7, 0x5a, 0x98, 0x01, 0x82, 0xb1, 0x0a, 0xb7, 0xd5, 0x4b, 0xfe, 0xd3, 0xc9, 0x64, 0x07, 0x3a,
+    0x0e, 0xe1, 0x72, 0xf3, 0xda, 0xa6, 0x23, 0x25, 0xaf, 0x02, 0x1a, 0x68, 0xf7, 0x07, 0x51, 0x1a,
+];
 
 const DIRECT_FIXTURE_INSTRUCTIONS: u64 = 422_138;
 const PROOF_DEADLINE: Duration = Duration::from_secs(60 * 60);
@@ -25,6 +31,8 @@ const VERIFICATION_DEADLINE: Duration = Duration::from_secs(60);
 const UNSAFE_ENV_HELPER: &str = "RAZIEL_UNSAFE_SP1_ENV_HELPER";
 const BENCHMARK_DIRECTORY_ENV: &str = "RAZIEL_SP1_BENCHMARK_DIRECTORY";
 const PROOF_ARTIFACT_FILE: &str = "plonk-proof.bin";
+const PUBLIC_VALUES_FILE: &str = "public-values.bin";
+const SP1_VKEY_HASH_FILE: &str = "sp1-vkey-hash.txt";
 const VERIFICATION_KEY_ID_FILE: &str = "verification-key-id.txt";
 
 fn direct_authorization_input() -> AuthorizationGuestInputV1 {
@@ -32,6 +40,18 @@ fn direct_authorization_input() -> AuthorizationGuestInputV1 {
         .into_iter()
         .find_map(|(case_id, input)| (case_id == "direct").then_some(input))
         .expect("direct authorization fixture must exist")
+}
+
+#[test]
+fn direct_fixture_uses_the_m4_signable_agent_identity() {
+    assert_eq!(
+        <[u8; 32]>::from(Sha256::digest(AGENT_PUBLIC_KEY)),
+        KEY_THUMBPRINT
+    );
+    assert_eq!(
+        direct_authorization_input().request.agent_key_thumbprint,
+        KEY_THUMBPRINT
+    );
 }
 
 #[test]
@@ -133,6 +153,11 @@ fn local_plonk_proof_passes_the_adr_0012_generation_gate() {
         &proof.verification_key_id,
     )
     .expect("public verification-key ID must be stored for verification");
+    fs::write(
+        benchmark_directory.join(PUBLIC_VALUES_FILE),
+        &proof.public_values,
+    )
+    .expect("public journal must be stored for independent verification");
     eprintln!(
         "adr_0012_prove: proof_mode=plonk, prove_ms={}, artifact_bytes={}, verification_key_id={}",
         prove_elapsed.as_millis(),
@@ -165,6 +190,11 @@ fn local_plonk_verification_passes_the_adr_0012_gate() {
     );
     assert_eq!(verified.verification_key_id, stored.verification_key_id);
     assert_eq!(verified.public_values, expected_journal);
+    fs::write(
+        benchmark_directory().join(SP1_VKEY_HASH_FILE),
+        verifier.sp1_vkey_hash(),
+    )
+    .expect("public SP1 verification-key hash must be stored for independent verification");
 
     eprintln!(
         "adr_0012_verify: proof_mode=plonk, verify_ms={}, verification_key_id={}",

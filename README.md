@@ -24,8 +24,11 @@ signature, checks trusted time and local registry state, and reconstructs the co
 expected proof journal. It sends only bounded public proof input to a networkless
 one-shot verifier under a 2 GiB, zero-swap, read-only, 60-second sandbox. Only direct
 SP1 verification success promotes candidate claims. Controlled crash, malformed
-output, timeout, and rejection tests pass. A retained real-proof worker run remains
-the next M4 gate. The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. The
+output, timeout, and rejection tests pass. B-0031 now has a public-only proof export,
+strict retained-fixture validation, a verifier-only Compose test role, and positive
+plus mutation acceptance logic. The retained proof and its verifier resource
+measurement still require one manual NUS VM run. The BullMQ `1.2.3` and Redis `8.2.8`
+conformance gate passes. The
 pure `razield` admission
 boundary validates generated
 request fields, derives the raw-key Ed25519 thumbprint, verifies the exact canonical
@@ -113,7 +116,8 @@ checks, launcher cancellation and exit, terminal capability publication, rendere
 sandbox controls, exact-revision snapshot publication, atomic root registration,
 revocation, expiry bounds, public lifecycle projection, queued and active
 cancellation, duplicate cancellation, and cancellation recovery. The retained-proof
-independent-verifier gate remains pending.
+plumbing passes locally. Its proof-backed independent-verifier gate remains pending
+until the manual NUS VM run.
 
 ## Read first
 
@@ -193,7 +197,9 @@ boundary before startup:
 
 Startup builds the fixed proof and verifier runtimes. It does not generate a proof
 until a valid capability job reaches the proof worker. The complete API proof-flow
-runbook remains pending with the M4 retained-proof and lifecycle gates.
+runbook remains pending with the M4 lifecycle gates. The separate
+[B-0031 retained-proof verifier runbook](docs/runbooks/B-0031-RETAINED-PLONK-VERIFIER.md)
+covers the one approved public-fixture generation and isolated verification run.
 
 ## Authority administration
 

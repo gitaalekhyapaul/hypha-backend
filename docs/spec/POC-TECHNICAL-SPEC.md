@@ -1195,6 +1195,10 @@ zero-swap, no-network, read-only-root, bounded-tmpfs, 60-second profile. Control
 tests contain child rejection, crash, malformed output, and timeout. Gateway nonce
 consumption and the matching TypeScript canonical vector remain M5 work. These build
 and controlled-process results do not replace the retained real-proof worker gate.
+B-0031 implements an approved public-only proof export, a strict retained-fixture
+loader, and a verifier-only acceptance role with eight fail-closed mutations. One
+manual NUS VM run must still create the fixture and record verification time, peak
+memory, zero swap, and issuer shutdown evidence.
 
 Deliver:
 

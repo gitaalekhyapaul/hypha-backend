@@ -17,6 +17,9 @@ wrong_key_public_report="docs/benchmarks/sp1-plonk/$test_id-wrong-key.md"
 duplicate_profile_report=".sp1/benchmarks/$test_id-duplicate-profile.pass.log"
 duplicate_profile_public_report="docs/benchmarks/sp1-plonk/$test_id-duplicate-profile.md"
 compose_output=$(mktemp /tmp/raziel-sp1-cluster-compose.XXXXXX)
+retained_output=$(mktemp -d /tmp/raziel-sp1-retained-output.XXXXXX)
+retained_fixture_root=$(mktemp -d /tmp/raziel-sp1-retained-fixture.XXXXXX)
+retained_rejection_root=$(mktemp -d /tmp/raziel-sp1-retained-rejection.XXXXXX)
 
 cleanup() {
   rm -f \
@@ -31,6 +34,10 @@ cleanup() {
     "$duplicate_profile_report" \
     "$duplicate_profile_public_report" \
     "$compose_output"
+  rm -rf \
+    "$retained_output" \
+    "$retained_fixture_root" \
+    "$retained_rejection_root"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -59,6 +66,7 @@ sh -n \
   scripts/cluster/stage-sp1-plonk-run-bundle \
   scripts/cluster/run-sp1-plonk \
   scripts/cluster/render-sp1-plonk-result \
+  scripts/cluster/stage-retained-sp1-plonk \
   scripts/cluster/slurm-probe-sp1-plonk \
   scripts/cluster/slurm-prepare-sp1-plonk \
   scripts/cluster/slurm-sp1-plonk
@@ -161,6 +169,9 @@ grep -Fq 'RAZIEL_SP1_BENCHMARK_PROFILE: cluster-56g-8cpu' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_GO_DEBUG: gctrace=1' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES: "60129542144"' "$compose_output"
 grep -Fq 'RAZIEL_SP1_EXPECTED_VISIBLE_CPUS: "8"' "$compose_output"
+grep -Fq 'RAZIEL_SP1_RETAIN_PUBLIC_ARTIFACT=1' scripts/cluster/run-sp1-plonk
+grep -Fq 'RAZIEL_SP1_PUBLIC_EXPORT_DIRECTORY=/public-output' scripts/cluster/run-sp1-plonk
+grep -Fq 'crates/prover/tests/support/mod.rs' scripts/cluster/sp1-plonk-common
 if grep -Fq "printf 'benchmark_profile=%s" scripts/cluster/run-sp1-plonk; then
   echo "cluster wrapper duplicates the in-container benchmark profile field" >&2
   exit 1
@@ -201,6 +212,7 @@ mkdir -p .sp1/benchmarks
   printf 'adr_0012_prove: proof_mode=plonk, prove_ms=120000, artifact_bytes=4096, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
   printf 'test local_plonk_verification_passes_the_adr_0012_gate ... adr_0012_verify: proof_mode=plonk, verify_ms=300, verification_key_id=sp1-vk-v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n'
   printf 'adr_0012_mutations=pass\n'
+  printf 'b0031_public_export=pass\n'
   printf 'container_memory_peak_bytes=34359738368\n'
   printf 'container_swap_peak_bytes=0\n'
   printf 'container_oom_count=0\n'
@@ -215,6 +227,41 @@ if grep -Eq 'secret-job-id|secret-hostname' "$public_report"; then
   echo "public benchmark result copied a private raw-log identifier" >&2
   exit 1
 fi
+
+dd if=/dev/zero of="$retained_output/plonk-proof.bin" bs=4096 count=1 2>/dev/null
+printf 'p' >"$retained_output/public-values.bin"
+printf '0x%s' "$(printf '%064d' 0)" >"$retained_output/sp1-vkey-hash.txt"
+printf 'sp1-vk-v1:%s' \
+  ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+  >"$retained_output/verification-key-id.txt"
+RAZIEL_CLUSTER_PLUMBING_SELF_TEST=1 \
+RAZIEL_RETAINED_PLONK_FIXTURE_ROOT="$retained_fixture_root" \
+  ./scripts/cluster/stage-retained-sp1-plonk \
+  "$raw_report" \
+  "$retained_output" \
+  >/dev/null
+retained_fixture="$retained_fixture_root/retained-plonk-v1"
+(
+  cd "$retained_fixture"
+  sha256sum --check --strict SHA256SUMS >/dev/null
+)
+grep -Fqx 'classification=public-zero-knowledge-test-fixture' \
+  "$retained_fixture/PROVENANCE"
+grep -Fqx 'private_witness_retained=false' "$retained_fixture/PROVENANCE"
+grep -Fqx 'debug_trace_retained=false' "$retained_fixture/PROVENANCE"
+
+printf 'not public\n' >"$retained_output/unapproved-private-file"
+if RAZIEL_CLUSTER_PLUMBING_SELF_TEST=1 \
+  RAZIEL_RETAINED_PLONK_FIXTURE_ROOT="$retained_rejection_root" \
+  ./scripts/cluster/stage-retained-sp1-plonk \
+    "$raw_report" \
+    "$retained_output" \
+    >/dev/null 2>&1
+then
+  echo "retained proof staging accepted an unapproved output file" >&2
+  exit 1
+fi
+rm "$retained_output/unapproved-private-file"
 sed \
   -e 's/^cluster_name=nus$/cluster_name=independent/' \
   -e 's/^cluster_scheduler=slurm$/cluster_scheduler=unscheduled/' \

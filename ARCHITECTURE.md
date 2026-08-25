@@ -183,7 +183,10 @@ checked dependency graph excludes the SDK, prover, core executor, native Gnark, 
 and outbound SP1 clients. B-0030 now runs that verifier behind a fixed owner-only
 launcher. The one-shot child has a 2 GiB hard limit, zero swap, no network, a
 read-only root, bounded tmpfs, and a 60-second deadline. A retained real proof must
-still pass through this worker before M4 can claim verifier behavior.
+still pass through this worker before M4 can claim verifier behavior. B-0031 now
+implements the public-only export, strict fixture loader, verifier-only Compose role,
+and proof, journal, key, policy, root, scope, expiry, and request-signature mutation
+cases. One manual NUS VM run must produce the retained proof and resource evidence.
 
 Generated Snapshot, Capability, and Verification clients and servers compile through
 the opt-in `raziel-proto` `services` feature. Both Rust service crates select that
@@ -307,7 +310,8 @@ removes waiting jobs or signals active work. It reports `CANCELED` only after pr
 cleanup. Duplicate calls return the retained outcome. Bounded reads reconcile rapid
 cross-queue transitions, and persistent mismatches fail closed. Startup recovery
 finishes commands retained before or after proof-job removal. Independent
-retained-proof verification remains pending.
+retained-proof plumbing passes locally. The proof-backed run remains pending on the
+NUS VM.
 
 ## Main components
 

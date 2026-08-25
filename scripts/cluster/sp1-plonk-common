@@ -233,6 +233,7 @@ raziel_stage_run_bundle() {
     crates/prover/src/*.rs \
     crates/prover/tests/prove_guest.rs \
     crates/prover/tests/support/authorization_fixture.rs \
+    crates/prover/tests/support/mod.rs \
     scripts/run-sp1-plonk-benchmark \
     target/raziel-sp1-plonk-test-executable \
     "$test_executable_relative" \

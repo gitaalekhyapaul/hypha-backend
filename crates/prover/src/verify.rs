@@ -47,6 +47,11 @@ impl Sp1Verifier {
         self.trusted_key.verification_key_id()
     }
 
+    #[must_use]
+    pub fn sp1_vkey_hash(&self) -> &str {
+        self.trusted_key.sp1_vkey_hash()
+    }
+
     /// `expected_public_values` must come from verifier-trusted capability claims.
     pub fn verify(
         &self,

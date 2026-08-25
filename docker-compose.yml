@@ -663,6 +663,51 @@ services:
         condition: service_healthy
     profiles: ["services"]
 
+  verifierd-retained-proof-test:
+    <<: *toolchain-service
+    # Root owns the disposable Cargo target volume. The measured worker stays non-root.
+    user: "0:0"
+    command:
+      - cargo
+      - test
+      - --locked
+      - --offline
+      - -p
+      - verifierd
+      - --lib
+      - admission::retained_proof_tests::retained_plonk_fixture_passes_isolated_verifier_and_mutations_fail_closed
+      - --
+      - --ignored
+      - --exact
+      - --nocapture
+      - --test-threads=1
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /var/cache/raziel-verifier-test
+      HOME: /tmp/raziel-home
+      RAZIEL_RETAINED_PLONK_FIXTURE_PATH: /workspace/services/verifierd/tests/fixtures/retained-plonk-v1
+      RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=268435456
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - verifierd-test-build-cache:/var/cache/raziel-verifier-test
+      - verifierd-worker-ipc:/run/raziel-verifier
+    depends_on:
+      verifierd-worker-sandbox:
+        condition: service_healthy
+    profiles: ["verifier-acceptance"]
+
   raziel-admin-policy:
     <<: *secure-rust-service
     entrypoint: ["cargo", "run", "--locked", "--offline", "-p", "raziel-admin", "--"]
@@ -734,6 +779,7 @@ volumes:
   verifierd-worker-build-cache:
   verifierd-worker-ipc:
   verifierd-worker-runtime:
+  verifierd-test-build-cache:
 
 networks:
   owner-internal:
