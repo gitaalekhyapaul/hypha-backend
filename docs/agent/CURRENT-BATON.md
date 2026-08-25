@@ -1,14 +1,14 @@
 # Current Engineering Baton
 
 - Baton ID: B-0031
-- State: ACTIVE
+- State: BLOCKED
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T10:16:36Z
+- Last updated UTC: 2026-08-25T10:37:14Z
 - Branch: `main`
-- Worktree: Clean at `5963da7` before this baton claim. B-0030 is the prior scoped
-  commit.
+- Worktree: Clean at `132a0f6`. The B-0031 export, fixture, verifier acceptance, and
+  operator plumbing is committed and pushed.
 
 ## Objective
 
@@ -67,8 +67,9 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Open Questions And Blockers
 
-- None. The expensive acceptance run remains a later manual action on the NUS VM
-  after the reviewed export plumbing is committed and pushed.
+- BLOCKER: the retained proof fixture and verification-only benchmark require the
+  maintainer's manual NUS VM run. Three consecutive state checks found no fixture,
+  benchmark result, or newer remote commit.
 
 ## Work Completed
 
@@ -110,6 +111,7 @@ every `razield` role stopped, then measure the verification-only resource profil
 | Signable direct fixture test | PASS | RFC 8032 key thumbprint binding | 2026-08-25T09:35:22Z |
 | Full workspace test | STOPPED | Full SP1 proving graph compile reached 25.16 GiB; focused gates used | 2026-08-25T09:48:28Z |
 | Retained real proof | NOT RUN | Manual NUS VM action after commit and push | 2026-08-25T09:35:22Z |
+| VM evidence availability | NOT AVAILABLE | No retained fixture or verifier benchmark after three checks | 2026-08-25T10:37:14Z |
 
 ## Privacy Checks
 
