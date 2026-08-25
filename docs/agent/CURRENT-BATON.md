@@ -5,11 +5,10 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T18:01:53Z
+- Last updated UTC: 2026-08-25T18:05:00Z
 - Branch: `main`
-- Worktree: Clean at `1492613` before the maintainer-approved fixed disk-floor
-  removal. The B-0031 export, fixture, verifier acceptance, operator plumbing, and
-  measured instruction-pin correction are pushed.
+- Worktree: Clean at pushed commit `950601b` after the maintainer-approved fixed
+  disk-floor removal.
 
 ## Objective
 
@@ -99,6 +98,7 @@ every `razield` role stopped, then measure the verification-only resource profil
 - Commit `1492613` contains the measured instruction-pin correction.
 - The fixed 60 GiB disk rejection is removed. Host preflight still records exact
   available worktree bytes for diagnostics.
+- Commit `950601b` contains the disk-floor removal and corrected runbooks.
 - No retained public proof fixture exists yet.
 
 ## Validation Plan
@@ -155,5 +155,5 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Pull the fixed disk-floor removal on the prepared NUS VM, then rerun the proof
-command without repeating preparation.
+Pull the fixed disk-floor removal on the NUS VM, refresh the prepared run bundle so
+it binds the new source commit, then rerun the proof command.
