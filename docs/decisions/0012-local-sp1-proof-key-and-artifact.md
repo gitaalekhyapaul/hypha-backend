@@ -294,6 +294,28 @@ Its source manifest matches the four-CPU validation. The manual transcript did n
 emit a source commit, source tree, run-bundle manifest digest, or toolchain image ID,
 so the record leaves those fields unknown.
 
+### B-0031 signable-fixture measurement
+
+B-0031 binds the direct synthetic fixture to the public RFC 8032 Ed25519 test key so
+the independent verifier can exercise the protected-request signature gate. M4 also
+added shared capability-scope validation helpers to the authorization guest after the
+M3 benchmark. These approved changes produce a new guest ELF and fixture commitment.
+
+The execute-only pre-proof gate ran on 2026-08-25 from source commit
+`e159538721b7040326f5cf84fb04d6d12a052b6e`. It measured 424,312 instructions in
+430 milliseconds. The guest ELF SHA-256 was
+`817b8689719d2079756160e56fe779b96f8e8194b77f68b5cca1c82fcb664a41`, and the source
+manifest SHA-256 was
+`e8423186bfb1947fe163e32baad1298ed532d5a5524342f41ff332e6c8223faf`. The old
+422,138-instruction assertion rejected the run before Plonk proof generation. The
+temporary input was deleted, and no proof artifact or retained witness was written.
+Peak memory was 48,537,600 bytes, with zero swap and no OOM event.
+
+The current B-0031 direct-fixture pin is 424,312 instructions. Historical M3 records
+remain unchanged at 422,138 instructions. The new measurement stays below the
+approved 520,000-instruction direct-path bound and does not change a proof ceiling,
+resource profile, proof statement, or public encoding.
+
 Plonk is selected over Groth16 for three reasons:
 
 - the baseline authorization paths execute in fewer than 520,000 instructions

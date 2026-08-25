@@ -1,14 +1,14 @@
 # Current Engineering Baton
 
 - Baton ID: B-0031
-- State: BLOCKED
+- State: ACTIVE
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T10:37:14Z
+- Last updated UTC: 2026-08-25T17:41:53Z
 - Branch: `main`
-- Worktree: Clean at `132a0f6`. The B-0031 export, fixture, verifier acceptance, and
-  operator plumbing is committed and pushed.
+- Worktree: Clean at `e159538` before the measured instruction-pin correction. The
+  B-0031 export, fixture, verifier acceptance, and operator plumbing is pushed.
 
 ## Objective
 
@@ -67,9 +67,8 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Open Questions And Blockers
 
-- BLOCKER: the retained proof fixture and verification-only benchmark require the
-  maintainer's manual NUS VM run. Three consecutive state checks found no fixture,
-  benchmark result, or newer remote commit.
+- None. The maintainer supplied the first NUS VM retry output. The proof did not
+  start because the current fixture instruction pin was stale.
 
 ## Work Completed
 
@@ -87,6 +86,9 @@ every `razield` role stopped, then measure the verification-only resource profil
 - The networkless acceptance client can write its disposable Cargo target and read
   the pinned offline dependency metadata. The measured worker remains non-root.
 - The NUS VM operator runbook records the exact proof and verifier commands.
+- The NUS VM passed the host, run-bundle, Plonk-setup, cgroup, and execute preflight.
+  The current direct fixture measured 424,312 instructions before proof generation.
+- The host test now pins that measurement as the B-0031 signable direct fixture.
 - No retained public proof fixture exists yet.
 
 ## Validation Plan
@@ -112,6 +114,10 @@ every `razield` role stopped, then measure the verification-only resource profil
 | Full workspace test | STOPPED | Full SP1 proving graph compile reached 25.16 GiB; focused gates used | 2026-08-25T09:48:28Z |
 | Retained real proof | NOT RUN | Manual NUS VM action after commit and push | 2026-08-25T09:35:22Z |
 | VM evidence availability | NOT AVAILABLE | No retained fixture or verifier benchmark after three checks | 2026-08-25T10:37:14Z |
+| B-0031 VM execute gate | FAIL | Measured 424,312 instructions; stale assertion expected 422,138; no proof started | 2026-08-25T17:38:15Z |
+| `cargo fmt --check` and `git diff --check` | PASS | Instruction pin and decision record | 2026-08-25T17:40:16Z |
+| Pinned container prover test | NOT AVAILABLE | Local Docker daemon is stopped | 2026-08-25T17:41:53Z |
+| Host prover test fallback | FAIL | SP1 Gnark build requires Go from the pinned Docker image | 2026-08-25T17:41:53Z |
 
 ## Privacy Checks
 
@@ -135,5 +141,5 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-The maintainer pulls the reviewed B-0031 plumbing on the NUS VM and follows
-`docs/runbooks/B-0031-RETAINED-PLONK-VERIFIER.md`.
+Commit and push the measured instruction-pin correction, then rerun preparation and
+the proof command on the NUS VM.
