@@ -5,10 +5,10 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T18:05:00Z
+- Last updated UTC: 2026-08-25T18:17:44Z
 - Branch: `main`
-- Worktree: Clean at pushed commit `950601b` after the maintainer-approved fixed
-  disk-floor removal.
+- Worktree: Clean at pushed commit `fd9ecd6` before correcting the stale public
+  benchmark parser.
 
 ## Objective
 
@@ -72,9 +72,10 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Open Questions And Blockers
 
-- None. The instruction pin is corrected. The next VM attempt stopped before Docker
-  started because preparation reduced free worktree space below the unmeasured fixed
-  60 GiB preflight. The maintainer approved removing that preflight.
+- The NUS VM completed the B-0031 proof benchmark with zero OOM events. Public report
+  rendering then rejected the new 424,312-instruction line against its stale
+  422,138-only pattern. The parser defect is corrected and validated locally. The
+  temporary public export was deleted, so one VM rerun remains required.
 
 ## Work Completed
 
@@ -99,6 +100,8 @@ every `razield` role stopped, then measure the verification-only resource profil
 - The fixed 60 GiB disk rejection is removed. Host preflight still records exact
   available worktree bytes for diagnostics.
 - Commit `950601b` contains the disk-floor removal and corrected runbooks.
+- The benchmark parser now accepts the validated historical M3 count and current
+  B-0031 count. Its current-fixture plumbing vector uses 424,312 instructions.
 - No retained public proof fixture exists yet.
 
 ## Validation Plan
@@ -132,6 +135,8 @@ every `razield` role stopped, then measure the verification-only resource profil
 | B-0031 VM proof preflight | FAIL | Unmeasured 60 GiB free-disk floor rejected prepared run before Docker started | 2026-08-25T18:00:07Z |
 | Shell syntax and `git diff --check` | PASS | Disk-floor removal and affected scripts | 2026-08-25T18:01:53Z |
 | `./scripts/cluster/check-sp1-plonk-plumbing` | PASS | Locked profile, Compose, exporter, and retained-artifact staging | 2026-08-25T18:01:53Z |
+| B-0031 VM proof benchmark | PASS, host post-processing failed | Proof completed with zero OOM events; stale execute-line parser rejected 424,312 instructions; public export deleted | 2026-08-25T17:53:21Z |
+| Shell syntax, `git diff --check`, and cluster plumbing | PASS | Current and historical execute-line parser formats plus retained-artifact staging | 2026-08-25T18:17:44Z |
 
 ## Privacy Checks
 
@@ -155,5 +160,5 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Pull the fixed disk-floor removal on the NUS VM, refresh the prepared run bundle so
-it binds the new source commit, then rerun the proof command.
+Validate and push the corrected benchmark parser, then refresh the prepared NUS VM
+bundle and rerun the retained proof command once.

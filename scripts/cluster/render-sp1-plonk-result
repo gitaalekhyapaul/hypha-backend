@@ -247,7 +247,7 @@ esac
 require_gate_line \
   adr_0012_execute \
   "$execute_gate" \
-  '^adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=422138, execute_ms=[0-9]+$'
+  '^adr_0012_execute: proof_mode=plonk, fixture_id=direct, instructions=(422138|424312), execute_ms=[0-9]+$'
 require_gate_line \
   adr_0012_prove \
   "$prove_gate" \
