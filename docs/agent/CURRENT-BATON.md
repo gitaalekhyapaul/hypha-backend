@@ -5,11 +5,11 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T19:24:23Z
+- Last updated UTC: 2026-08-25T19:25:57Z
 - Branch: `main`
-- Worktree: Local fixes for retained-fixture permissions, generated-contract
-  preparation, verifier-client identity, and worker readiness are uncommitted on
-  pushed commit `0f9954f`. The retained VM proof is bound to `35db270`.
+- Worktree: Permanent retained-verifier orchestration fixes are committed at
+  `a8340ef`. The retained VM proof is bound to `35db270`; its public fixture and
+  reports remain uncommitted on the VM.
 
 ## Objective
 
@@ -196,6 +196,6 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Commit and push the permanent verifier orchestration fixes. Then fast-forward the VM
-and commit the retained public fixture plus the Plonk and verifier benchmark reports.
-No proof or verifier rerun remains.
+Fast-forward the VM, review the exact public-file allowlist, and commit the retained
+public fixture plus the Plonk and verifier benchmark reports. No proof or verifier
+rerun remains.
