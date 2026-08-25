@@ -11,6 +11,7 @@
 - 56 GiB validation passed: 2026-08-11
 - Eight-CPU validation passed: 2026-08-13
 - Eight-CPU profile approved by maintainer: 2026-08-24
+- Fixed disk floor removed by maintainer: 2026-08-26
 - 30 GiB diagnostic approved by maintainer: 2026-07-27
 - Resolution: O-003 is closed. D-019 selects local Plonk for final demo proof
   artifacts.
@@ -315,6 +316,24 @@ The current B-0031 direct-fixture pin is 424,312 instructions. Historical M3 rec
 remain unchanged at 422,138 instructions. The new measurement stays below the
 approved 520,000-instruction direct-path bound and does not change a proof ceiling,
 resource profile, proof statement, or public encoding.
+
+### Fixed disk-floor removal
+
+The maintainer approved removal of the fixed 60 GiB free-disk preflight on
+2026-08-26. The original cluster script introduced that value as a conservative
+host-capacity guard. No benchmark derived it from proof storage.
+
+The validated Plonk artifact is 2,537 bytes. The witness-bearing container uses a
+read-only root, read-only source and setup mounts, and a memory-backed `/tmp`. Its
+large transient proving state falls under the 56 GiB memory cgroup, not the worktree
+filesystem. Preparation still stores the toolchain image, setup files, dependency
+caches, and build output. Their size does not justify rejecting every prepared proof
+run below 60 GiB free space.
+
+The host preflight continues to report exact available worktree bytes for operational
+diagnostics. It no longer accepts a minimum-disk override or rejects a run against a
+fixed disk threshold. Normal filesystem and container-runtime failures still fail the
+operation.
 
 Plonk is selected over Groth16 for three reasons:
 

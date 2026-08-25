@@ -27,8 +27,8 @@ The 30 GiB and 36 GiB gates failed at their exact cgroup limits. A four-CPU 56 G
 attempt passed on 2026-08-11. A later eight-CPU run passed on 2026-08-13. On
 2026-08-24, the maintainer adopted `cluster-56g-8cpu` as the current profile. This
 amendment changes CPU affinity and worker counts only. The proof runner fixes every
-listed value. Environment variables cannot raise or lower the approved memory, disk,
-heap, CPU-affinity, diagnostic, or worker limits.
+listed value. Environment variables cannot raise or lower the approved memory, heap,
+CPU-affinity, diagnostic, or worker limits.
 
 ## Runtime Choice
 
@@ -48,8 +48,9 @@ export RAZIEL_CLUSTER_RUNTIME=docker
 
 The independent machine needs Git, a local Docker Engine, and Docker Compose. The
 repository toolchain image supplies Node.js, pnpm, Rust, Go, Buf, Protobuf, libclang,
-and SP1. Do not install those tools on the host for this run. The proof preflight also
-requires at least eight CPUs, 62 GiB RAM, and 60 GiB free disk.
+and SP1. Do not install those tools on the host for this run. The proof preflight
+requires at least eight CPUs and 62 GiB RAM. It reports available worktree disk space
+for diagnostics but does not apply a fixed disk floor.
 
 The NUS preflight rejects Docker even if a client binary appears in `PATH`. It also
 rejects an invocation without `SLURM_JOB_ID`. Preparation and proving must run inside
@@ -187,7 +188,7 @@ Preparation uses network access. It verifies the setup archive, fills dependency
 caches, builds the guest, and compiles the proof test. It does not construct a
 witness or create a proof.
 
-Run it through Slurm from a clean clone with at least 60 GiB free space:
+Run it through Slurm from a clean clone:
 
 ```bash
 sbatch scripts/cluster/slurm-prepare-sp1-plonk

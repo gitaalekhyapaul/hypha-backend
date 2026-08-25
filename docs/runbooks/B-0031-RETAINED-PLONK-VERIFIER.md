@@ -19,7 +19,8 @@ salt, caveat value, private journal input, or debug trace.
 ## Machine
 
 Use the independent NUS SoC VM with Docker. Do not use the NUS Slurm path for these
-commands. The VM needs at least eight CPUs, 62 GiB RAM, and 60 GiB free disk.
+commands. The VM needs at least eight CPUs and 62 GiB RAM. The preflight reports
+available disk space but does not reject the run against a fixed disk floor.
 
 Keep the SSH session open during proving. A healthy proof command can remain silent
 for up to 60 minutes. The measured eight-CPU run took about 15 minutes 30 seconds.

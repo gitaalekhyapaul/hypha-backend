@@ -5,10 +5,11 @@
 - Milestone: M4, retained proof through the independent verifier
 - Owner: Codex
 - Started UTC: 2026-08-25T09:08:27Z
-- Last updated UTC: 2026-08-25T17:41:53Z
+- Last updated UTC: 2026-08-25T18:01:53Z
 - Branch: `main`
-- Worktree: Clean at `e159538` before the measured instruction-pin correction. The
-  B-0031 export, fixture, verifier acceptance, and operator plumbing is pushed.
+- Worktree: Clean at `1492613` before the maintainer-approved fixed disk-floor
+  removal. The B-0031 export, fixture, verifier acceptance, operator plumbing, and
+  measured instruction-pin correction are pushed.
 
 ## Objective
 
@@ -45,6 +46,8 @@ every `razield` role stopped, then measure the verification-only resource profil
 - Retained public proof fixture and provenance manifest
 - Isolated-verifier integration and mutation tests
 - Verifier benchmark evidence
+- SP1 host preflight profile and B-0031 operator runbooks
+- ADR-0012 resource-profile amendment
 - M4 current-state and baton documents
 
 ## Out Of Scope
@@ -64,11 +67,15 @@ every `razield` role stopped, then measure the verification-only resource profil
 - Made: The synthetic direct fixture now uses the SHA-256 thumbprint of the public
   RFC 8032 Ed25519 test key. The former arbitrary bytes had no signing key, so they
   could not exercise the protected-request signature gate.
+- Made: The maintainer approved removal of the unmeasured fixed 60 GiB free-disk
+  preflight on 2026-08-26. Available disk remains diagnostic output. CPU, memory,
+  swap, network, proof deadline, and artifact-size gates remain fixed.
 
 ## Open Questions And Blockers
 
-- None. The maintainer supplied the first NUS VM retry output. The proof did not
-  start because the current fixture instruction pin was stale.
+- None. The instruction pin is corrected. The next VM attempt stopped before Docker
+  started because preparation reduced free worktree space below the unmeasured fixed
+  60 GiB preflight. The maintainer approved removing that preflight.
 
 ## Work Completed
 
@@ -89,6 +96,9 @@ every `razield` role stopped, then measure the verification-only resource profil
 - The NUS VM passed the host, run-bundle, Plonk-setup, cgroup, and execute preflight.
   The current direct fixture measured 424,312 instructions before proof generation.
 - The host test now pins that measurement as the B-0031 signable direct fixture.
+- Commit `1492613` contains the measured instruction-pin correction.
+- The fixed 60 GiB disk rejection is removed. Host preflight still records exact
+  available worktree bytes for diagnostics.
 - No retained public proof fixture exists yet.
 
 ## Validation Plan
@@ -99,6 +109,7 @@ every `razield` role stopped, then measure the verification-only resource profil
   stopped.
 - Rerun the focused prover, verifier, feature-tree, privacy, formatting, lint, and
   Compose gates.
+- Run shell and cluster-plumbing checks after removing the fixed disk floor.
 
 ## Validation Evidence
 
@@ -118,6 +129,9 @@ every `razield` role stopped, then measure the verification-only resource profil
 | `cargo fmt --check` and `git diff --check` | PASS | Instruction pin and decision record | 2026-08-25T17:40:16Z |
 | Pinned container prover test | NOT AVAILABLE | Local Docker daemon is stopped | 2026-08-25T17:41:53Z |
 | Host prover test fallback | FAIL | SP1 Gnark build requires Go from the pinned Docker image | 2026-08-25T17:41:53Z |
+| B-0031 VM proof preflight | FAIL | Unmeasured 60 GiB free-disk floor rejected prepared run before Docker started | 2026-08-25T18:00:07Z |
+| Shell syntax and `git diff --check` | PASS | Disk-floor removal and affected scripts | 2026-08-25T18:01:53Z |
+| `./scripts/cluster/check-sp1-plonk-plumbing` | PASS | Locked profile, Compose, exporter, and retained-artifact staging | 2026-08-25T18:01:53Z |
 
 ## Privacy Checks
 
@@ -141,5 +155,5 @@ every `razield` role stopped, then measure the verification-only resource profil
 
 ## Exact Next Action
 
-Commit and push the measured instruction-pin correction, then rerun preparation and
-the proof command on the NUS VM.
+Pull the fixed disk-floor removal on the prepared NUS VM, then rerun the proof
+command without repeating preparation.

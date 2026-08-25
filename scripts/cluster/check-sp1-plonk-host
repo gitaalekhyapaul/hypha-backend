@@ -9,7 +9,6 @@ cd "$repo_root"
 
 memory_limit_bytes=${RAZIEL_SP1_EXPECTED_MEMORY_MAX_BYTES:-60129542144}
 minimum_host_memory_bytes=${RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES:-66571993088}
-minimum_disk_bytes=${RAZIEL_SP1_MINIMUM_DISK_BYTES:-64424509440}
 preflight_phase=${RAZIEL_CLUSTER_PREFLIGHT_PHASE:-prove}
 
 raziel_reject_container_runtime_environment
@@ -20,9 +19,6 @@ raziel_require_positive_integer \
 raziel_require_positive_integer \
   RAZIEL_SP1_MINIMUM_HOST_MEMORY_BYTES \
   "$minimum_host_memory_bytes"
-raziel_require_positive_integer \
-  RAZIEL_SP1_MINIMUM_DISK_BYTES \
-  "$minimum_disk_bytes"
 
 if [ "$(uname -s)" != Linux ]; then
   echo "the cluster benchmark requires Linux" >&2
@@ -67,10 +63,6 @@ available_disk_bytes=$(
   df -Pk "$repo_root" |
     awk 'NR == 2 { printf "%.0f\n", $4 * 1024 }'
 )
-if [ "$available_disk_bytes" -lt "$minimum_disk_bytes" ]; then
-  echo "the cluster worktree needs at least $minimum_disk_bytes free bytes" >&2
-  exit 1
-fi
 
 runtime=$(raziel_resolve_cluster_runtime)
 case "$runtime" in
