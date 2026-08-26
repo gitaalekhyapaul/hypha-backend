@@ -5,9 +5,9 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-25T20:04:00Z
+- Last updated UTC: 2026-08-26T03:04:41Z
 - Branch: `main`
-- Worktree: Clean at `960e1be` before B-0031 archive and current-state document edits.
+- Worktree: Clean at `1fa6983`. The B-0032 plumbing is pushed to `origin/main`.
 
 ## Objective
 
@@ -96,7 +96,6 @@ verifier, then record a reproducible M4 acceptance result.
 
 ## Validation Plan
 
-- Complete the final source review, commit the VM-ready plumbing, and push it.
 - Run the real Plonk service flow once on the NUS VM and commit only public evidence.
 - Reconcile M4 status across the spec, architecture, README, and baton archive.
 
@@ -114,6 +113,7 @@ verifier, then record a reproducible M4 acceptance result.
 | `cargo test -p verifierd -p razield --all-targets` | PASS, 131 active tests with 19 controlled or live tests skipped | Current B-0032 service and verifier regression suite | 2026-08-25T20:04:00Z |
 | `cargo clippy -p razield --test m4_service_flow -- -D warnings` | PASS | B-0032 acceptance client | 2026-08-25T20:04:00Z |
 | Proof sandbox, verifier sandbox, and cluster plumbing checks | PASS | Current isolation and SP1 plumbing | 2026-08-25T20:04:00Z |
+| B-0032 implementation review and push | PASS, commit `1fa6983` | VM-ready runner, client, fixture, docs, and B-0031 archive | 2026-08-26T03:04:41Z |
 
 ## Privacy Checks
 
@@ -135,5 +135,6 @@ verifier, then record a reproducible M4 acceptance result.
 
 ## Exact Next Action
 
-Review, commit, and push the B-0032 acceptance plumbing. Then run its one approved
-real Plonk service flow on the NUS VM and return the public result record.
+Pull `origin/main` on the NUS VM, prepare the pinned SP1 inputs, and run
+`./scripts/run-m4-service-flow` with its explicit one-run approval flag. Return the
+generated public result record for M4 closure.
