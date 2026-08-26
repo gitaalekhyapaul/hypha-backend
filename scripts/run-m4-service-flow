@@ -159,6 +159,12 @@ if [ ! -d "$RAZIEL_SP1_PLONK_SETUP_PATH" ] || [ -L "$RAZIEL_SP1_PLONK_SETUP_PATH
   exit 1
 fi
 
+compose run --rm --no-deps \
+  --user 0:0 \
+  toolchain \
+  ./scripts/normalize-public-cargo-cache \
+  >>"$raw_in_progress" 2>&1
+
 run_toolchain() {
   compose run --rm --no-deps \
     --user "$HOST_UID:$HOST_GID" \

@@ -31,7 +31,10 @@ The verifier receives 2 GiB RAM, no swap, no network, and a read-only root.
 
 The runner uses a private, host-user-owned Cargo target for its acceptance client.
 It does not depend on the ownership of the repository's shared `target` directory.
-The private target is reused during one run and deleted during cleanup.
+The private target is reused during one run and deleted during cleanup. Before the
+first client build, the runner restores read and directory-traverse permissions on
+the shared cache of public Cargo dependencies. It does not grant cache write access
+or change file ownership.
 
 ## Prepare
 

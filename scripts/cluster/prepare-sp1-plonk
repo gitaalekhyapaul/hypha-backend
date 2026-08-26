@@ -53,7 +53,8 @@ case "$runtime" in
     docker compose \
       --env-file tools/toolchain-versions.env \
       run --rm toolchain \
-      cargo fetch --locked
+      /bin/sh -eu -c \
+      'cargo fetch --locked && ./scripts/normalize-public-cargo-cache'
     docker compose \
       --env-file tools/toolchain-versions.env \
       run --rm \
@@ -72,6 +73,10 @@ case "$runtime" in
       --env-file tools/toolchain-versions.env \
       run --rm toolchain \
       node ./scripts/prepare-sp1-plonk-benchmark.mjs
+    docker compose \
+      --env-file tools/toolchain-versions.env \
+      run --rm toolchain \
+      ./scripts/normalize-public-cargo-cache
     toolchain_image_id=$(docker image inspect --format '{{.Id}}' raziel-toolchain:m0)
     runtime_version=$(docker version --format '{{.Client.Version}}/{{.Server.Version}}')
     ;;
@@ -110,6 +115,7 @@ case "$runtime" in
     run_build_step ./scripts/check-sp1-features
     run_build_step cargo prove build --locked --packages raziel-authorization-guest
     run_build_step node ./scripts/prepare-sp1-plonk-benchmark.mjs
+    run_build_step ./scripts/normalize-public-cargo-cache
     toolchain_image_id="sha256:$(raziel_sha256_file "$RAZIEL_SP1_TOOLCHAIN_SIF")"
     runtime_version=$("$runtime" version)
     ;;

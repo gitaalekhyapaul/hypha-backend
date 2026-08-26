@@ -5,7 +5,7 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T07:10:28Z
+- Last updated UTC: 2026-08-26T07:30:34Z
 - Branch: `main`
 - Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
   `origin/main`.
@@ -76,7 +76,12 @@ verifier, then record a reproducible M4 acceptance result.
 - The first NUS B-0032 run stopped before proof generation. Its unprivileged Rust
   acceptance client inherited Cargo's default `/workspace/target`, which was not
   writable after earlier root-owned VM builds. The runner now owns a private
-  per-run Cargo target. A VM retry remains required.
+  per-run Cargo target.
+- The second NUS attempt confirmed that target fix, then stopped before proof because
+  a root-created public Cargo registry file lacked read permission for the host UID.
+  Cluster preparation now normalizes the public cache after fetching, and the runner
+  repairs an existing cache before starting its first client. A VM retry remains
+  required.
 - No architecture decision or dependency approval remains.
 
 ## Work Completed
@@ -101,6 +106,8 @@ verifier, then record a reproducible M4 acceptance result.
 - The runner gives every unprivileged acceptance-client invocation one private,
   host-user-owned Cargo target. It reuses that target within the run and deletes it
   during cleanup, independent of the shared workspace target's ownership.
+- One reusable cache helper restores read and directory-traverse permissions after a
+  root Cargo fetch. The M4 runner applies it before private inputs or services exist.
 
 ## Validation Plan
 
@@ -129,6 +136,12 @@ verifier, then record a reproducible M4 acceptance result.
 | `cargo test --locked --offline -p razield --test m4_service_flow` | PASS, four live tests compiled and intentionally ignored | B-0032 acceptance client | 2026-08-26T07:10:28Z |
 | Pinned-container Cargo target smoke | SKIP, local Docker daemon unavailable | Exact container ownership path | 2026-08-26T07:10:28Z |
 | `git diff --check` | PASS | Scoped retry fix | 2026-08-26T07:10:28Z |
+| Second B-0032 NUS VM attempt | FAIL before proof, cached `fnv` source was not readable by the host UID | Public Cargo cache permissions | 2026-08-26T07:13:07Z |
+| Public Cargo cache permission fixture | PASS, directory `0755` and source file `0644` | Read and traverse repair without added write access | 2026-08-26T07:30:34Z |
+| Shell syntax for cache helper, bootstrap, cluster preparation, and M4 runner | PASS | Corrected cache lifecycle | 2026-08-26T07:30:34Z |
+| Compose rendered configuration | PASS | Corrected admin, service, and proof profiles | 2026-08-26T07:30:34Z |
+| Cluster plumbing runtime check | SKIP, local Docker daemon unavailable | Docker-backed cluster harness | 2026-08-26T07:30:34Z |
+| `git diff --check` | PASS | Public-cache repair | 2026-08-26T07:30:34Z |
 
 ## Privacy Checks
 

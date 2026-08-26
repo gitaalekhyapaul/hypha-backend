@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+cargo_home=${CARGO_HOME:-"$HOME/.cargo"}
+
+for public_cache in "$cargo_home/registry" "$cargo_home/git"; do
+  if [ -e "$public_cache" ]; then
+    chmod -R a+rX "$public_cache"
+  fi
+done
