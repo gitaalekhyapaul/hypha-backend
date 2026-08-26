@@ -215,6 +215,45 @@ services:
       - raziel-registry-ipc:/run/raziel-registry
     profiles: ["services", "proof"]
 
+  razield-proof-dependency-fetch:
+    <<: *toolchain-service
+    user: "0:0"
+    working_dir: /tmp
+    command: ["/usr/local/bin/prepare-proof-sandbox-dependencies"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      GOCACHE: /tmp/raziel-go-build
+      GOFLAGS: -mod=readonly
+      GOMODCACHE: /var/cache/raziel-proof-go-mod
+      GOPROXY: https://proxy.golang.org
+      GOSUMDB: sum.golang.org
+      GOTOOLCHAIN: local
+      HOME: /tmp/raziel-home
+      RAZIEL_SP1_CRATE_VERSION: "${SP1_VERSION}"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=268435456
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: ./scripts/prepare-proof-sandbox-dependencies
+        target: /usr/local/bin/prepare-proof-sandbox-dependencies
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: cargo-registry
+        target: /usr/local/cargo/registry
+        read_only: true
+      - type: volume
+        source: razield-proof-go-mod-cache
+        target: /var/cache/raziel-proof-go-mod
+    profiles: ["proof"]
+
   razield-proof-build:
     <<: *toolchain-service
     user: "0:0"
@@ -223,6 +262,11 @@ services:
       CARGO_HOME: /usr/local/cargo
       CARGO_NET_OFFLINE: "true"
       CARGO_TARGET_DIR: /var/cache/raziel-proof-build
+      GOCACHE: /var/cache/raziel-proof-build/go-build
+      GOFLAGS: -mod=readonly
+      GOMODCACHE: /var/cache/raziel-proof-go-mod
+      GOPROXY: "off"
+      GOTOOLCHAIN: local
       HOME: /tmp/raziel-home
       RAZIEL_PROOF_RUNTIME_ROOT: /opt/raziel-runtime
       RUSTUP_TOOLCHAIN: "1.97.1"
@@ -235,7 +279,14 @@ services:
       - cargo-registry:/usr/local/cargo/registry:ro
       - cargo-git:/usr/local/cargo/git:ro
       - razield-proof-build-cache:/var/cache/raziel-proof-build
+      - type: volume
+        source: razield-proof-go-mod-cache
+        target: /var/cache/raziel-proof-go-mod
+        read_only: true
       - razield-proof-runtime:/opt/raziel-runtime
+    depends_on:
+      razield-proof-dependency-fetch:
+        condition: service_completed_successfully
     profiles: ["proof"]
 
   razield-proof-init:
@@ -808,6 +859,7 @@ volumes:
   razield-private-envelopes:
   razield-private-snapshots:
   razield-proof-build-cache:
+  razield-proof-go-mod-cache:
   razield-proof-ipc:
   razield-proof-runtime:
   raziel-registry-ipc:

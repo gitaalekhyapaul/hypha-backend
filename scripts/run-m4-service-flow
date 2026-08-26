@@ -128,6 +128,13 @@ cleanup_private_failure() {
 }
 
 cleanup() {
+  if [ "$completed" != 1 ] && [ -f "$raw_in_progress" ]; then
+    compose logs --no-color \
+      razield-proof-dependency-fetch \
+      razield-proof-build \
+      verifierd-worker-build \
+      >>"$raw_in_progress" 2>&1 || true
+  fi
   compose down --remove-orphans >/dev/null 2>&1 || true
   if [ "$completed" != 1 ] && ! cleanup_private_failure; then
     echo "the failed M4 run could not remove its exact private artifacts" >&2
@@ -248,10 +255,17 @@ append_cgroup_evidence() {
   } >>"$raw_in_progress"
 }
 
+run_toolchain pnpm generate >>"$raw_in_progress" 2>&1
+compose run --rm --no-deps \
+  razield-proof-dependency-fetch \
+  >>"$raw_in_progress" 2>&1
+compose run --rm --no-deps \
+  razield-proof-build \
+  >>"$raw_in_progress" 2>&1
+
 printf '%s' "$SPICEDB_PRESHARED_KEY" >"$spicedb_token_path"
 chmod 0400 "$spicedb_token_path"
 
-run_toolchain pnpm generate >>"$raw_in_progress" 2>&1
 run_toolchain \
   go run ./tools/spicedb-ir-compiler/cmd/spicedb-ir-compiler compile \
   --schema services/razield/tests/fixtures/m4-service-flow/authorization.zed \

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+umask 022
+
+crate_version=${RAZIEL_SP1_CRATE_VERSION:?RAZIEL_SP1_CRATE_VERSION is required}
+cargo_home=${CARGO_HOME:-"$HOME/.cargo"}
+go_mod_cache=${GOMODCACHE:?GOMODCACHE is required}
+crate_root=
+crate_count=0
+
+for candidate in \
+  "$cargo_home"/registry/src/*/"sp1-recursion-gnark-ffi-$crate_version"
+do
+  if [ -d "$candidate" ] && [ ! -L "$candidate" ]; then
+    crate_root=$candidate
+    crate_count=$((crate_count + 1))
+  fi
+done
+
+if [ "$crate_count" -ne 1 ]; then
+  echo "expected one pinned sp1-recursion-gnark-ffi source, found $crate_count" >&2
+  exit 1
+fi
+if [ ! -f "$crate_root/go/go.mod" ] || [ -L "$crate_root/go/go.mod" ] ||
+  [ ! -f "$crate_root/go/go.sum" ] || [ -L "$crate_root/go/go.sum" ]
+then
+  echo "the pinned SP1 Gnark module manifest is missing or unsafe" >&2
+  exit 1
+fi
+
+install -d -m 0755 "$go_mod_cache"
+(
+  cd "$crate_root/go"
+  go mod download all
+  go mod verify
+)
+chmod -R a+rX "$go_mod_cache"

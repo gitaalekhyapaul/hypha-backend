@@ -5,7 +5,7 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T07:30:34Z
+- Last updated UTC: 2026-08-26T07:53:06Z
 - Branch: `main`
 - Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
   `origin/main`.
@@ -80,8 +80,11 @@ verifier, then record a reproducible M4 acceptance result.
 - The second NUS attempt confirmed that target fix, then stopped before proof because
   a root-created public Cargo registry file lacked read permission for the host UID.
   Cluster preparation now normalizes the public cache after fetching, and the runner
-  repairs an existing cache before starting its first client. A VM retry remains
-  required.
+  repairs an existing cache before starting its first client.
+- The third NUS attempt passed the signed request and exact-duplicate gate, then
+  exposed SP1's nested Gnark Go download inside the networkless prover-runtime build.
+  A separate public dependency-fetch container now fills a dedicated verified module
+  cache. A VM retry remains required.
 - No architecture decision or dependency approval remains.
 
 ## Work Completed
@@ -108,6 +111,12 @@ verifier, then record a reproducible M4 acceptance result.
   during cleanup, independent of the shared workspace target's ownership.
 - One reusable cache helper restores read and directory-traverse permissions after a
   root Cargo fetch. The M4 runner applies it before private inputs or services exist.
+- The runner now fetches SP1's pinned Gnark Go modules in a build-only container with
+  no repository or private-runtime mounts. It builds the prover runtime before
+  creating private state. The runtime build remains networkless with a read-only Go
+  module cache and `GOPROXY=off`.
+- Failed runs preserve logs only from the public dependency-fetch and binary-build
+  containers before Compose cleanup removes them.
 
 ## Validation Plan
 
@@ -142,6 +151,12 @@ verifier, then record a reproducible M4 acceptance result.
 | Compose rendered configuration | PASS | Corrected admin, service, and proof profiles | 2026-08-26T07:30:34Z |
 | Cluster plumbing runtime check | SKIP, local Docker daemon unavailable | Docker-backed cluster harness | 2026-08-26T07:30:34Z |
 | `git diff --check` | PASS | Public-cache repair | 2026-08-26T07:30:34Z |
+| Third B-0032 NUS VM attempt | FAIL before proof after `b0032_submit` passed, Gnark Go modules were absent from the networkless build | Prover-runtime dependency cache | 2026-08-26T07:33:05Z |
+| Proof sandbox rendered boundary check | PASS | Public-only fetch mounts, read-only module cache, networkless runtime build and prover | 2026-08-26T07:51:25Z |
+| Shell syntax for dependency fetch, M4 runner, and Compose boundary check | PASS | Corrected proof-build preflight | 2026-08-26T07:51:25Z |
+| `cargo test --locked --offline -p razield --test m4_service_flow` | PASS, four live tests compiled and intentionally ignored | B-0032 acceptance client | 2026-08-26T07:51:25Z |
+| Pinned Gnark module download and networkless runtime build | SKIP, local Docker daemon unavailable | Exact build-only fetch and offline consumer | 2026-08-26T07:51:25Z |
+| `git diff --check` | PASS | Gnark build-cache fix | 2026-08-26T07:51:25Z |
 
 ## Privacy Checks
 
@@ -151,6 +166,8 @@ verifier, then record a reproducible M4 acceptance result.
 - PASS: the independent verifier reads trusted state from its own registry and has no
   prover connection.
 - PASS: the local B-0032 request marker did not enter service logs or Redis.
+- PASS: the networked dependency-fetch service has no repository, registry-state,
+  key, envelope, snapshot, proof IPC, or Plonk setup mount.
 - NOT APPLICABLE: real transaction data is not part of this synthetic M4 run.
 
 ## Risks And Private-Data Notes
@@ -160,6 +177,9 @@ verifier, then record a reproducible M4 acceptance result.
 - The acceptance harness must not introduce a mock success mode into production code.
 - The private envelope, witness, and prover traces must be deleted before a terminal
   public capability is retained. The approved private snapshot remains owner-side.
+- The VM must complete one pinned Gnark module fetch before the networkless runtime
+  build can be considered proven. Go module versions and checksums come from the
+  locked SP1 `6.3.1` crate.
 
 ## Exact Next Action
 

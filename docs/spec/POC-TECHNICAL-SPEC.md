@@ -1164,6 +1164,9 @@ Its feature build and focused protocol, configuration, cgroup, and privacy tests
 without running SP1. The default API graph excludes the SP1 SDK. The B-0025 fixed
 launcher accepts one bounded request and starts one fixed child at a time. It confirms
 child exit after cancellation, crash, malformed output, and closed typed failures.
+The proof-runtime build prefetches and verifies SP1's pinned Gnark Go modules in a
+build-only container with no repository or private-state mounts. The runtime build
+stays networkless, mounts that module cache read-only, and disables Go proxy access.
 The Compose proof profile applies the accepted 60,129,542,144-byte cap, zero swap,
 eight CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
 bounded tmpfs. The supervisor deletes the private envelope before direct Plonk and

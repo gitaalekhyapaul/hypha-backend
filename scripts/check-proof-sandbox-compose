@@ -5,7 +5,9 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 compose_output=$(mktemp)
 sandbox_output=$(mktemp)
 worker_output=$(mktemp)
-trap 'rm -f "$compose_output" "$sandbox_output" "$worker_output"' EXIT
+dependency_fetch_output=$(mktemp)
+build_output=$(mktemp)
+trap 'rm -f "$compose_output" "$sandbox_output" "$worker_output" "$dependency_fetch_output" "$build_output"' EXIT
 
 cd "$repo_root"
 HOST_UID=${HOST_UID:-$(id -u)} \
@@ -27,6 +29,43 @@ extract_service() {
 
 extract_service razield-proof-sandbox "$sandbox_output"
 extract_service razield-proof-worker "$worker_output"
+extract_service razield-proof-dependency-fetch "$dependency_fetch_output"
+extract_service razield-proof-build "$build_output"
+
+for exact_setting in \
+  'GOMODCACHE: /var/cache/raziel-proof-go-mod' \
+  'GOPROXY: https://proxy.golang.org' \
+  'RAZIEL_SP1_CRATE_VERSION: 6.3.1' \
+  'source: cargo-registry' \
+  'source: razield-proof-go-mod-cache' \
+  'target: /usr/local/cargo/registry' \
+  'target: /var/cache/raziel-proof-go-mod'
+do
+  grep -Fq "$exact_setting" "$dependency_fetch_output"
+done
+
+for forbidden_fetch_mount in \
+  '/workspace' \
+  '/var/lib/raziel' \
+  '/run/raziel' \
+  '/opt/sp1'
+do
+  if grep -Fq "$forbidden_fetch_mount" "$dependency_fetch_output"; then
+    echo "proof dependency fetch can see a forbidden runtime mount" >&2
+    exit 1
+  fi
+done
+
+for exact_setting in \
+  'GOMODCACHE: /var/cache/raziel-proof-go-mod' \
+  "GOPROXY: 'off'" \
+  'network_mode: none' \
+  'source: razield-proof-go-mod-cache' \
+  'target: /var/cache/raziel-proof-go-mod'
+do
+  grep -Fq "$exact_setting" "$build_output"
+done
+grep -Fq 'condition: service_completed_successfully' "$build_output"
 
 for exact_setting in \
   'cpuset: 0-7' \

@@ -26,6 +26,10 @@ least eight CPUs, at least 62 GiB RAM, and the prepared SP1 Plonk setup. Host No
 Rust, Go, Buf, and OpenSSL installations are not required. The pinned toolchain image
 provides them.
 
+The first prover-runtime build needs outbound HTTPS and DNS access to
+`proxy.golang.org` and `sum.golang.org`. It downloads only the Go modules pinned by
+SP1 `6.3.1`, verifies their checksums, and retains them in a Docker volume.
+
 The approved proof sandbox receives eight CPUs, 56 GiB RAM, no swap, and no network.
 The verifier receives 2 GiB RAM, no swap, no network, and a read-only root.
 
@@ -35,6 +39,14 @@ The private target is reused during one run and deleted during cleanup. Before t
 first client build, the runner restores read and directory-traverse permissions on
 the shared cache of public Cargo dependencies. It does not grant cache write access
 or change file ownership.
+
+SP1's pinned Gnark bridge contains a Go build step. A build-only fetch container
+downloads and verifies those pinned Go modules into a dedicated cache. That container
+cannot see the repository or any Raziel key, registry, envelope, snapshot, proof IPC,
+or Plonk setup mount. The networkless prover-runtime build receives the cache
+read-only and sets `GOPROXY=off`. The runner completes both build steps before it
+creates tokens, authority keys, snapshots, or queue records. The prover sandbox
+remains networkless.
 
 ## Prepare
 
@@ -97,8 +109,10 @@ A failed run moves its raw log to:
 .sp1/benchmarks/m4-service-<timestamp>.fail.log
 ```
 
-The runner stops the stack first. It then removes the failed run's exact private
-envelope and snapshot when their validated identifiers were recorded.
+The runner first appends public dependency-fetch and runtime-build logs, then stops
+the stack. It removes the failed run's exact private envelope and snapshot when their
+validated identifiers were recorded. This keeps the first useful build error in the
+failed raw log without capturing a private runtime mount.
 
 Do not start another proof. Return the last 80 lines for review:
 
