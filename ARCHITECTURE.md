@@ -1,6 +1,6 @@
 # Raziel PoC Architecture
 
-Status: active baseline; M0 through M3 validated; M4 under implementation
+Status: active baseline; M0 through M4 validated; M5 ready
 
 Last updated: 2026-08-26
 
@@ -40,8 +40,8 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service, identity, snapshot-publication, private proving, and request-signature contracts, plus passing issuer admission, private-envelope, queue, snapshot, prover, lifecycle, retained-proof, and independent-verifier gates. The complete service-path run remains |
-| M5 | Shells only | Next.js console and gateway have no service wiring |
+| M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
+| M5 | Ready | Next.js console and gateway shells exist; gateway, SDK, replay, transaction, receipt, and console wiring remains |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
 
@@ -189,7 +189,13 @@ proof took 932,309 milliseconds and peaked at 46,271,315,968 bytes. Verification
 journal, key, policy, root, scope, expiry, and request-signature mutations. The
 [proof](docs/benchmarks/sp1-plonk/cluster-20260825T182353Z-18591.md) and
 [verifier](docs/benchmarks/sp1-verifier/verifier-20260825T192214Z-34749.md) reports
-record the public evidence. B-0032 owns the final complete M4 service-path run.
+record the public evidence. B-0032 completed the full service path. Its signed API
+request reached BullMQ, private proving, terminal capability publication, and
+independent verification with the issuer and prover stopped. The proof took 955,516
+milliseconds, peaked at 47,003,119,616 bytes, used no swap, and recorded no OOM
+event. The verifier rejected an altered capability and a stolen key binding. The
+[service-flow report](docs/benchmarks/m4-service-flow/m4-service-20260826T090300Z-199729.md)
+records the final M4 gate.
 
 The local prover-runtime build keeps networking disabled. A separate build-only
 container downloads the Go modules pinned by SP1's checked-in Gnark bridge before
@@ -320,10 +326,10 @@ removes waiting jobs or signals active work. It reports `CANCELED` only after pr
 cleanup. Duplicate calls return the retained outcome. Bounded reads reconcile rapid
 cross-queue transitions, and persistent mismatches fail closed. Startup recovery
 finishes commands retained before or after proof-job removal. The independent
-retained-proof gate now passes on the NUS VM. The full signed request, queue,
-one-shot proof, terminal capability, and independent-verifier path remains B-0032.
-Its signed request, snapshot, and queued-job leg passes locally with the proof worker
-absent. The final proof-backed leg runs on the NUS VM.
+retained-proof gate passes on the NUS VM. B-0032 passed the full signed request,
+queue, one-shot proof, terminal capability, and independent-verifier path on the same
+VM. The final verifier ran after the issuer and proof worker stopped. The private job
+envelope was deleted, and the approved owner-only private snapshot remained.
 
 ## Main components
 

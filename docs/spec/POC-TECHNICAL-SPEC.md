@@ -1101,7 +1101,7 @@ Exit gate:
 
 ### M4: Capability service and independent verifier
 
-Status: active implementation. The maintainer accepted
+Status: complete on 2026-08-26. The maintainer accepted
 [ADR-0013](../decisions/0013-m4-service-and-verifier-execution.md) and
 [ADR-0014](../decisions/0014-agent-key-thumbprint-and-issuance-identity.md) on
 2026-08-12, then accepted
@@ -1206,11 +1206,17 @@ peaked at 46,271,315,968 bytes. The verifier took 447 milliseconds, peaked at
 expiry, and request-signature mutations. The public
 [proof](../benchmarks/sp1-plonk/cluster-20260825T182353Z-18591.md) and
 [verifier](../benchmarks/sp1-verifier/verifier-20260825T192214Z-34749.md) reports
-record the gate. B-0032 owns the remaining complete signed-request, queue, prover,
-terminal-capability, and verifier service run before M4 closes. Its production-client
-acceptance harness now passes policy compilation, exact-revision snapshot creation,
-signed request admission, queued publication, exact duplicate handling, and local
-privacy scans. The real proof-backed leg remains one NUS VM run.
+record the retained-proof gate. B-0032 completed the signed-request, queue, prover,
+terminal-capability, and verifier service run on the NUS VM. The production client
+compiled and approved the synthetic policy, built an exact-revision snapshot,
+submitted and deduplicated the signed request, generated one real local Plonk proof,
+and published one terminal capability. The issuer and prover stopped before the
+independent verifier accepted the capability. The verifier rejected an altered
+capability and a stolen key binding. Proving took 955,516 milliseconds and peaked at
+47,003,119,616 bytes under the 56 GiB cap with no swap or OOM event. The private job
+envelope was deleted, and the owner-only private snapshot remained. The
+[complete service-flow report](../benchmarks/m4-service-flow/m4-service-20260826T090300Z-199729.md)
+records the final M4 gate.
 
 Deliver:
 
@@ -1227,7 +1233,7 @@ Exit gate:
 
 ### M5: Next.js gateway and console
 
-Status: process and application shells only.
+Status: ready for implementation; process and application shells only.
 
 Deliver:
 

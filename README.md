@@ -10,14 +10,14 @@ acceptance run.
 
 ## Current status
 
-M0 through M3 are complete. M3 produced and independently verified a real local SP1
+M0 through M4 are complete. M3 produced and independently verified a real local SP1
 Plonk proof. The approved eight-CPU profile records a 2,537-byte proof,
 929,660-millisecond proving time, 438-millisecond verification time, and a
 45,592,842,240-byte memory peak. See the
 [`cluster-20260813T063649Z-8cpu` benchmark](docs/benchmarks/sp1-plonk/cluster-20260813T063649Z-8cpu.md).
 
-M4 is in active implementation under accepted ADR-0013 through ADR-0017. `razield`
-now runs bounded CapabilityService and SnapshotService Tonic ingress. `verifierd`
+M4 is complete under accepted ADR-0013 through ADR-0017. `razield` runs bounded
+CapabilityService and SnapshotService Tonic ingress. `verifierd`
 now has a live strict public service boundary under accepted ADR-0002. It rejects
 unknown and noncanonical Protobuf, validates the agent key and exact protected-request
 signature, checks trusted time and local registry state, and reconstructs the complete
@@ -30,6 +30,12 @@ and peaked at 46,271,315,968 bytes. The isolated verifier accepted it in 447
 milliseconds, peaked at 8,146,944 bytes, used no swap, and rejected eight bound-field
 mutations. See the [proof benchmark](docs/benchmarks/sp1-plonk/cluster-20260825T182353Z-18591.md)
 and [verifier benchmark](docs/benchmarks/sp1-verifier/verifier-20260825T192214Z-34749.md).
+The final B-0032 run submitted one signed request, queued one BullMQ job, generated
+a real local Plonk proof, published the terminal capability, stopped the issuer and
+prover, and verified the result independently. Proving took 955,516 milliseconds and
+peaked at 47,003,119,616 bytes under the 56 GiB cap with no swap or OOM event. The
+verifier rejected an altered capability and a stolen key binding. See the
+[complete M4 service-flow report](docs/benchmarks/m4-service-flow/m4-service-20260826T090300Z-199729.md).
 The BullMQ `1.2.3` and Redis `8.2.8` conformance gate passes. The
 pure `razield` admission
 boundary validates generated
@@ -118,8 +124,8 @@ checks, launcher cancellation and exit, terminal capability publication, rendere
 sandbox controls, exact-revision snapshot publication, atomic root registration,
 revocation, expiry bounds, public lifecycle projection, queued and active
 cancellation, duplicate cancellation, and cancellation recovery. The retained-proof
-independent-verifier gate passes. B-0032 now owns the remaining complete
-API-to-queue-to-prover-to-verifier M4 acceptance run.
+independent-verifier gate and the complete B-0032 service-flow gate pass. M5 gateway,
+SDK, replay-control, transaction, receipt, and console work is ready to start.
 
 ## Read first
 
@@ -199,8 +205,8 @@ boundary before startup:
 
 Startup builds the fixed proof and verifier runtimes. It does not generate a proof
 until a valid capability job reaches the proof worker. The
-[B-0032 service-flow runbook](docs/runbooks/B-0032-M4-SERVICE-FLOW.md) covers the
-final M4 API, queue, proof, and independent-verifier acceptance run. The separate
+[B-0032 service-flow runbook](docs/runbooks/B-0032-M4-SERVICE-FLOW.md) reproduces the
+completed M4 API, queue, proof, and independent-verifier acceptance run. The separate
 [B-0031 retained-proof verifier runbook](docs/runbooks/B-0031-RETAINED-PLONK-VERIFIER.md)
 covers the one approved public-fixture generation and isolated verification run.
 
