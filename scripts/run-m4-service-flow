@@ -22,15 +22,22 @@ registry_root="$run_root/registry"
 secret_root="$run_root/secrets"
 generated_root="$run_root/generated"
 public_root="$run_root/public"
+cargo_target_root="$run_root/cargo-target"
 raw_root="$repo_root/.sp1/benchmarks"
 raw_in_progress="$raw_root/$run_id.in-progress.log"
 raw_pass="$raw_root/$run_id.pass.log"
 raw_fail="$raw_root/$run_id.fail.log"
 public_report="$repo_root/docs/benchmarks/m4-service-flow/$run_id.md"
 
-mkdir -p "$registry_root/drafts" "$secret_root" "$generated_root" "$public_root" "$raw_root"
+mkdir -p \
+  "$registry_root/drafts" \
+  "$secret_root" \
+  "$generated_root" \
+  "$public_root" \
+  "$cargo_target_root" \
+  "$raw_root"
 chmod 0700 "$run_root" "$registry_root" "$registry_root/drafts" "$secret_root" \
-  "$generated_root" "$public_root" "$raw_root"
+  "$generated_root" "$public_root" "$cargo_target_root" "$raw_root"
 : >"$raw_in_progress"
 chmod 0600 "$raw_in_progress"
 
@@ -63,6 +70,7 @@ export RAZIEL_ZED_TOKEN_PATH="$zed_token_path"
 
 relative_run_root=${run_root#"$repo_root/"}
 workspace_run_root="/workspace/$relative_run_root"
+workspace_cargo_target_root="$workspace_run_root/cargo-target"
 workspace_policy_path="$workspace_run_root/generated/policy.pb"
 workspace_policy_diagnostic_path="$workspace_run_root/generated/policy.json"
 workspace_policy_key_path="$workspace_run_root/secrets/policy-authority.pk8"
@@ -132,6 +140,7 @@ cleanup() {
     "$job_id_path" \
     "$snapshot_root_path" \
     "$capability_path"
+  rm -rf "$cargo_target_root"
   if [ "$completed" != 1 ] && [ -f "$raw_in_progress" ]; then
     mv "$raw_in_progress" "$raw_fail"
     printf 'm4_service_benchmark_report=%s\n' "${raw_fail#"$repo_root/"}"
@@ -155,6 +164,7 @@ run_toolchain() {
     --user "$HOST_UID:$HOST_GID" \
     -e HOME=/tmp/raziel-home \
     -e BUF_CACHE_DIR=/tmp/raziel-buf-cache \
+    -e "CARGO_TARGET_DIR=$workspace_cargo_target_root" \
     toolchain "$@"
 }
 
@@ -164,6 +174,7 @@ run_client() {
   compose run --rm --no-deps \
     --user "$HOST_UID:$HOST_GID" \
     -e HOME=/tmp/raziel-home \
+    -e "CARGO_TARGET_DIR=$workspace_cargo_target_root" \
     "$@" \
     toolchain \
     cargo test --locked --offline -p razield --test m4_service_flow \

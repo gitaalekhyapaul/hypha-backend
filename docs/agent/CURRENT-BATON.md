@@ -5,9 +5,10 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T03:08:18Z
+- Last updated UTC: 2026-08-26T07:10:28Z
 - Branch: `main`
-- Worktree: Clean. The B-0032 plumbing and VM handoff are pushed to `origin/main`.
+- Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
+  `origin/main`.
 
 ## Objective
 
@@ -72,7 +73,11 @@ verifier, then record a reproducible M4 acceptance result.
 
 - The Mac cannot run the 56 GiB proof sandbox. The final real-proof portion must run
   on the prepared NUS VM.
-- No architecture decision, dependency approval, or implementation blocker remains.
+- The first NUS B-0032 run stopped before proof generation. Its unprivileged Rust
+  acceptance client inherited Cargo's default `/workspace/target`, which was not
+  writable after earlier root-owned VM builds. The runner now owns a private
+  per-run Cargo target. A VM retry remains required.
+- No architecture decision or dependency approval remains.
 
 ## Work Completed
 
@@ -93,6 +98,9 @@ verifier, then record a reproducible M4 acceptance result.
 - The local privacy scan found no private request marker in service logs or Redis.
 - The B-0032 VM runbook documents the one approval flag, resource profile, outputs,
   retention rules, and failure evidence.
+- The runner gives every unprivileged acceptance-client invocation one private,
+  host-user-owned Cargo target. It reuses that target within the run and deletes it
+  during cleanup, independent of the shared workspace target's ownership.
 
 ## Validation Plan
 
@@ -115,6 +123,12 @@ verifier, then record a reproducible M4 acceptance result.
 | Proof sandbox, verifier sandbox, and cluster plumbing checks | PASS | Current isolation and SP1 plumbing | 2026-08-25T20:04:00Z |
 | B-0032 implementation review and push | PASS, commit `1fa6983` | VM-ready runner, client, fixture, docs, and B-0031 archive | 2026-08-26T03:04:41Z |
 | B-0032 VM result availability | NOT AVAILABLE, no public result on `origin/main` | Final proof-backed service flow | 2026-08-26T03:08:18Z |
+| First B-0032 NUS VM attempt | FAIL before proof, Cargo could not create `/workspace/target/debug` | Acceptance-client build ownership | 2026-08-26T06:55:14Z |
+| `sh -n scripts/run-m4-service-flow` | PASS | Corrected runner syntax | 2026-08-26T07:10:28Z |
+| Compose rendered configuration | PASS | Admin, service, and proof profiles | 2026-08-26T07:10:28Z |
+| `cargo test --locked --offline -p razield --test m4_service_flow` | PASS, four live tests compiled and intentionally ignored | B-0032 acceptance client | 2026-08-26T07:10:28Z |
+| Pinned-container Cargo target smoke | SKIP, local Docker daemon unavailable | Exact container ownership path | 2026-08-26T07:10:28Z |
+| `git diff --check` | PASS | Scoped retry fix | 2026-08-26T07:10:28Z |
 
 ## Privacy Checks
 
@@ -136,6 +150,6 @@ verifier, then record a reproducible M4 acceptance result.
 
 ## Exact Next Action
 
-Pull `origin/main` on the NUS VM, prepare the pinned SP1 inputs, and run
-`./scripts/run-m4-service-flow` with its explicit one-run approval flag. Return the
-generated public result record for M4 closure.
+Pull `origin/main` on the NUS VM and rerun `./scripts/run-m4-service-flow` with its
+explicit one-run approval flag. Return the generated public result record for M4
+closure.

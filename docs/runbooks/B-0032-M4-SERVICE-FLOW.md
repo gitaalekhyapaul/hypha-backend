@@ -29,6 +29,10 @@ provides them.
 The approved proof sandbox receives eight CPUs, 56 GiB RAM, no swap, and no network.
 The verifier receives 2 GiB RAM, no swap, no network, and a read-only root.
 
+The runner uses a private, host-user-owned Cargo target for its acceptance client.
+It does not depend on the ownership of the repository's shared `target` directory.
+The private target is reused during one run and deleted during cleanup.
+
 ## Prepare
 
 Run from the repository root:
