@@ -5,7 +5,7 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T08:07:01Z
+- Last updated UTC: 2026-08-26T08:24:54Z
 - Branch: `main`
 - Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
   `origin/main`.
@@ -88,7 +88,8 @@ verifier, then record a reproducible M4 acceptance result.
 - The fourth NUS attempt reached that fetch container, then stopped because Go tried
   to extend the pinned crate's read-only `go.sum`. The fetch now works from a private
   manifest copy, verifies it, and publishes the finalized pair for the offline build.
-  A VM retry remains required.
+  The exact fetch and networkless runtime build now pass in local Apple Silicon
+  Docker. The complete proof-backed VM run remains required.
 - No architecture decision or dependency approval remains.
 
 ## Work Completed
@@ -122,6 +123,9 @@ verifier, then record a reproducible M4 acceptance result.
 - The dependency fetch copies SP1's immutable `go.mod` and `go.sum` into its public
   cache. Go can add required transitive checksums there. The offline build receives
   the finalized manifest and cache read-only.
+- Local Docker completed that fetch and the full networkless runtime build. The build
+  compiled the native Gnark bridge, SP1 prover SDK, Raziel prover services, and
+  authorization guest without creating private state or generating a proof.
 - Failed runs preserve logs only from the public dependency-fetch and binary-build
   containers before Compose cleanup removes them.
 
@@ -169,6 +173,8 @@ verifier, then record a reproducible M4 acceptance result.
 | Proof sandbox rendered boundary check | PASS | Cached manifest is read-only and restricted to the networkless build | 2026-08-26T08:07:01Z |
 | Cached Gnark module download and networkless runtime build | SKIP, local Docker daemon unavailable | Exact Go command against pinned SP1 source | 2026-08-26T08:07:01Z |
 | `git diff --check` | PASS | Cached-manifest fix | 2026-08-26T08:07:01Z |
+| `razield-proof-dependency-fetch` | PASS, `all modules verified` | Pinned SP1 Go modules and finalized cached manifest | 2026-08-26T08:24:54Z |
+| Networkless `razield-proof-build` | PASS in about five minutes | Native Gnark bridge, SP1 SDK, Raziel binaries, and authorization guest | 2026-08-26T08:24:54Z |
 
 ## Privacy Checks
 
@@ -189,10 +195,9 @@ verifier, then record a reproducible M4 acceptance result.
 - The acceptance harness must not introduce a mock success mode into production code.
 - The private envelope, witness, and prover traces must be deleted before a terminal
   public capability is retained. The approved private snapshot remains owner-side.
-- The VM must complete one pinned Gnark module fetch from a cached manifest before the
-  networkless runtime build can be considered proven. Module versions originate in
-  the locked SP1 `6.3.1` crate. The fetch verifies downloaded content and records any
-  required transitive checksums in the dedicated public cache.
+- The cached-manifest fetch and networkless runtime build pass locally. Module
+  versions originate in the locked SP1 `6.3.1` crate. The full VM run repeats that
+  preflight on `linux/amd64`, then performs the 56 GiB proof and service verification.
 
 ## Exact Next Action
 
