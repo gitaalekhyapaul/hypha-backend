@@ -1,0 +1,6 @@
+definition agent {}
+
+definition dataset {
+  relation viewer: agent
+  permission access = viewer
+}

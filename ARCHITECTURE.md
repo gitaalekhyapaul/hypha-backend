@@ -2,7 +2,7 @@
 
 Status: active baseline; M0 through M3 validated; M4 under implementation
 
-Last updated: 2026-08-24
+Last updated: 2026-08-26
 
 ## Human-readable overview
 
@@ -40,7 +40,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M1 | Complete | Strict SpiceDB compiler adapter, PolicyIR evaluator, and live equivalence |
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
-| M4 | Active implementation | Accepted service, identity, snapshot-publication, private proving, and request-signature contracts, plus passing issuer admission, private-envelope, queue, snapshot, prover, lifecycle, and independent-verifier admission gates |
+| M4 | Active implementation | Accepted service, identity, snapshot-publication, private proving, and request-signature contracts, plus passing issuer admission, private-envelope, queue, snapshot, prover, lifecycle, retained-proof, and independent-verifier gates. The complete service-path run remains |
 | M5 | Shells only | Next.js console and gateway have no service wiring |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
@@ -182,11 +182,14 @@ or SP1-network path. The verification-only `raziel-prover` feature uses direct
 checked dependency graph excludes the SDK, prover, core executor, native Gnark, JIT,
 and outbound SP1 clients. B-0030 now runs that verifier behind a fixed owner-only
 launcher. The one-shot child has a 2 GiB hard limit, zero swap, no network, a
-read-only root, bounded tmpfs, and a 60-second deadline. A retained real proof must
-still pass through this worker before M4 can claim verifier behavior. B-0031 now
-implements the public-only export, strict fixture loader, verifier-only Compose role,
-and proof, journal, key, policy, root, scope, expiry, and request-signature mutation
-cases. One manual NUS VM run must produce the retained proof and resource evidence.
+read-only root, bounded tmpfs, and a 60-second deadline. B-0031 retained one public
+Plonk proof and passed it through this worker with every `razield` role stopped. The
+proof took 932,309 milliseconds and peaked at 46,271,315,968 bytes. Verification took
+447 milliseconds and peaked at 8,146,944 bytes. It used no swap and rejected proof,
+journal, key, policy, root, scope, expiry, and request-signature mutations. The
+[proof](docs/benchmarks/sp1-plonk/cluster-20260825T182353Z-18591.md) and
+[verifier](docs/benchmarks/sp1-verifier/verifier-20260825T192214Z-34749.md) reports
+record the public evidence. B-0032 owns the final complete M4 service-path run.
 
 Generated Snapshot, Capability, and Verification clients and servers compile through
 the opt-in `raziel-proto` `services` feature. Both Rust service crates select that
@@ -309,9 +312,11 @@ public cancellation commands before any target mutation. The same supervisor pro
 removes waiting jobs or signals active work. It reports `CANCELED` only after private
 cleanup. Duplicate calls return the retained outcome. Bounded reads reconcile rapid
 cross-queue transitions, and persistent mismatches fail closed. Startup recovery
-finishes commands retained before or after proof-job removal. Independent
-retained-proof plumbing passes locally. The proof-backed run remains pending on the
-NUS VM.
+finishes commands retained before or after proof-job removal. The independent
+retained-proof gate now passes on the NUS VM. The full signed request, queue,
+one-shot proof, terminal capability, and independent-verifier path remains B-0032.
+Its signed request, snapshot, and queued-job leg passes locally with the proof worker
+absent. The final proof-backed leg runs on the NUS VM.
 
 ## Main components
 

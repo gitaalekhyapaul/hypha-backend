@@ -1,0 +1,578 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+umask 077
+
+if [ "${RAZIEL_M4_SERVICE_FLOW_APPROVED:-}" != 1 ]; then
+  echo "set RAZIEL_M4_SERVICE_FLOW_APPROVED=1 after approving one real M4 Plonk run" >&2
+  exit 1
+fi
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+  echo "the M4 acceptance run requires a clean source worktree" >&2
+  exit 1
+fi
+
+source_commit=$(git rev-parse HEAD)
+source_tree=$(git rev-parse 'HEAD^{tree}')
+run_id="m4-service-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+run_root="$repo_root/.raziel/m4-service-flow/$run_id"
+registry_root="$run_root/registry"
+secret_root="$run_root/secrets"
+generated_root="$run_root/generated"
+public_root="$run_root/public"
+raw_root="$repo_root/.sp1/benchmarks"
+raw_in_progress="$raw_root/$run_id.in-progress.log"
+raw_pass="$raw_root/$run_id.pass.log"
+raw_fail="$raw_root/$run_id.fail.log"
+public_report="$repo_root/docs/benchmarks/m4-service-flow/$run_id.md"
+
+mkdir -p "$registry_root/drafts" "$secret_root" "$generated_root" "$public_root" "$raw_root"
+chmod 0700 "$run_root" "$registry_root" "$registry_root/drafts" "$secret_root" \
+  "$generated_root" "$public_root" "$raw_root"
+: >"$raw_in_progress"
+chmod 0600 "$raw_in_progress"
+
+export HOST_UID=${HOST_UID:-$(id -u)}
+export HOST_GID=${HOST_GID:-$(id -g)}
+export RAZIEL_TRUST_DOMAIN_ID="raziel-m4-$run_id"
+export RAZIEL_REGISTRY_PATH="$registry_root"
+export RAZIEL_QUEUE_PREFIX="raziel-m4-$run_id"
+export RAZIEL_SPICEDB_ENDPOINT_REF=owner-spicedb
+export RAZIEL_ZED_TOKEN_SECRET_REF=reconciliation-revision
+export RAZIEL_SP1_PLONK_SETUP_PATH=${RAZIEL_SP1_PLONK_SETUP_PATH:-"$repo_root/.sp1/circuits/plonk/v6.1.0"}
+export RAZIEL_REDIS_USERNAME=${RAZIEL_REDIS_USERNAME:-raziel}
+export RAZIEL_REDIS_PASSWORD=${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}
+export SPICEDB_PRESHARED_KEY=${SPICEDB_PRESHARED_KEY:-raziel-local-development-only}
+
+policy_key_path="$secret_root/policy-authority.pk8"
+snapshot_key_path="$secret_root/snapshot-authority.pk8"
+spicedb_token_path="$secret_root/spicedb-token"
+zed_token_path="$secret_root/zed-token"
+policy_path="$generated_root/policy.pb"
+policy_diagnostic_path="$generated_root/policy.json"
+job_id_path="$public_root/job-id.txt"
+snapshot_root_path="$public_root/snapshot-root.txt"
+capability_path="$public_root/capability.pb"
+
+export RAZIEL_POLICY_KEY_PATH="$policy_key_path"
+export RAZIEL_SNAPSHOT_KEY_PATH="$snapshot_key_path"
+export RAZIEL_SPICEDB_AUTH_TOKEN_PATH="$spicedb_token_path"
+export RAZIEL_ZED_TOKEN_PATH="$zed_token_path"
+
+relative_run_root=${run_root#"$repo_root/"}
+workspace_run_root="/workspace/$relative_run_root"
+workspace_policy_path="$workspace_run_root/generated/policy.pb"
+workspace_policy_diagnostic_path="$workspace_run_root/generated/policy.json"
+workspace_policy_key_path="$workspace_run_root/secrets/policy-authority.pk8"
+workspace_snapshot_key_path="$workspace_run_root/secrets/snapshot-authority.pk8"
+workspace_zed_token_path="$workspace_run_root/secrets/zed-token"
+workspace_job_id_path="$workspace_run_root/public/job-id.txt"
+workspace_snapshot_root_path="$workspace_run_root/public/snapshot-root.txt"
+workspace_capability_path="$workspace_run_root/public/capability.pb"
+
+compose() {
+  ./scripts/compose --profile admin --profile services --profile proof "$@"
+}
+
+completed=0
+cleanup_private_failure() {
+  job_id=
+  snapshot_root=
+  if [ -f "$job_id_path" ]; then
+    job_id=$(cat "$job_id_path")
+  fi
+  if [ -f "$snapshot_root_path" ]; then
+    snapshot_root=$(cat "$snapshot_root_path")
+  fi
+  case "$job_id" in
+    '') ;;
+    *[!0-9a-f]*) return 1 ;;
+  esac
+  case "$snapshot_root" in
+    '') ;;
+    *[!0-9a-f]*) return 1 ;;
+  esac
+  if { [ -n "$job_id" ] && [ "${#job_id}" -ne 64 ]; } ||
+    { [ -n "$snapshot_root" ] && [ "${#snapshot_root}" -ne 64 ]; }
+  then
+    return 1
+  fi
+  if [ -z "$job_id" ] && [ -z "$snapshot_root" ]; then
+    return 0
+  fi
+  compose run --rm --no-deps \
+    --user "$HOST_UID:$HOST_GID" \
+    --entrypoint /bin/sh \
+    razield-private-init \
+    -eu -c '
+      job_id=$1
+      snapshot_root=$2
+      if [ -n "$job_id" ]; then
+        rm -f "/var/lib/raziel/private-envelopes/pe1_$job_id.pb"
+      fi
+      if [ -n "$snapshot_root" ]; then
+        rm -f "/var/lib/raziel/private-snapshots/$snapshot_root.snapshot.pb"
+      fi
+    ' sh "$job_id" "$snapshot_root" \
+    >/dev/null 2>&1
+}
+
+cleanup() {
+  compose down --remove-orphans >/dev/null 2>&1 || true
+  if [ "$completed" != 1 ] && ! cleanup_private_failure; then
+    echo "the failed M4 run could not remove its exact private artifacts" >&2
+  fi
+  rm -f \
+    "$policy_key_path" \
+    "$snapshot_key_path" \
+    "$spicedb_token_path" \
+    "$zed_token_path" \
+    "$job_id_path" \
+    "$snapshot_root_path" \
+    "$capability_path"
+  if [ "$completed" != 1 ] && [ -f "$raw_in_progress" ]; then
+    mv "$raw_in_progress" "$raw_fail"
+    printf 'm4_service_benchmark_report=%s\n' "${raw_fail#"$repo_root/"}"
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+running_services=$(compose ps --status running --services)
+if [ -n "$running_services" ]; then
+  echo "stop the current Raziel Compose stack before the isolated M4 acceptance run" >&2
+  printf '%s\n' "$running_services" >&2
+  exit 1
+fi
+if [ ! -d "$RAZIEL_SP1_PLONK_SETUP_PATH" ] || [ -L "$RAZIEL_SP1_PLONK_SETUP_PATH" ]; then
+  echo "the pinned SP1 Plonk setup directory is missing" >&2
+  exit 1
+fi
+
+run_toolchain() {
+  compose run --rm --no-deps \
+    --user "$HOST_UID:$HOST_GID" \
+    -e HOME=/tmp/raziel-home \
+    -e BUF_CACHE_DIR=/tmp/raziel-buf-cache \
+    toolchain "$@"
+}
+
+run_client() {
+  test_name=$1
+  shift
+  compose run --rm --no-deps \
+    --user "$HOST_UID:$HOST_GID" \
+    -e HOME=/tmp/raziel-home \
+    "$@" \
+    toolchain \
+    cargo test --locked --offline -p razield --test m4_service_flow \
+    "$test_name" -- --ignored --exact --nocapture --test-threads=1
+}
+
+field_value() {
+  field=$1
+  file=$2
+  awk -v prefix="$field=" '
+    index($0, prefix) == 1 {
+      value = substr($0, length(prefix) + 1)
+      count += 1
+    }
+    END {
+      if (count != 1 || value == "") exit 1
+      print value
+    }
+  ' "$file"
+}
+
+required_gate() {
+  marker=$1
+  awk -v marker="$marker" '
+    {
+      position = index($0, marker)
+      if (position > 0) {
+        value = substr($0, position)
+        count += 1
+      }
+    }
+    END {
+      if (count != 1 || value == "") exit 1
+      print value
+    }
+  ' "$raw_in_progress"
+}
+
+cgroup_value() {
+  container=$1
+  path=$2
+  docker exec "$container" cat "$path"
+}
+
+append_cgroup_evidence() {
+  prefix=$1
+  container=$2
+  memory_max=$(cgroup_value "$container" /sys/fs/cgroup/memory.max)
+  memory_peak=$(cgroup_value "$container" /sys/fs/cgroup/memory.peak)
+  swap_max=$(cgroup_value "$container" /sys/fs/cgroup/memory.swap.max)
+  swap_peak=$(cgroup_value "$container" /sys/fs/cgroup/memory.swap.peak)
+  events=$(cgroup_value "$container" /sys/fs/cgroup/memory.events)
+  oom=$(printf '%s\n' "$events" | awk '$1 == "oom" { print $2 }')
+  oom_kill=$(printf '%s\n' "$events" | awk '$1 == "oom_kill" { print $2 }')
+  case "$memory_max:$memory_peak:$swap_max:$swap_peak:$oom:$oom_kill" in
+    *[!0-9:]*) echo "$prefix cgroup returned a non-integer value" >&2; exit 1 ;;
+  esac
+  {
+    printf '%s_memory_max_bytes=%s\n' "$prefix" "$memory_max"
+    printf '%s_memory_peak_bytes=%s\n' "$prefix" "$memory_peak"
+    printf '%s_swap_max_bytes=%s\n' "$prefix" "$swap_max"
+    printf '%s_swap_peak_bytes=%s\n' "$prefix" "$swap_peak"
+    printf '%s_oom_count=%s\n' "$prefix" "$oom"
+    printf '%s_oom_kill_count=%s\n' "$prefix" "$oom_kill"
+  } >>"$raw_in_progress"
+}
+
+printf '%s' "$SPICEDB_PRESHARED_KEY" >"$spicedb_token_path"
+chmod 0400 "$spicedb_token_path"
+
+run_toolchain pnpm generate >>"$raw_in_progress" 2>&1
+run_toolchain \
+  go run ./tools/spicedb-ir-compiler/cmd/spicedb-ir-compiler compile \
+  --schema services/razield/tests/fixtures/m4-service-flow/authorization.zed \
+  --config services/razield/tests/fixtures/m4-service-flow/compiler.json \
+  --compiler-version 1.54.0 \
+  --out "$workspace_policy_path" \
+  --diagnostic-out "$workspace_policy_diagnostic_path" \
+  >>"$raw_in_progress" 2>&1
+
+run_toolchain sh -eu -c '
+  umask 077
+  openssl genpkey -algorithm ED25519 -outform DER -out "$1"
+  openssl genpkey -algorithm ED25519 -outform DER -out "$2"
+  chmod 0400 "$1" "$2"
+' sh "$workspace_policy_key_path" "$workspace_snapshot_key_path" \
+  >>"$raw_in_progress" 2>&1
+
+compose up --detach --wait --wait-timeout 60 --force-recreate spicedb \
+  >>"$raw_in_progress" 2>&1
+run_client \
+  m4_seed_spicedb_writes_the_agent_relationship_and_revision \
+  -e RAZIEL_M4_SPICEDB_ENDPOINT=http://spicedb:50051 \
+  -e "RAZIEL_M4_SPICEDB_TOKEN=$SPICEDB_PRESHARED_KEY" \
+  -e "RAZIEL_M4_ZED_TOKEN_OUTPUT_PATH=$workspace_zed_token_path" \
+  >>"$raw_in_progress" 2>&1
+chmod 0400 "$zed_token_path"
+
+now=$(date -u +%s)
+valid_from=$((now - 60))
+valid_until=$((now + 86400))
+
+policy_key_log="$run_root/policy-key.log"
+snapshot_key_log="$run_root/snapshot-key.log"
+policy_log="$run_root/policy.log"
+compose run --rm --no-deps raziel-admin-policy \
+  inspect-key \
+  --key /run/secrets/raziel/policy-authority.pk8 \
+  --role policy \
+  --trust-domain "$RAZIEL_TRUST_DOMAIN_ID" \
+  --valid-from "$valid_from" \
+  --valid-until "$valid_until" \
+  --generation 1 \
+  --output /var/lib/raziel/registry/drafts/policy-key.pb \
+  --json-output /var/lib/raziel/registry/drafts/policy-key.json \
+  >"$policy_key_log" 2>&1
+compose run --rm --no-deps raziel-admin-snapshot \
+  inspect-key \
+  --key /run/secrets/raziel/snapshot-authority.pk8 \
+  --role snapshot \
+  --trust-domain "$RAZIEL_TRUST_DOMAIN_ID" \
+  --valid-from "$valid_from" \
+  --valid-until "$valid_until" \
+  --generation 1 \
+  --output /var/lib/raziel/registry/drafts/snapshot-key.pb \
+  --json-output /var/lib/raziel/registry/drafts/snapshot-key.json \
+  >"$snapshot_key_log" 2>&1
+snapshot_key_id=$(field_value key_id "$snapshot_key_log")
+
+compose run --rm --no-deps raziel-admin-policy \
+  approve-policy \
+  --policy "$workspace_policy_path" \
+  --key /run/secrets/raziel/policy-authority.pk8 \
+  --trust-domain "$RAZIEL_TRUST_DOMAIN_ID" \
+  --record-id policy-m4-service-flow-v1 \
+  --policy-name m4-service-flow \
+  --policy-version 1 \
+  --approval-epoch 1 \
+  --valid-from "$valid_from" \
+  --valid-until "$valid_until" \
+  --approved-by m4-acceptance-operator \
+  --registered-at "$now" \
+  --generation 1 \
+  --output /var/lib/raziel/registry/drafts/policy.pb \
+  --json-output /var/lib/raziel/registry/drafts/policy.json \
+  >"$policy_log" 2>&1
+policy_hash=$(field_value policy_hash "$policy_log")
+
+compose run --rm --no-deps raziel-admin-policy \
+  publish-registry \
+  --root /var/lib/raziel/registry \
+  --trust-domain "$RAZIEL_TRUST_DOMAIN_ID" \
+  --generation 1 \
+  --published-at "$now" \
+  --observed-now "$now" \
+  --output-directory generations/1 \
+  --output-manifest /var/lib/raziel/registry/current.pb \
+  --output-json /var/lib/raziel/registry/current.json \
+  --authority-key drafts/policy-key.pb \
+  --authority-key drafts/snapshot-key.pb \
+  --policy drafts/policy.pb \
+  >>"$raw_in_progress" 2>&1
+
+export RAZIEL_EXPECTED_VERIFICATION_KEY_ID
+RAZIEL_EXPECTED_VERIFICATION_KEY_ID=$(cat services/verifierd/tests/fixtures/retained-plonk-v1/verification-key-id.txt)
+export RAZIEL_EXPECTED_SP1_VKEY_HASH
+RAZIEL_EXPECTED_SP1_VKEY_HASH=$(cat services/verifierd/tests/fixtures/retained-plonk-v1/sp1-vkey-hash.txt)
+
+compose up \
+  --detach \
+  --wait \
+  --wait-timeout 120 \
+  --force-recreate \
+  razield \
+  >>"$raw_in_progress" 2>&1
+
+run_client \
+  m4_submit_signed_capability_returns_queued_and_is_idempotent \
+  -e RAZIEL_M4_RAZIELD_ENDPOINT=http://razield:50052 \
+  -e "RAZIEL_M4_POLICY_HASH=$policy_hash" \
+  -e RAZIEL_M4_POLICY_RECORD_ID=policy-m4-service-flow-v1 \
+  -e "RAZIEL_M4_SNAPSHOT_AUTHORITY_KEY_ID=$snapshot_key_id" \
+  -e "RAZIEL_M4_JOB_ID_OUTPUT_PATH=$workspace_job_id_path" \
+  -e "RAZIEL_M4_SNAPSHOT_ROOT_OUTPUT_PATH=$workspace_snapshot_root_path" \
+  >>"$raw_in_progress" 2>&1
+
+job_id=$(cat "$job_id_path")
+case "$job_id" in
+  *[!0-9a-f]*|'') echo "M4 submit produced an invalid job ID" >&2; exit 1 ;;
+esac
+if [ "${#job_id}" -ne 64 ]; then
+  echo "M4 submit produced an invalid job ID length" >&2
+  exit 1
+fi
+
+compose up \
+  --detach \
+  --wait \
+  --wait-timeout 900 \
+  razield-proof-sandbox \
+  razield-proof-worker \
+  >>"$raw_in_progress" 2>&1
+proof_client_status_path="$run_root/proof-client.status"
+(
+  if run_client \
+    m4_wait_for_terminal_capability_records_public_result \
+    -e RAZIEL_M4_RAZIELD_ENDPOINT=http://razield:50052 \
+    -e "RAZIEL_M4_JOB_ID_PATH=$workspace_job_id_path" \
+    -e "RAZIEL_M4_CAPABILITY_OUTPUT_PATH=$workspace_capability_path"
+  then
+    printf '0\n' >"$proof_client_status_path"
+  else
+    proof_client_status=$?
+    printf '%s\n' "$proof_client_status" >"$proof_client_status_path"
+    exit "$proof_client_status"
+  fi
+) 2>&1 | tee -a "$raw_in_progress"
+proof_client_status=$(cat "$proof_client_status_path")
+rm -f "$proof_client_status_path"
+case "$proof_client_status" in
+  0) ;;
+  *[!0-9]*|'') echo "M4 proof client produced an invalid exit status" >&2; exit 1 ;;
+  *) echo "M4 proof client failed with status $proof_client_status" >&2; exit 1 ;;
+esac
+if [ ! -f "$capability_path" ] || [ -L "$capability_path" ]; then
+  echo "M4 proof flow produced no public capability" >&2
+  exit 1
+fi
+
+proof_container=$(compose ps -q razield-proof-sandbox)
+if [ -z "$proof_container" ]; then
+  echo "the isolated proof sandbox is missing" >&2
+  exit 1
+fi
+append_cgroup_evidence proof_container "$proof_container"
+
+compose run --rm --no-deps \
+  --user "$HOST_UID:$HOST_GID" \
+  --entrypoint /bin/sh \
+  razield-private-init \
+  -eu -c "test ! -e /var/lib/raziel/private-envelopes/pe1_$job_id.pb" \
+  >>"$raw_in_progress" 2>&1
+
+compose stop \
+  razield \
+  razield-proof-worker \
+  razield-proof-sandbox \
+  raziel-registry-writer \
+  >>"$raw_in_progress" 2>&1
+running_after_stop=$(compose ps --status running --services)
+if printf '%s\n' "$running_after_stop" | grep -Eq '^(razield|raziel-registry-writer)($|-)'; then
+  echo "an issuer or prover role remained active before independent verification" >&2
+  exit 1
+fi
+
+compose up \
+  --detach \
+  --wait \
+  --wait-timeout 900 \
+  --force-recreate \
+  verifierd \
+  >>"$raw_in_progress" 2>&1
+
+run_client \
+  m4_independent_verifier_accepts_and_bound_mutations_fail \
+  -e RAZIEL_M4_VERIFIERD_ENDPOINT=http://verifierd:50053 \
+  -e "RAZIEL_M4_CAPABILITY_PATH=$workspace_capability_path" \
+  >>"$raw_in_progress" 2>&1
+
+verifier_container=$(compose ps -q verifierd-worker-sandbox)
+if [ -z "$verifier_container" ]; then
+  echo "the isolated verifier sandbox is missing" >&2
+  exit 1
+fi
+append_cgroup_evidence verifier_container "$verifier_container"
+
+service_log="$run_root/service.log"
+compose logs --no-color \
+  razield \
+  razield-proof-worker \
+  razield-proof-sandbox \
+  verifierd \
+  verifierd-worker-sandbox \
+  >"$service_log" 2>&1
+if grep -Fq 'm4-private-context-4829' "$service_log"; then
+  echo "private request context entered a service log" >&2
+  exit 1
+fi
+
+redis_container=$(compose ps -q redis)
+if [ -z "$redis_container" ]; then
+  echo "the Redis service is missing" >&2
+  exit 1
+fi
+redis_state="$run_root/redis-public-state.txt"
+docker exec \
+  -e "RAZIEL_AUDIT_REDIS_USERNAME=$RAZIEL_REDIS_USERNAME" \
+  -e "RAZIEL_AUDIT_REDIS_PASSWORD=$RAZIEL_REDIS_PASSWORD" \
+  -e "RAZIEL_AUDIT_QUEUE_PREFIX=$RAZIEL_QUEUE_PREFIX" \
+  "$redis_container" \
+  /bin/sh -eu -c '
+    redis() {
+      redis-cli --no-auth-warning \
+        --user "$RAZIEL_AUDIT_REDIS_USERNAME" \
+        --pass "$RAZIEL_AUDIT_REDIS_PASSWORD" \
+        --raw "$@"
+    }
+    redis --scan --pattern "$RAZIEL_AUDIT_QUEUE_PREFIX:*" | while IFS= read -r key; do
+      printf "key=%s\n" "$key"
+      type=$(redis TYPE "$key")
+      printf "type=%s\n" "$type"
+      case "$type" in
+        string) redis GET "$key" ;;
+        hash) redis HGETALL "$key" ;;
+        list) redis LRANGE "$key" 0 -1 ;;
+        set) redis SMEMBERS "$key" ;;
+        zset) redis ZRANGE "$key" 0 -1 WITHSCORES ;;
+        stream) redis XRANGE "$key" - + ;;
+        none) : ;;
+        *) echo "unsupported Redis acceptance type: $type" >&2; exit 1 ;;
+      esac
+    done
+  ' >"$redis_state"
+if grep -Fq 'm4-private-context-4829' "$redis_state"; then
+  echo "private request context entered Redis" >&2
+  exit 1
+fi
+if grep -Fq 'm4-private-context-4829' "$raw_in_progress"; then
+  echo "private request context entered the acceptance log" >&2
+  exit 1
+fi
+
+submit_gate=$(required_gate 'b0032_submit: ')
+issue_gate=$(required_gate 'b0032_issue: ')
+verify_gate=$(required_gate 'b0032_verify: ')
+if ! printf '%s\n' "$submit_gate" | grep -Eq '^b0032_submit: job_id=[0-9a-f]{64}, snapshot_id=snapshot-v1:[0-9a-f]{64}, state=queued, duplicate=same_job$' ||
+  ! printf '%s\n' "$issue_gate" | grep -Eq '^b0032_issue: job_id=[0-9a-f]{64}, snapshot_id=snapshot-v1:[0-9a-f]{64}, policy_hash=[0-9a-f]{64}, relationship_root=[0-9a-f]{64}, proof_bytes=[1-9][0-9]*, execute_ms=[0-9]+, prove_ms=[0-9]+, verification_key_id=sp1-vk-v1:[0-9a-f]{64}$' ||
+  [ "$verify_gate" != 'b0032_verify: outcome=verified, altered_capability=reject, stolen_key_binding=reject' ]
+then
+  echo "M4 service-flow output does not match its acceptance format" >&2
+  exit 1
+fi
+
+proof_memory_max=$(field_value proof_container_memory_max_bytes "$raw_in_progress")
+proof_memory_peak=$(field_value proof_container_memory_peak_bytes "$raw_in_progress")
+proof_swap_max=$(field_value proof_container_swap_max_bytes "$raw_in_progress")
+proof_swap_peak=$(field_value proof_container_swap_peak_bytes "$raw_in_progress")
+proof_oom=$(field_value proof_container_oom_count "$raw_in_progress")
+proof_oom_kill=$(field_value proof_container_oom_kill_count "$raw_in_progress")
+verifier_memory_max=$(field_value verifier_container_memory_max_bytes "$raw_in_progress")
+verifier_memory_peak=$(field_value verifier_container_memory_peak_bytes "$raw_in_progress")
+verifier_swap_max=$(field_value verifier_container_swap_max_bytes "$raw_in_progress")
+verifier_swap_peak=$(field_value verifier_container_swap_peak_bytes "$raw_in_progress")
+verifier_oom=$(field_value verifier_container_oom_count "$raw_in_progress")
+verifier_oom_kill=$(field_value verifier_container_oom_kill_count "$raw_in_progress")
+
+if [ "$proof_memory_max" != 60129542144 ] ||
+  [ "$proof_memory_peak" -gt "$proof_memory_max" ] ||
+  [ "$proof_swap_max" != 0 ] ||
+  [ "$proof_swap_peak" != 0 ] ||
+  [ "$proof_oom" != 0 ] ||
+  [ "$proof_oom_kill" != 0 ] ||
+  [ "$verifier_memory_max" != 2147483648 ] ||
+  [ "$verifier_memory_peak" -gt "$verifier_memory_max" ] ||
+  [ "$verifier_swap_max" != 0 ] ||
+  [ "$verifier_swap_peak" != 0 ] ||
+  [ "$verifier_oom" != 0 ] ||
+  [ "$verifier_oom_kill" != 0 ]
+then
+  echo "M4 service-flow resource evidence does not meet the approved profiles" >&2
+  exit 1
+fi
+
+mv "$raw_in_progress" "$raw_pass"
+mkdir -p "$(dirname "$public_report")"
+chmod 0755 "$(dirname "$public_report")"
+{
+  printf '# M4 Complete Service Flow: %s\n\n' "$run_id"
+  printf -- '- Status: pass\n'
+  printf -- '- Source commit: `%s`\n' "$source_commit"
+  printf -- '- Source tree: `%s`\n' "$source_tree"
+  printf -- '- Data classification: `synthetic`\n'
+  printf -- '- Proof mode: `local Plonk`\n'
+  printf -- '- Issuer and prover stopped before independent verification: `true`\n'
+  printf -- '- Private snapshot retained in owner-only runtime storage: `true`\n'
+  printf -- '- Private job envelope retained: `false`\n\n'
+  printf '## Service Gates\n\n'
+  printf '```text\n%s\n%s\n%s\n```\n\n' "$submit_gate" "$issue_gate" "$verify_gate"
+  printf '## Resource Evidence\n\n'
+  printf '| Field | Value |\n'
+  printf '| --- | --- |\n'
+  printf '| Proof memory limit bytes | `%s` |\n' "$proof_memory_max"
+  printf '| Proof peak memory bytes | `%s` |\n' "$proof_memory_peak"
+  printf '| Proof peak swap bytes | `%s` |\n' "$proof_swap_peak"
+  printf '| Proof OOM events | `%s` |\n' "$proof_oom"
+  printf '| Proof OOM kills | `%s` |\n' "$proof_oom_kill"
+  printf '| Verifier memory limit bytes | `%s` |\n' "$verifier_memory_max"
+  printf '| Verifier peak memory bytes | `%s` |\n' "$verifier_memory_peak"
+  printf '| Verifier peak swap bytes | `%s` |\n' "$verifier_swap_peak"
+  printf '| Verifier OOM events | `%s` |\n' "$verifier_oom"
+  printf '| Verifier OOM kills | `%s` |\n\n' "$verifier_oom_kill"
+  printf 'The raw run log stays under `.sp1/`. Temporary authority keys, token files,\n'
+  printf 'job identifiers, and capability bytes are deleted after the run. The approved\n'
+  printf 'private snapshot stays in its owner-only Docker volume.\n'
+} >"$public_report"
+chmod 0644 "$public_report"
+
+completed=1
+cleanup
+trap - EXIT HUP INT TERM
+printf 'm4_service_benchmark_report=%s\n' "${raw_pass#"$repo_root/"}"
+printf 'public_m4_service_result=%s\n' "${public_report#"$repo_root/"}"

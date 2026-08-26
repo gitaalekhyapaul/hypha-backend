@@ -1195,10 +1195,18 @@ zero-swap, no-network, read-only-root, bounded-tmpfs, 60-second profile. Control
 tests contain child rejection, crash, malformed output, and timeout. Gateway nonce
 consumption and the matching TypeScript canonical vector remain M5 work. These build
 and controlled-process results do not replace the retained real-proof worker gate.
-B-0031 implements an approved public-only proof export, a strict retained-fixture
-loader, and a verifier-only acceptance role with eight fail-closed mutations. One
-manual NUS VM run must still create the fixture and record verification time, peak
-memory, zero swap, and issuer shutdown evidence.
+B-0031 retained an approved public-only Plonk proof and passed it through the isolated
+verifier with every `razield` role stopped. The proof took 932,309 milliseconds and
+peaked at 46,271,315,968 bytes. The verifier took 447 milliseconds, peaked at
+8,146,944 bytes, used no swap, and rejected proof, journal, key, policy, root, scope,
+expiry, and request-signature mutations. The public
+[proof](../benchmarks/sp1-plonk/cluster-20260825T182353Z-18591.md) and
+[verifier](../benchmarks/sp1-verifier/verifier-20260825T192214Z-34749.md) reports
+record the gate. B-0032 owns the remaining complete signed-request, queue, prover,
+terminal-capability, and verifier service run before M4 closes. Its production-client
+acceptance harness now passes policy compilation, exact-revision snapshot creation,
+signed request admission, queued publication, exact duplicate handling, and local
+privacy scans. The real proof-backed leg remains one NUS VM run.
 
 Deliver:
 
