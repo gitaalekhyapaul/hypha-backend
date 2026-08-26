@@ -57,6 +57,7 @@ do
 done
 
 for exact_setting in \
+  'GOFLAGS: -mod=readonly -modfile=/var/cache/raziel-proof-go-mod/raziel-sp1-gnark.mod' \
   'GOMODCACHE: /var/cache/raziel-proof-go-mod' \
   "GOPROXY: 'off'" \
   'network_mode: none' \

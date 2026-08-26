@@ -41,12 +41,13 @@ the shared cache of public Cargo dependencies. It does not grant cache write acc
 or change file ownership.
 
 SP1's pinned Gnark bridge contains a Go build step. A build-only fetch container
-downloads and verifies those pinned Go modules into a dedicated cache. That container
+copies SP1's immutable Go manifest into a dedicated cache, downloads its pinned
+modules, extends the copied checksum file, and verifies the cache. That container
 cannot see the repository or any Raziel key, registry, envelope, snapshot, proof IPC,
-or Plonk setup mount. The networkless prover-runtime build receives the cache
-read-only and sets `GOPROXY=off`. The runner completes both build steps before it
-creates tokens, authority keys, snapshots, or queue records. The prover sandbox
-remains networkless.
+or Plonk setup mount. The networkless prover-runtime build receives the module cache
+and finalized manifest read-only, then sets `GOPROXY=off`. The runner completes both
+build steps before it creates tokens, authority keys, snapshots, or queue records.
+The prover sandbox remains networkless.
 
 ## Prepare
 

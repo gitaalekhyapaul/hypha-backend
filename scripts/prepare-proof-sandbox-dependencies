@@ -5,8 +5,17 @@ umask 022
 crate_version=${RAZIEL_SP1_CRATE_VERSION:?RAZIEL_SP1_CRATE_VERSION is required}
 cargo_home=${CARGO_HOME:-"$HOME/.cargo"}
 go_mod_cache=${GOMODCACHE:?GOMODCACHE is required}
+cached_modfile="$go_mod_cache/raziel-sp1-gnark.mod"
+cached_sumfile="$go_mod_cache/raziel-sp1-gnark.sum"
+temporary_modfile="$go_mod_cache/.raziel-sp1-gnark-$$.mod"
+temporary_sumfile="$go_mod_cache/.raziel-sp1-gnark-$$.sum"
 crate_root=
 crate_count=0
+
+cleanup() {
+  rm -f "$temporary_modfile" "$temporary_sumfile"
+}
+trap cleanup EXIT HUP INT TERM
 
 for candidate in \
   "$cargo_home"/registry/src/*/"sp1-recursion-gnark-ffi-$crate_version"
@@ -29,9 +38,14 @@ then
 fi
 
 install -d -m 0755 "$go_mod_cache"
+install -m 0600 "$crate_root/go/go.mod" "$temporary_modfile"
+install -m 0600 "$crate_root/go/go.sum" "$temporary_sumfile"
 (
   cd "$crate_root/go"
-  go mod download all
-  go mod verify
+  GOFLAGS="-mod=mod -modfile=$temporary_modfile" go mod download all
+  GOFLAGS="-mod=readonly -modfile=$temporary_modfile" GOPROXY=off go mod verify
 )
+chmod 0444 "$temporary_modfile" "$temporary_sumfile"
+mv -f "$temporary_sumfile" "$cached_sumfile"
+mv -f "$temporary_modfile" "$cached_modfile"
 chmod -R a+rX "$go_mod_cache"

@@ -223,7 +223,6 @@ services:
     environment:
       CARGO_HOME: /usr/local/cargo
       GOCACHE: /tmp/raziel-go-build
-      GOFLAGS: -mod=readonly
       GOMODCACHE: /var/cache/raziel-proof-go-mod
       GOPROXY: https://proxy.golang.org
       GOSUMDB: sum.golang.org
@@ -263,7 +262,7 @@ services:
       CARGO_NET_OFFLINE: "true"
       CARGO_TARGET_DIR: /var/cache/raziel-proof-build
       GOCACHE: /var/cache/raziel-proof-build/go-build
-      GOFLAGS: -mod=readonly
+      GOFLAGS: -mod=readonly -modfile=/var/cache/raziel-proof-go-mod/raziel-sp1-gnark.mod
       GOMODCACHE: /var/cache/raziel-proof-go-mod
       GOPROXY: "off"
       GOTOOLCHAIN: local

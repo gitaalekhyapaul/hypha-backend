@@ -194,8 +194,9 @@ record the public evidence. B-0032 owns the final complete M4 service-path run.
 The local prover-runtime build keeps networking disabled. A separate build-only
 container downloads the Go modules pinned by SP1's checked-in Gnark bridge before
 Raziel creates private run state. That fetch container can read only the public Cargo
-registry and its dedicated Go module cache. The networkless runtime build mounts the
-verified cache read-only and disables Go proxy access.
+registry and its dedicated Go module cache. It finalizes a cached manifest and
+checksum pair without modifying the immutable Cargo source. The networkless runtime
+build mounts the verified cache read-only and disables Go proxy access.
 
 Generated Snapshot, Capability, and Verification clients and servers compile through
 the opt-in `raziel-proto` `services` feature. Both Rust service crates select that

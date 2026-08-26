@@ -5,7 +5,7 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T07:53:06Z
+- Last updated UTC: 2026-08-26T08:07:01Z
 - Branch: `main`
 - Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
   `origin/main`.
@@ -84,7 +84,11 @@ verifier, then record a reproducible M4 acceptance result.
 - The third NUS attempt passed the signed request and exact-duplicate gate, then
   exposed SP1's nested Gnark Go download inside the networkless prover-runtime build.
   A separate public dependency-fetch container now fills a dedicated verified module
-  cache. A VM retry remains required.
+  cache.
+- The fourth NUS attempt reached that fetch container, then stopped because Go tried
+  to extend the pinned crate's read-only `go.sum`. The fetch now works from a private
+  manifest copy, verifies it, and publishes the finalized pair for the offline build.
+  A VM retry remains required.
 - No architecture decision or dependency approval remains.
 
 ## Work Completed
@@ -115,6 +119,9 @@ verifier, then record a reproducible M4 acceptance result.
   no repository or private-runtime mounts. It builds the prover runtime before
   creating private state. The runtime build remains networkless with a read-only Go
   module cache and `GOPROXY=off`.
+- The dependency fetch copies SP1's immutable `go.mod` and `go.sum` into its public
+  cache. Go can add required transitive checksums there. The offline build receives
+  the finalized manifest and cache read-only.
 - Failed runs preserve logs only from the public dependency-fetch and binary-build
   containers before Compose cleanup removes them.
 
@@ -157,6 +164,11 @@ verifier, then record a reproducible M4 acceptance result.
 | `cargo test --locked --offline -p razield --test m4_service_flow` | PASS, four live tests compiled and intentionally ignored | B-0032 acceptance client | 2026-08-26T07:51:25Z |
 | Pinned Gnark module download and networkless runtime build | SKIP, local Docker daemon unavailable | Exact build-only fetch and offline consumer | 2026-08-26T07:51:25Z |
 | `git diff --check` | PASS | Gnark build-cache fix | 2026-08-26T07:51:25Z |
+| Fourth B-0032 NUS VM attempt | FAIL before private state or proof, Go could not extend the immutable SP1 `go.sum` | Public dependency-manifest staging | 2026-08-26T08:00:17Z |
+| Shell syntax for dependency staging and M4 runner | PASS | Cached Go manifest lifecycle | 2026-08-26T08:07:01Z |
+| Proof sandbox rendered boundary check | PASS | Cached manifest is read-only and restricted to the networkless build | 2026-08-26T08:07:01Z |
+| Cached Gnark module download and networkless runtime build | SKIP, local Docker daemon unavailable | Exact Go command against pinned SP1 source | 2026-08-26T08:07:01Z |
+| `git diff --check` | PASS | Cached-manifest fix | 2026-08-26T08:07:01Z |
 
 ## Privacy Checks
 
@@ -177,9 +189,10 @@ verifier, then record a reproducible M4 acceptance result.
 - The acceptance harness must not introduce a mock success mode into production code.
 - The private envelope, witness, and prover traces must be deleted before a terminal
   public capability is retained. The approved private snapshot remains owner-side.
-- The VM must complete one pinned Gnark module fetch before the networkless runtime
-  build can be considered proven. Go module versions and checksums come from the
-  locked SP1 `6.3.1` crate.
+- The VM must complete one pinned Gnark module fetch from a cached manifest before the
+  networkless runtime build can be considered proven. Module versions originate in
+  the locked SP1 `6.3.1` crate. The fetch verifies downloaded content and records any
+  required transitive checksums in the dedicated public cache.
 
 ## Exact Next Action
 
