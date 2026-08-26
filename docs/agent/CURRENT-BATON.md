@@ -5,9 +5,9 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T03:04:41Z
+- Last updated UTC: 2026-08-26T03:08:18Z
 - Branch: `main`
-- Worktree: Clean at `1fa6983`. The B-0032 plumbing is pushed to `origin/main`.
+- Worktree: Clean. The B-0032 plumbing and VM handoff are pushed to `origin/main`.
 
 ## Objective
 
@@ -71,7 +71,7 @@ verifier, then record a reproducible M4 acceptance result.
 ## Open Questions And Blockers
 
 - The Mac cannot run the 56 GiB proof sandbox. The final real-proof portion must run
-  on the prepared NUS VM after this plumbing is committed and pushed.
+  on the prepared NUS VM.
 - No architecture decision, dependency approval, or implementation blocker remains.
 
 ## Work Completed
@@ -114,6 +114,7 @@ verifier, then record a reproducible M4 acceptance result.
 | `cargo clippy -p razield --test m4_service_flow -- -D warnings` | PASS | B-0032 acceptance client | 2026-08-25T20:04:00Z |
 | Proof sandbox, verifier sandbox, and cluster plumbing checks | PASS | Current isolation and SP1 plumbing | 2026-08-25T20:04:00Z |
 | B-0032 implementation review and push | PASS, commit `1fa6983` | VM-ready runner, client, fixture, docs, and B-0031 archive | 2026-08-26T03:04:41Z |
+| B-0032 VM result availability | NOT AVAILABLE, no public result on `origin/main` | Final proof-backed service flow | 2026-08-26T03:08:18Z |
 
 ## Privacy Checks
 
