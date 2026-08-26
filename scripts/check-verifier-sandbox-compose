@@ -54,6 +54,27 @@ done
 grep -Fq 'RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock' "$api_output"
 grep -Fq 'source: verifierd-worker-ipc' "$api_output"
 grep -Fq 'target: /run/raziel-verifier' "$api_output"
+api_command=$(awk '
+  $0 == "    command:" { in_command = 1; next }
+  in_command && /^    [a-zA-Z0-9_-]+:/ { exit }
+  in_command && /^      - / {
+    sub(/^      - /, "")
+    print
+  }
+' "$api_output")
+expected_api_command=$(printf '%s\n' \
+  cargo \
+  run \
+  --locked \
+  --offline \
+  -p \
+  verifierd \
+  --bin \
+  verifierd)
+if [ "$api_command" != "$expected_api_command" ]; then
+  echo "verifierd Compose command does not select its API binary" >&2
+  exit 1
+fi
 
 for exact_setting in \
   "user: '0:0'" \

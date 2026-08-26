@@ -5,7 +5,7 @@
 - Milestone: M4, complete capability service proof flow
 - Owner: Codex
 - Started UTC: 2026-08-25T19:34:44Z
-- Last updated UTC: 2026-08-26T08:24:54Z
+- Last updated UTC: 2026-08-26T08:59:08Z
 - Branch: `main`
 - Worktree: Clean after the scoped B-0032 retry fix. The change is pushed to
   `origin/main`.
@@ -20,7 +20,7 @@ verifier, then record a reproducible M4 acceptance result.
 
 - [x] One valid signed `CreateCapability` request returns a queued job without waiting
       for proof generation.
-- [ ] The BullMQ supervisor claims the job once and the isolated prover publishes one
+- [x] The BullMQ supervisor claims the job once and the isolated prover publishes one
       bound public `ProofCapability`.
 - [ ] `GetCapability` reaches `SUCCEEDED` with no job envelope, witness, or prover
       trace in Redis, service logs, retained job files, or client responses. The
@@ -71,8 +71,8 @@ verifier, then record a reproducible M4 acceptance result.
 
 ## Open Questions And Blockers
 
-- The Mac cannot run the 56 GiB proof sandbox. The final real-proof portion must run
-  on the prepared NUS VM.
+- The Mac cannot run the 56 GiB proof sandbox. The real B-0032 proof completed on the
+  prepared NUS VM.
 - The first NUS B-0032 run stopped before proof generation. Its unprivileged Rust
   acceptance client inherited Cargo's default `/workspace/target`, which was not
   writable after earlier root-owned VM builds. The runner now owns a private
@@ -89,7 +89,11 @@ verifier, then record a reproducible M4 acceptance result.
   to extend the pinned crate's read-only `go.sum`. The fetch now works from a private
   manifest copy, verifies it, and publishes the finalized pair for the offline build.
   The exact fetch and networkless runtime build now pass in local Apple Silicon
-  Docker. The complete proof-backed VM run remains required.
+  Docker.
+- The fifth NUS attempt completed the signed request, queue, one-shot Plonk proof, and
+  terminal capability. The verifier API did not start because its Compose command
+  omitted `--bin verifierd` after the package gained three binaries. The terminal
+  public job remains in persistent Redis for recovery without another proof.
 - No architecture decision or dependency approval remains.
 
 ## Work Completed
@@ -126,12 +130,16 @@ verifier, then record a reproducible M4 acceptance result.
 - Local Docker completed that fetch and the full networkless runtime build. The build
   compiled the native Gnark bridge, SP1 prover SDK, Raziel prover services, and
   authorization guest without creating private state or generating a proof.
-- Failed runs preserve logs only from the public dependency-fetch and binary-build
-  containers before Compose cleanup removes them.
+- The NUS VM completed the B-0032 Plonk proof in 932,007 ms. The proof container
+  peaked at 46,172,573,696 bytes, used no swap, and recorded no OOM event.
+- The verifier API Compose command now selects the `verifierd` binary explicitly.
+  The rendered boundary check fixes that command shape. Failed runs now preserve API
+  and verifier-worker logs before Compose cleanup removes their containers.
 
 ## Validation Plan
 
-- Run the real Plonk service flow once on the NUS VM and commit only public evidence.
+- Recover the retained public capability from the successful NUS proof job and run
+  the independent verifier without another proof.
 - Reconcile M4 status across the spec, architecture, README, and baton archive.
 
 ## Validation Evidence
@@ -175,6 +183,10 @@ verifier, then record a reproducible M4 acceptance result.
 | `git diff --check` | PASS | Cached-manifest fix | 2026-08-26T08:07:01Z |
 | `razield-proof-dependency-fetch` | PASS, `all modules verified` | Pinned SP1 Go modules and finalized cached manifest | 2026-08-26T08:24:54Z |
 | Networkless `razield-proof-build` | PASS in about five minutes | Native Gnark bridge, SP1 SDK, Raziel binaries, and authorization guest | 2026-08-26T08:24:54Z |
+| Fifth B-0032 NUS VM attempt | PASS through terminal capability, proof took 932,007 ms and peaked at 46,172,573,696 bytes with zero swap and no OOM | Signed request, BullMQ, one-shot Plonk, terminal publication, and envelope deletion | 2026-08-26T08:43:57Z |
+| Fifth B-0032 independent-verifier startup | FAIL before service code, ambiguous Cargo binary selection | Verifier API Compose command | 2026-08-26T08:43:57Z |
+| `./scripts/check-verifier-sandbox-compose` | PASS | Explicit verifier API binary and existing isolation controls | 2026-08-26T08:59:08Z |
+| Local verifier API command smoke | PASS through binary selection and expected configuration rejection | Exact Compose `cargo run` command | 2026-08-26T08:59:08Z |
 
 ## Privacy Checks
 
@@ -190,17 +202,16 @@ verifier, then record a reproducible M4 acceptance result.
 
 ## Risks And Private-Data Notes
 
-- A complete run starts a costly Plonk proof. Local development must stop before that
-  step or use the retained public fixture. Only the NUS VM performs the final proof.
+- The complete B-0032 proof already succeeded. Recovery work must reuse its retained
+  public BullMQ result and must not start another proof.
 - The acceptance harness must not introduce a mock success mode into production code.
 - The private envelope, witness, and prover traces must be deleted before a terminal
   public capability is retained. The approved private snapshot remains owner-side.
-- The cached-manifest fetch and networkless runtime build pass locally. Module
-  versions originate in the locked SP1 `6.3.1` crate. The full VM run repeats that
-  preflight on `linux/amd64`, then performs the 56 GiB proof and service verification.
+- The cached-manifest fetch and networkless runtime build pass on both architectures.
+  Module versions originate in the locked SP1 `6.3.1` crate.
 
 ## Exact Next Action
 
-Pull `origin/main` on the NUS VM and rerun `./scripts/run-m4-service-flow` with its
-explicit one-run approval flag. Return the generated public result record for M4
-closure.
+Pull the verifier command fix on the NUS VM. Restart `verifierd` against the retained
+B-0032 registry, recover the terminal capability from persistent Redis, and complete
+the independent verification and privacy gates without another proof.

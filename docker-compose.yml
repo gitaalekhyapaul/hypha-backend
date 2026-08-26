@@ -722,7 +722,7 @@ services:
 
   verifierd:
     <<: *secure-rust-service
-    command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd"]
+    command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd", "--bin", "verifierd"]
     environment:
       CARGO_HOME: /usr/local/cargo
       CARGO_NET_OFFLINE: "true"

@@ -132,7 +132,9 @@ cleanup() {
     compose logs --no-color \
       razield-proof-dependency-fetch \
       razield-proof-build \
+      verifierd \
       verifierd-worker-build \
+      verifierd-worker-sandbox \
       >>"$raw_in_progress" 2>&1 || true
   fi
   compose down --remove-orphans >/dev/null 2>&1 || true
