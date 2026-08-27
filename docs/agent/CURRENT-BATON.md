@@ -5,9 +5,10 @@
 - Milestone: M5, first protected reconciliation query
 - Owner: unassigned
 - Started UTC: 2026-08-27T00:50:21Z
-- Last updated UTC: 2026-08-27T01:51:26Z
+- Last updated UTC: 2026-08-27T03:21:10Z
 - Branch: `main`
-- Worktree: Approved M5 docs and B-0034 through B-0050 features are uncommitted.
+- Worktree: M5 through UF-08 and the focused VM policy-tools build fix are committed;
+  the VM rerun is pending.
 
 ## Objective
 
@@ -88,8 +89,10 @@ rows, and records a public receipt.
 
 ## Open Questions And Blockers
 
-- No implementation blocker.
-- Review gate: commit and push B-0051, pull it onto the NUS VM, then run one live
+- The first VM startup failed in `demo-console-policy-tools`. Go attempted optional
+  VCS stamping inside the bind-mounted checkout and returned `error obtaining VCS
+  status: exit status 128`. The focused build fix disables unused VCS stamping.
+- Review gate: push the focused build fix, pull it onto the NUS VM, then run one live
   UF-01 through UF-08 walkthrough. Local checks do not replace that live proof and
   verifier acceptance run.
 
@@ -109,6 +112,10 @@ rows, and records a public receipt.
   and verifier client to the pinned M5 policy-tool build.
 - Updated the VM runbook with deployment checks, one live proof walkthrough, the
   protected query, receipt evidence, and the current demo boundary.
+- Committed and pushed M5 through UF-08 as `8cb36c6`.
+- Matched the existing workspace build policy by disabling unused Go VCS stamping in
+  the M5 policy-tools builder. This avoids host/container Git ownership checks and
+  does not change the compiler output or runtime policy semantics.
 
 ## Remaining M5 Work After B-0051
 
@@ -149,6 +156,11 @@ rows, and records a public receipt.
 | `pnpm lint` in the pinned toolchain | PASS, Biome, Clippy, Go vet, and Buf | Full workspace | 2026-08-27T01:51:26Z |
 | `pnpm typecheck` in the pinned toolchain | PASS, TypeScript, Cargo check, and Go compile | Full workspace | 2026-08-27T01:51:26Z |
 | `pnpm test` in the pinned toolchain | PASS, TypeScript, Rust, Go, and doc tests | Full non-guest workspace | 2026-08-27T01:51:26Z |
+| First live VM Compose startup | FAIL, Go policy-tools build could not obtain VCS status | M5 policy-tools builder | 2026-08-27T03:18:50Z |
+| `sh -n scripts/prepare-m5-policy-tools` | PASS | Focused policy-tools shell syntax | 2026-08-27T03:20:01Z |
+| `./scripts/compose --profile apps --profile m5-live config --quiet` | PASS | Full M5 Compose graph | 2026-08-27T03:20:01Z |
+| `git diff --check` | PASS | Focused VM build fix | 2026-08-27T03:20:01Z |
+| Local `demo-console-policy-tools` container build | PASS, `m5_policy_tools=ready` | Exact one-shot policy-tools build | 2026-08-27T03:21:10Z |
 | Live VM UF-08 walkthrough | NOT AVAILABLE, requires commit and VM pull | Fresh proof and connected services | 2026-08-27T01:28:04Z |
 
 ## Risks And Private-Data Notes
@@ -163,5 +175,5 @@ rows, and records a public receipt.
 
 ## Exact Next Action
 
-Review the B-0051 diff. After maintainer approval, commit and push it, pull it onto the
-NUS VM, then run the live UF-08 procedure in `docs/runbooks/M5-LOCAL-PORTAL.md`.
+Pull the focused policy-tools build fix onto the NUS VM, then rerun the live UF-08
+procedure in `docs/runbooks/M5-LOCAL-PORTAL.md`.

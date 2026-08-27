@@ -60,7 +60,7 @@ chmod 0700 \
   cd "$repo_root/tools/spicedb-ir-compiler"
   GOCACHE="$build_root/go-build" \
     GOMODCACHE="$build_root/go-mod" \
-    go build -mod=readonly -trimpath -o "$compiler_tmp" ./cmd/spicedb-ir-compiler
+    go build -buildvcs=false -mod=readonly -trimpath -o "$compiler_tmp" ./cmd/spicedb-ir-compiler
 )
 
 CARGO_TARGET_DIR="$build_root/cargo-target" \
