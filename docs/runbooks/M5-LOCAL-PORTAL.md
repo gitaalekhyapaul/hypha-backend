@@ -23,8 +23,12 @@ Open `http://127.0.0.1:3000` and sign in with the exported password.
 The default `recorded` capability mode plays the checked-in public M4 timeline. It
 cannot issue a capability or unlock protected transaction data.
 
-For a forwarded VM or ngrok development URL, set the exact public origin and its
-hostname before startup:
+The mutation routes accept the request's actual same origin. Both
+`http://127.0.0.1:3000` and `http://localhost:3000` work through an SSH tunnel.
+
+For an ngrok development URL, add its hostname to the Next.js development-origin
+list before startup. Set the expected origin only when a reverse proxy rewrites the
+request host:
 
 ```bash
 export RAZIEL_OPERATOR_EXPECTED_ORIGIN='https://demo.example.ngrok.app'
@@ -32,8 +36,8 @@ export RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS='demo.example.ngrok.app'
 ./scripts/compose --profile apps up --build --wait
 ```
 
-The browser-facing origin remains exact. The gateway stays on the private Compose
-network at `http://demo-gateway:3001`.
+The gateway stays on the private Compose network at `http://demo-gateway:3001`.
+Browser requests remain same-origin and need no wildcard CORS policy.
 
 The profile stores ignored runtime state under `.raziel/m5/`:
 

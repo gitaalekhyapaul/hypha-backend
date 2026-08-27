@@ -201,6 +201,24 @@ describe("M5 operator authentication", () => {
     expect(rejectedOrigin.status).toBe(403);
     expect(await rejectedOrigin.json()).toEqual({ error: "OPERATOR_ORIGIN_REJECTED" });
   });
+
+  it("accepts a mutation from the request's actual same origin", async () => {
+    const fixture = await createFixture();
+    const service = serviceFor(fixture.config, NOW);
+    const issued = await service.login(PASSWORD);
+    const localhostOrigin = "http://localhost:3000";
+    const headers = new Headers({
+      cookie: cookiePair(issued.setCookie),
+      origin: localhostOrigin,
+      [OPERATOR_CSRF_HEADER]: issued.session.csrfToken,
+    });
+
+    await expect(
+      service.authorizeMutation(
+        new Request(`${localhostOrigin}/api/owner/action`, { method: "POST", headers }),
+      ),
+    ).resolves.toEqual(issued.session);
+  });
 });
 
 async function createFixture(): Promise<{

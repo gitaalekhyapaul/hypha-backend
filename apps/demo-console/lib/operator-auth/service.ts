@@ -28,8 +28,12 @@ export class OperatorAuthService {
     this.#randomBytes = dependencies.randomBytes ?? randomBytes;
   }
 
-  public assertExactOrigin(request: Request): void {
-    if (request.headers.get("origin") !== this.#config.expectedOrigin) {
+  public assertAllowedOrigin(request: Request): void {
+    const suppliedOrigin = request.headers.get("origin");
+    if (
+      !suppliedOrigin ||
+      (suppliedOrigin !== this.#config.expectedOrigin && suppliedOrigin !== requestOrigin(request))
+    ) {
       throw new OperatorAuthError("OPERATOR_ORIGIN_REJECTED");
     }
   }
@@ -72,7 +76,7 @@ export class OperatorAuthService {
   }
 
   public async authorizeMutation(request: Request): Promise<OperatorSessionProjection> {
-    this.assertExactOrigin(request);
+    this.assertAllowedOrigin(request);
     const session = await this.#verifiedSession(request);
     const suppliedCsrf = request.headers.get(OPERATOR_CSRF_HEADER);
     if (!suppliedCsrf || !constantTimeTextEqual(suppliedCsrf, session.csrfToken)) {
@@ -138,4 +142,12 @@ function constantTimeTextEqual(left: string, right: string): boolean {
 
 function systemNowUnixSeconds(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function requestOrigin(request: Request): string | undefined {
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return undefined;
+  }
 }

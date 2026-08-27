@@ -5,10 +5,10 @@
 - Milestone: M5, first protected reconciliation query
 - Owner: unassigned
 - Started UTC: 2026-08-27T00:50:21Z
-- Last updated UTC: 2026-08-27T03:30:03Z
+- Last updated UTC: 2026-08-27T03:37:47Z
 - Branch: `main`
-- Worktree: M5 through UF-08 and the Go build fix are pushed; the focused hardened
-  service mount fix is ready for review.
+- Worktree: M5 through UF-08, the Go build fix, and the hardened service mount fix are
+  pushed; the same-origin demo fix is ready for review.
 
 ## Objective
 
@@ -95,7 +95,10 @@ rows, and records a public receipt.
 - The second VM startup reached `demo-policy-registry-init` but its capability-free
   root process could not traverse the host-owned mode-`0700` `.raziel` parent. The
   fix mounts only generated tools and policy candidates at dedicated container paths.
-- Review gate: push the focused mount fix, pull it onto the NUS VM, then run one live
+- The forwarded console rejected `localhost` because operator mutation routes still
+  compared `Origin` against one static `127.0.0.1` value. The fix accepts the actual
+  same origin and keeps the gateway private without wildcard CORS.
+- Review gate: push the focused origin fix, pull it onto the NUS VM, then run one live
   UF-01 through UF-08 walkthrough. Local checks do not replace that live proof and
   verifier acceptance run.
 
@@ -122,6 +125,9 @@ rows, and records a public receipt.
 - Added dedicated `/opt/raziel/m5/policy-tools` and
   `/var/lib/raziel/policy-candidates` mounts for every hardened policy service. The
   services retain `cap_drop: ALL`; the private `.raziel` parent remains mode `0700`.
+- Replaced the static-only operator origin comparison with a same-origin check based
+  on the public request URL. Explicit expected-origin configuration remains as a
+  reverse-proxy fallback.
 
 ## Remaining M5 Work After B-0051
 
@@ -170,6 +176,9 @@ rows, and records a public receipt.
 | Second live VM Compose startup | FAIL, capability-free registry initializer could not traverse host-owned `.raziel` | M5 registry initializer | 2026-08-27T03:30:03Z |
 | Local `demo-policy-registry-init` container run | PASS, `m5_policy_registry=ready` | Dedicated policy-tools mount | 2026-08-27T03:30:03Z |
 | Local policy service chain startup | PASS, authority, writer, activation, snapshot, Access Graph, and SpiceDB healthy | Hardened M5 policy services | 2026-08-27T03:30:03Z |
+| Demo-console tests | PASS, 54 tests | Same-origin operator requests and existing portal flows | 2026-08-27T03:37:47Z |
+| Demo-console format, lint, and typecheck | PASS | Same-origin console change | 2026-08-27T03:37:47Z |
+| Demo-console production build | PASS | Complete Next.js route surface | 2026-08-27T03:37:47Z |
 | Live VM UF-08 walkthrough | NOT AVAILABLE, requires commit and VM pull | Fresh proof and connected services | 2026-08-27T01:28:04Z |
 
 ## Risks And Private-Data Notes
@@ -184,5 +193,5 @@ rows, and records a public receipt.
 
 ## Exact Next Action
 
-Pull the hardened service mount fix onto the NUS VM, then rerun the live UF-08
+Pull the same-origin demo fix onto the NUS VM, then rerun the live UF-08
 procedure in `docs/runbooks/M5-LOCAL-PORTAL.md`.
