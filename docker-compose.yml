@@ -877,7 +877,7 @@ services:
     command: ["./scripts/prepare-m5-policy-registry"]
     environment:
       RAZIEL_M5_POLICY_REGISTRY_ROOT: /var/lib/raziel/m5-registry
-      RAZIEL_M5_POLICY_RUNTIME_ROOT: /workspace/.raziel/m5
+      RAZIEL_M5_POLICY_RUNTIME_ROOT: /opt/raziel/m5
       RAZIEL_M5_POLICY_SECRET_ROOT: /var/lib/raziel/m5-secrets
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
     network_mode: none
@@ -888,6 +888,7 @@ services:
       - no-new-privileges:true
     volumes:
       - .:/workspace:ro
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-policy-registry:/var/lib/raziel/m5-registry
       - m5-policy-secrets:/var/lib/raziel/m5-secrets:ro
     depends_on:
@@ -936,10 +937,10 @@ services:
 
   demo-policy-authority:
     <<: *toolchain-service
-    command: ["/workspace/.raziel/m5/policy-tools/raziel-policy-authority"]
+    command: ["/opt/raziel/m5/policy-tools/raziel-policy-authority"]
     environment:
       RAZIEL_POLICY_AUTHORITY_SOCKET_PATH: /run/raziel-policy-authority/authority.sock
-      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_CANDIDATE_ROOT: /var/lib/raziel/policy-candidates
       RAZIEL_POLICY_KEY_PATH: /run/secrets/raziel/policy-authority.pk8
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
@@ -953,7 +954,8 @@ services:
       - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
     volumes:
       - .:/workspace:ro
-      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates
+      - ./.raziel/m5/policy-candidates:/var/lib/raziel/policy-candidates
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-policy-authority-ipc:/run/raziel-policy-authority
       - m5-policy-registry:/var/lib/raziel/registry:ro
       - m5-policy-secrets:/run/secrets/raziel:ro
@@ -972,7 +974,7 @@ services:
 
   demo-policy-registry-writer:
     <<: *toolchain-service
-    command: ["/workspace/.raziel/m5/policy-tools/raziel-registry-writer"]
+    command: ["/opt/raziel/m5/policy-tools/raziel-registry-writer"]
     environment:
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
@@ -987,6 +989,7 @@ services:
       - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
     volumes:
       - .:/workspace:ro
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-policy-registry:/var/lib/raziel/registry
       - m5-registry-writer-ipc:/run/raziel-registry-writer
     depends_on:
@@ -1004,12 +1007,12 @@ services:
 
   demo-policy-activation:
     <<: *toolchain-service
-    command: ["/workspace/.raziel/m5/policy-tools/raziel-policy-activation"]
+    command: ["/opt/raziel/m5/policy-tools/raziel-policy-activation"]
     environment:
       RAZIEL_POLICY_ACTIVATION_ROOT: /var/lib/raziel/policy-activation
       RAZIEL_POLICY_ACTIVATION_SOCKET_PATH: /run/raziel-policy-activation/activation.sock
       RAZIEL_POLICY_AUTHORITY_SOCKET_PATH: /run/raziel-policy-authority/authority.sock
-      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_CANDIDATE_ROOT: /var/lib/raziel/policy-candidates
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
@@ -1023,6 +1026,8 @@ services:
       - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
     volumes:
       - .:/workspace:ro
+      - ./.raziel/m5/policy-candidates:/var/lib/raziel/policy-candidates
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-policy-activation-ipc:/run/raziel-policy-activation
       - m5-policy-activation-state:/var/lib/raziel/policy-activation
       - m5-policy-authority-ipc:/run/raziel-policy-authority
@@ -1043,7 +1048,7 @@ services:
 
   demo-snapshot:
     <<: *toolchain-service
-    command: ["/workspace/.raziel/m5/policy-tools/razield-snapshot"]
+    command: ["/opt/raziel/m5/policy-tools/razield-snapshot"]
     environment:
       RAZIEL_BIND_ADDRESS: 0.0.0.0:50053
       RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
@@ -1054,7 +1059,7 @@ services:
       RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
       RAZIEL_SPICEDB_ENDPOINT_REF: ${RAZIEL_SPICEDB_ENDPOINT_REF:-owner-spicedb}
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
-      RAZIEL_ZED_TOKEN_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_ZED_TOKEN_CANDIDATE_ROOT: /var/lib/raziel/policy-candidates
     read_only: true
     cap_drop:
       - ALL
@@ -1064,7 +1069,8 @@ services:
       - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
     volumes:
       - .:/workspace:ro
-      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates:ro
+      - ./.raziel/m5/policy-candidates:/var/lib/raziel/policy-candidates:ro
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-policy-registry:/var/lib/raziel/registry:ro
       - m5-policy-secrets:/run/secrets/raziel:ro
       - m5-private-snapshots:/var/lib/raziel/private-snapshots
@@ -1088,11 +1094,11 @@ services:
 
   demo-access-graph:
     <<: *toolchain-service
-    command: ["/workspace/.raziel/m5/policy-tools/raziel-access-graph"]
+    command: ["/opt/raziel/m5/policy-tools/raziel-access-graph"]
     environment:
       RAZIEL_ACCESS_GRAPH_SOCKET_PATH: /run/raziel-access-graph/access-graph.sock
       RAZIEL_ACCESS_GRAPH_STATE_ROOT: /var/lib/raziel/access-graph-state
-      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_CANDIDATE_ROOT: /var/lib/raziel/policy-candidates
       RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
       RAZIEL_SNAPSHOT_ENDPOINT: http://demo-snapshot:50053
       RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
@@ -1108,7 +1114,8 @@ services:
       - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
     volumes:
       - .:/workspace:ro
-      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates
+      - ./.raziel/m5/policy-candidates:/var/lib/raziel/policy-candidates
+      - ./.raziel/m5/policy-tools:/opt/raziel/m5/policy-tools:ro
       - m5-access-graph-ipc:/run/raziel-access-graph
       - m5-access-graph-state:/var/lib/raziel/access-graph-state
       - m5-policy-registry:/var/lib/raziel/registry:ro

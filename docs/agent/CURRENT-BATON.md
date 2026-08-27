@@ -5,10 +5,10 @@
 - Milestone: M5, first protected reconciliation query
 - Owner: unassigned
 - Started UTC: 2026-08-27T00:50:21Z
-- Last updated UTC: 2026-08-27T03:21:10Z
+- Last updated UTC: 2026-08-27T03:30:03Z
 - Branch: `main`
-- Worktree: M5 through UF-08 and the focused VM policy-tools build fix are committed;
-  the VM rerun is pending.
+- Worktree: M5 through UF-08 and the Go build fix are pushed; the focused hardened
+  service mount fix is ready for review.
 
 ## Objective
 
@@ -92,7 +92,10 @@ rows, and records a public receipt.
 - The first VM startup failed in `demo-console-policy-tools`. Go attempted optional
   VCS stamping inside the bind-mounted checkout and returned `error obtaining VCS
   status: exit status 128`. The focused build fix disables unused VCS stamping.
-- Review gate: push the focused build fix, pull it onto the NUS VM, then run one live
+- The second VM startup reached `demo-policy-registry-init` but its capability-free
+  root process could not traverse the host-owned mode-`0700` `.raziel` parent. The
+  fix mounts only generated tools and policy candidates at dedicated container paths.
+- Review gate: push the focused mount fix, pull it onto the NUS VM, then run one live
   UF-01 through UF-08 walkthrough. Local checks do not replace that live proof and
   verifier acceptance run.
 
@@ -116,6 +119,9 @@ rows, and records a public receipt.
 - Matched the existing workspace build policy by disabling unused Go VCS stamping in
   the M5 policy-tools builder. This avoids host/container Git ownership checks and
   does not change the compiler output or runtime policy semantics.
+- Added dedicated `/opt/raziel/m5/policy-tools` and
+  `/var/lib/raziel/policy-candidates` mounts for every hardened policy service. The
+  services retain `cap_drop: ALL`; the private `.raziel` parent remains mode `0700`.
 
 ## Remaining M5 Work After B-0051
 
@@ -161,6 +167,9 @@ rows, and records a public receipt.
 | `./scripts/compose --profile apps --profile m5-live config --quiet` | PASS | Full M5 Compose graph | 2026-08-27T03:20:01Z |
 | `git diff --check` | PASS | Focused VM build fix | 2026-08-27T03:20:01Z |
 | Local `demo-console-policy-tools` container build | PASS, `m5_policy_tools=ready` | Exact one-shot policy-tools build | 2026-08-27T03:21:10Z |
+| Second live VM Compose startup | FAIL, capability-free registry initializer could not traverse host-owned `.raziel` | M5 registry initializer | 2026-08-27T03:30:03Z |
+| Local `demo-policy-registry-init` container run | PASS, `m5_policy_registry=ready` | Dedicated policy-tools mount | 2026-08-27T03:30:03Z |
+| Local policy service chain startup | PASS, authority, writer, activation, snapshot, Access Graph, and SpiceDB healthy | Hardened M5 policy services | 2026-08-27T03:30:03Z |
 | Live VM UF-08 walkthrough | NOT AVAILABLE, requires commit and VM pull | Fresh proof and connected services | 2026-08-27T01:28:04Z |
 
 ## Risks And Private-Data Notes
@@ -175,5 +184,5 @@ rows, and records a public receipt.
 
 ## Exact Next Action
 
-Pull the focused policy-tools build fix onto the NUS VM, then rerun the live UF-08
+Pull the hardened service mount fix onto the NUS VM, then rerun the live UF-08
 procedure in `docs/runbooks/M5-LOCAL-PORTAL.md`.
