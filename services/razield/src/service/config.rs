@@ -4,9 +4,6 @@ use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
-/// Maximum decoded request size accepted by the Tonic service wrapper.
-pub const MAX_SERVICE_MESSAGE_BYTES: usize = 2 * 1024 * 1024;
-
 /// Newly staged envelopes receive this grace period during startup cleanup.
 pub const ORPHAN_GRACE_PERIOD: Duration = Duration::from_secs(10 * 60);
 

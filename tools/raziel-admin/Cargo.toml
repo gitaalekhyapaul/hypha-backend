@@ -8,19 +8,55 @@ publish = false
 default-run = "raziel-admin"
 
 [dependencies]
+getrandom.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 raziel-authority.workspace = true
+raziel-authorization-core.workspace = true
 raziel-canonical.workspace = true
 raziel-policy-ir = { workspace = true, features = ["strict-protobuf"] }
-raziel-proto.workspace = true
+raziel-proto = { workspace = true, features = ["services"] }
+raziel-snapshot.workspace = true
 raziel-verifier = { path = "../../crates/verifier" }
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-
-[dev-dependencies]
-raziel-snapshot.workspace = true
+spicedb-rs-proto.workspace = true
+tokio.workspace = true
+tonic.workspace = true
 
 [[bin]]
 name = "raziel-registry-writer"
 path = "src/bin/raziel-registry-writer.rs"
+
+[[bin]]
+name = "raziel-policy-authority"
+path = "src/bin/raziel-policy-authority.rs"
+
+[[bin]]
+name = "raziel-spicedb-candidate"
+path = "src/bin/raziel-spicedb-candidate.rs"
+
+[[bin]]
+name = "raziel-policy-activation"
+path = "src/bin/raziel-policy-activation.rs"
+
+[[bin]]
+name = "raziel-policy-activate"
+path = "src/bin/raziel-policy-activate.rs"
+
+[[bin]]
+name = "raziel-access-graph"
+path = "src/bin/raziel-access-graph.rs"
+
+[[bin]]
+name = "raziel-access-graph-publish"
+path = "src/bin/raziel-access-graph-publish.rs"
+
+[[bin]]
+name = "raziel-capability-client"
+path = "src/bin/raziel-capability-client.rs"
+
+[[bin]]
+name = "raziel-verifier-client"
+path = "src/bin/raziel-verifier-client.rs"

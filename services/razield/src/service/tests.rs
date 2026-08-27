@@ -168,12 +168,36 @@ fn snapshot_configuration_uses_fixed_refs_and_redacts_secret_paths() {
 
     assert_eq!(config.spicedb_endpoint_ref(), "owner-spicedb");
     assert_eq!(config.spicedb_endpoint(), "http://spicedb:50051");
-    assert_eq!(config.zed_token_secret_ref(), "reconciliation-revision");
+    assert_eq!(
+        config.fixed_zed_token_secret_ref(),
+        Some("reconciliation-revision")
+    );
+    assert_eq!(config.candidate_revision_root(), None);
     assert_eq!(config.trust_domain_id(), "raziel-test");
     let debug = format!("{config:?}");
     assert!(!debug.contains("spicedb-token"));
     assert!(!debug.contains("zed-token"));
     assert_eq!(debug.matches("<redacted>").count(), 1);
+}
+
+#[test]
+fn snapshot_configuration_accepts_one_private_candidate_root() {
+    let mut values = snapshot_values();
+    values.remove("RAZIEL_ZED_TOKEN_SECRET_REF");
+    values.remove("RAZIEL_ZED_TOKEN_PATH");
+    values.insert(
+        "RAZIEL_ZED_TOKEN_CANDIDATE_ROOT",
+        "/var/lib/raziel/policy-candidates",
+    );
+    let config =
+        SnapshotServiceConfig::from_lookup(|key| values.get(key).map(ToString::to_string)).unwrap();
+    assert_eq!(config.fixed_zed_token_secret_ref(), None);
+    assert_eq!(
+        config.candidate_revision_root(),
+        Some(Path::new("/var/lib/raziel/policy-candidates"))
+    );
+    assert!(config.accepts_zed_token_reference("candidate-1"));
+    assert!(!config.accepts_zed_token_reference("../private"));
 }
 
 #[test]
@@ -201,6 +225,18 @@ fn snapshot_configuration_rejects_remote_tls_and_unsafe_paths() {
     assert_eq!(
         relative_socket,
         Err(SnapshotServiceConfigError::InvalidRegistryWriterSocket)
+    );
+
+    let ambiguous_source = SnapshotServiceConfig::from_lookup(|key| {
+        if key == "RAZIEL_ZED_TOKEN_CANDIDATE_ROOT" {
+            Some("/var/lib/raziel/policy-candidates".into())
+        } else {
+            values.get(key).map(ToString::to_string)
+        }
+    });
+    assert_eq!(
+        ambiguous_source,
+        Err(SnapshotServiceConfigError::InvalidZedTokenSource)
     );
 }
 

@@ -5,7 +5,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
 use super::codec::{read_request, write_response};
-use super::store::{RegistryMutationStore, StoreMutationError, trusted_now};
+use super::store::{RegistryMutationStore, StoreMutationError, StoreMutationResult, trusted_now};
 use super::wire::{RegistryWriterFailureWire, RegistryWriterResponseWire};
 use super::{PROTOCOL_VERSION, valid_absolute_path};
 
@@ -51,12 +51,28 @@ pub(super) fn handle_connection(
         Ok(now) => now,
         Err(_) => return failure(RegistryWriterFailureWire::PublicationFailed),
     };
+    handle_request(store, request, now)
+}
+
+pub(super) fn handle_request(
+    store: &RegistryMutationStore,
+    request: super::wire::RegistryWriterRequestWire,
+    now: i64,
+) -> RegistryWriterResponseWire {
     match store.apply(request, now) {
-        Ok(root_record) => RegistryWriterResponseWire {
+        Ok(StoreMutationResult::Root(root_record)) => RegistryWriterResponseWire {
             format_version: PROTOCOL_VERSION,
             failure: RegistryWriterFailureWire::Unspecified as i32,
             registry_generation: root_record.registry_generation,
             root_record: Some(root_record),
+            policy_record: None,
+        },
+        Ok(StoreMutationResult::Policy(policy_record)) => RegistryWriterResponseWire {
+            format_version: PROTOCOL_VERSION,
+            failure: RegistryWriterFailureWire::Unspecified as i32,
+            registry_generation: policy_record.registry_generation,
+            root_record: None,
+            policy_record: Some(policy_record),
         },
         Err(error) => failure(match error {
             StoreMutationError::StaleGeneration => RegistryWriterFailureWire::StaleGeneration,
@@ -74,6 +90,7 @@ fn failure(code: RegistryWriterFailureWire) -> RegistryWriterResponseWire {
         failure: code as i32,
         registry_generation: 0,
         root_record: None,
+        policy_record: None,
     }
 }
 

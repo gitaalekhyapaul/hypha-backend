@@ -169,7 +169,7 @@ services:
       - /run/redis:rw,nosuid,nodev,mode=0700
     volumes:
       - redis-data:/data
-    profiles: ["services", "queue-conformance", "proof"]
+    profiles: ["services", "queue-conformance", "proof", "m5-live"]
 
   razield-private-init:
     <<: *toolchain-service
@@ -251,7 +251,7 @@ services:
       - type: volume
         source: razield-proof-go-mod-cache
         target: /var/cache/raziel-proof-go-mod
-    profiles: ["proof"]
+    profiles: ["proof", "m5-live"]
 
   razield-proof-build:
     <<: *toolchain-service
@@ -286,9 +286,9 @@ services:
     depends_on:
       razield-proof-dependency-fetch:
         condition: service_completed_successfully
-    profiles: ["proof"]
+    profiles: ["proof", "m5-live"]
 
-  razield-proof-init:
+  razield-proof-init: &razield-proof-init-service
     <<: *toolchain-service
     user: "0:0"
     command:
@@ -324,7 +324,7 @@ services:
       - razield-proof-ipc:/run/raziel-proof
     profiles: ["proof"]
 
-  razield-proof-sandbox:
+  razield-proof-sandbox: &razield-proof-sandbox-service
     <<: *toolchain-service
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     command: ["/opt/raziel-runtime/razield-proof-launcher"]
@@ -399,7 +399,7 @@ services:
     restart: unless-stopped
     profiles: ["proof"]
 
-  razield-proof-worker:
+  razield-proof-worker: &razield-proof-worker-service
     <<: *secure-rust-service
     command: ["cargo", "run", "--locked", "--offline", "-p", "razield", "--bin", "razield-proof-worker"]
     environment:
@@ -604,7 +604,7 @@ services:
       - cargo-git:/usr/local/cargo/git:ro
       - verifierd-worker-build-cache:/var/cache/raziel-verifier-build
       - verifierd-worker-runtime:/opt/raziel-verifier-runtime
-    profiles: ["services"]
+    profiles: ["services", "m5-live"]
 
   verifierd-worker-init:
     <<: *toolchain-service
@@ -835,23 +835,664 @@ services:
       - ${RAZIEL_SNAPSHOT_KEY_PATH:-/dev/null}:/run/secrets/raziel/snapshot-authority.pk8:ro
     profiles: ["admin"]
 
+  demo-console-init:
+    <<: *toolchain-service
+    command: ["node", "./scripts/prepare-m5-demo.mjs"]
+    environment:
+      RAZIEL_M5_OPERATOR_ID: ${RAZIEL_M5_OPERATOR_ID:-operator-local}
+      RAZIEL_M5_OPERATOR_PASSWORD: ${RAZIEL_M5_OPERATOR_PASSWORD:-raziel-local-operator}
+      RAZIEL_M5_RESET_OPERATOR: ${RAZIEL_M5_RESET_OPERATOR:-0}
+      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m5/operator-secret.json
+    profiles: ["apps"]
+
+  demo-console-sdk-build:
+    <<: *toolchain-service
+    command: ["pnpm", "--filter", "@raziel/sdk-ts", "build"]
+    profiles: ["apps"]
+
+  demo-console-policy-tools:
+    <<: *toolchain-service
+    command: ["./scripts/prepare-m5-policy-tools"]
+    environment:
+      HOME: /tmp/raziel-home
+      RAZIEL_M5_POLICY_ACTIVATION_ROOT: /var/lib/raziel/m5-policy-activation
+      RAZIEL_M5_POLICY_REGISTRY_ROOT: /var/lib/raziel/m5-registry
+      RAZIEL_M5_POLICY_RUNTIME_ROOT: /workspace/.raziel/m5
+      RAZIEL_M5_POLICY_SECRET_ROOT: /var/lib/raziel/m5-secrets
+      RAZIEL_M5_SPICEDB_TOKEN: ${SPICEDB_PRESHARED_KEY:-raziel-local-development-only}
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    volumes:
+      - .:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - pnpm-store:/pnpm/store
+      - m5-policy-activation-state:/var/lib/raziel/m5-policy-activation
+      - m5-policy-registry:/var/lib/raziel/m5-registry
+      - m5-policy-secrets:/var/lib/raziel/m5-secrets
+    profiles: ["apps"]
+
+  demo-policy-registry-init:
+    <<: *toolchain-service
+    command: ["./scripts/prepare-m5-policy-registry"]
+    environment:
+      RAZIEL_M5_POLICY_REGISTRY_ROOT: /var/lib/raziel/m5-registry
+      RAZIEL_M5_POLICY_RUNTIME_ROOT: /workspace/.raziel/m5
+      RAZIEL_M5_POLICY_SECRET_ROOT: /var/lib/raziel/m5-secrets
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - .:/workspace:ro
+      - m5-policy-registry:/var/lib/raziel/m5-registry
+      - m5-policy-secrets:/var/lib/raziel/m5-secrets:ro
+    depends_on:
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+    profiles: ["apps"]
+
+  demo-policy-runtime-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d -m 0700 \
+          /run/raziel-access-graph \
+          /run/raziel-policy-activation \
+          /run/raziel-policy-authority \
+          /run/raziel-registry-writer \
+          /var/lib/raziel/access-graph-state \
+          /var/lib/raziel/private-snapshots
+        test "$$(stat --format=%a /run/raziel-access-graph)" = 700
+        test "$$(stat --format=%a /run/raziel-policy-activation)" = 700
+        test "$$(stat --format=%a /run/raziel-policy-authority)" = 700
+        test "$$(stat --format=%a /run/raziel-registry-writer)" = 700
+        test "$$(stat --format=%a /var/lib/raziel/access-graph-state)" = 700
+        test "$$(stat --format=%a /var/lib/raziel/private-snapshots)" = 700
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - m5-access-graph-ipc:/run/raziel-access-graph
+      - m5-access-graph-state:/var/lib/raziel/access-graph-state
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-private-snapshots:/var/lib/raziel/private-snapshots
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+    profiles: ["apps"]
+
+  demo-policy-authority:
+    <<: *toolchain-service
+    command: ["/workspace/.raziel/m5/policy-tools/raziel-policy-authority"]
+    environment:
+      RAZIEL_POLICY_AUTHORITY_SOCKET_PATH: /run/raziel-policy-authority/authority.sock
+      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_KEY_PATH: /run/secrets/raziel/policy-authority.pk8
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
+    volumes:
+      - .:/workspace:ro
+      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-policy-secrets:/run/secrets/raziel:ro
+    depends_on:
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/raziel-policy-authority/authority.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: ["apps"]
+
+  demo-policy-registry-writer:
+    <<: *toolchain-service
+    command: ["/workspace/.raziel/m5/policy-tools/raziel-registry-writer"]
+    environment:
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
+    volumes:
+      - .:/workspace:ro
+      - m5-policy-registry:/var/lib/raziel/registry
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+    depends_on:
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/raziel-registry-writer/writer.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: ["apps"]
+
+  demo-policy-activation:
+    <<: *toolchain-service
+    command: ["/workspace/.raziel/m5/policy-tools/raziel-policy-activation"]
+    environment:
+      RAZIEL_POLICY_ACTIVATION_ROOT: /var/lib/raziel/policy-activation
+      RAZIEL_POLICY_ACTIVATION_SOCKET_PATH: /run/raziel-policy-activation/activation.sock
+      RAZIEL_POLICY_AUTHORITY_SOCKET_PATH: /run/raziel-policy-authority/authority.sock
+      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
+    volumes:
+      - .:/workspace:ro
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
+      - m5-policy-activation-state:/var/lib/raziel/policy-activation
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+    depends_on:
+      demo-policy-authority:
+        condition: service_healthy
+      demo-policy-registry-writer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/raziel-policy-activation/activation.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: ["apps"]
+
+  demo-snapshot:
+    <<: *toolchain-service
+    command: ["/workspace/.raziel/m5/policy-tools/razield-snapshot"]
+    environment:
+      RAZIEL_BIND_ADDRESS: 0.0.0.0:50053
+      RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
+      RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/raziel/snapshot-authority.pk8
+      RAZIEL_SPICEDB_AUTH_TOKEN_PATH: /run/secrets/raziel/spicedb-token
+      RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
+      RAZIEL_SPICEDB_ENDPOINT_REF: ${RAZIEL_SPICEDB_ENDPOINT_REF:-owner-spicedb}
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RAZIEL_ZED_TOKEN_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
+    volumes:
+      - .:/workspace:ro
+      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates:ro
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-policy-secrets:/run/secrets/raziel:ro
+      - m5-private-snapshots:/var/lib/raziel/private-snapshots
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+    depends_on:
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-policy-registry-writer:
+        condition: service_healthy
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+      spicedb:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/50053'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: ["apps"]
+
+  demo-access-graph:
+    <<: *toolchain-service
+    command: ["/workspace/.raziel/m5/policy-tools/raziel-access-graph"]
+    environment:
+      RAZIEL_ACCESS_GRAPH_SOCKET_PATH: /run/raziel-access-graph/access-graph.sock
+      RAZIEL_ACCESS_GRAPH_STATE_ROOT: /var/lib/raziel/access-graph-state
+      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_SNAPSHOT_ENDPOINT: http://demo-snapshot:50053
+      RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
+      RAZIEL_SPICEDB_ENDPOINT_REF: ${RAZIEL_SPICEDB_ENDPOINT_REF:-owner-spicedb}
+      RAZIEL_SPICEDB_TOKEN_PATH: /run/secrets/raziel/spicedb-token
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=1777,size=67108864
+    volumes:
+      - .:/workspace:ro
+      - ./.raziel/m5/policy-candidates:/workspace/.raziel/m5/policy-candidates
+      - m5-access-graph-ipc:/run/raziel-access-graph
+      - m5-access-graph-state:/var/lib/raziel/access-graph-state
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-policy-secrets:/run/secrets/raziel:ro
+    depends_on:
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+      demo-snapshot:
+        condition: service_healthy
+      spicedb:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/raziel-access-graph/access-graph.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: ["apps"]
+
+  demo-capability-private-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d -m 0700 /var/lib/raziel/private-envelopes
+        test "$$(stat --format=%a /var/lib/raziel/private-envelopes)" = 700
+        test "$$(stat --format=%u /var/lib/raziel/private-envelopes)" = 0
+        test "$$(stat --format=%g /var/lib/raziel/private-envelopes)" = 0
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - m5-private-envelopes:/var/lib/raziel/private-envelopes
+    profiles: ["m5-live"]
+
+  demo-proof-init:
+    <<: *razield-proof-init-service
+    environment:
+      RAZIEL_PRIVATE_GID: "0"
+      RAZIEL_PRIVATE_UID: "0"
+      RUSTUP_TOOLCHAIN: "${RUST_VERSION}"
+    volumes:
+      - m5-proof-ipc:/run/raziel-proof
+    profiles: ["m5-live"]
+
+  demo-proof-sandbox:
+    <<: *razield-proof-sandbox-service
+    user: "0:0"
+    environment:
+      GOMAXPROCS: "8"
+      GOMEMLIMIT: "24GiB"
+      HOME: /tmp
+      RAYON_NUM_THREADS: "8"
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_GUEST_ELF_PATH: /opt/raziel-runtime/raziel-authorization-guest
+      RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
+      RAZIEL_PROOF_LAUNCHER_SOCKET_PATH: /run/raziel-proof/launcher.sock
+      RAZIEL_PROVER_CHILD_PATH: /opt/raziel-runtime/razield-prover
+      RAZIEL_PROVER_CHILD_SOCKET_PATH: /run/raziel-proof/child.sock
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      SP1_PLONK_CIRCUIT_PATH: /opt/sp1/circuits/plonk
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=0700,size=1073741824,uid=0,gid=0
+    volumes:
+      - type: volume
+        source: razield-proof-runtime
+        target: /opt/raziel-runtime
+        read_only: true
+      - type: volume
+        source: m5-private-snapshots
+        target: /var/lib/raziel/private-snapshots
+        read_only: true
+      - type: volume
+        source: m5-proof-ipc
+        target: /run/raziel-proof
+      - type: volume
+        source: m5-policy-registry
+        target: /var/lib/raziel/registry
+        read_only: true
+      - type: bind
+        source: ${RAZIEL_SP1_PLONK_SETUP_PATH:-./.sp1/circuits/plonk/v6.1.0}
+        target: /opt/sp1/circuits/plonk/v6.1.0
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      razield-proof-build:
+        condition: service_completed_successfully
+      demo-proof-init:
+        condition: service_completed_successfully
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -S /run/raziel-proof/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-proof/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-proof/launcher.sock)" = 0
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    profiles: ["m5-live"]
+
+  demo-proof-worker:
+    <<: *razield-proof-worker-service
+    user: "0:0"
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_PRIVATE_ENVELOPE_ROOT: /var/lib/raziel/private-envelopes
+      RAZIEL_PROOF_LAUNCHER_SOCKET_PATH: /run/raziel-proof/launcher.sock
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_M5_QUEUE_PREFIX:-raziel-m5-capabilities}
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - m5-private-envelopes:/var/lib/raziel/private-envelopes
+      - m5-proof-ipc:/run/raziel-proof
+      - type: volume
+        source: m5-policy-registry
+        target: /var/lib/raziel/registry
+        read_only: true
+    depends_on:
+      redis:
+        condition: service_healthy
+      demo-capability-private-init:
+        condition: service_completed_successfully
+      demo-proof-sandbox:
+        condition: service_healthy
+    profiles: ["m5-live"]
+
+  demo-capability-api:
+    <<: *secure-rust-service
+    user: "0:0"
+    command: ["cargo", "run", "--locked", "--offline", "-p", "razield", "--bin", "razield-capability"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_BIND_ADDRESS: 0.0.0.0:50052
+      RAZIEL_PRIVATE_ENVELOPE_ROOT: /var/lib/raziel/private-envelopes
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_M5_QUEUE_PREFIX:-raziel-m5-capabilities}
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - m5-private-envelopes:/var/lib/raziel/private-envelopes
+    depends_on:
+      redis:
+        condition: service_healthy
+      demo-capability-private-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/50052'
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+    networks:
+      - default
+      - owner-internal
+    restart: unless-stopped
+    profiles: ["m5-live"]
+
+  demo-verifier-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        install -d -m 0700 /run/raziel-verifier
+        test "$$(stat --format=%a /run/raziel-verifier)" = 700
+        test "$$(stat --format=%u /run/raziel-verifier)" = 0
+        test "$$(stat --format=%g /run/raziel-verifier)" = 0
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - m5-verifier-ipc:/run/raziel-verifier
+    profiles: ["m5-live"]
+
+  demo-verifier-sandbox:
+    <<: *toolchain-service
+    user: "0:0"
+    command: ["/opt/raziel-verifier-runtime/verifierd-worker"]
+    environment:
+      HOME: /tmp
+      RAZIEL_VERIFIER_CHILD_PATH: /opt/raziel-verifier-runtime/verifierd-verifier
+      RAZIEL_VERIFIER_CHILD_SOCKET_PATH: /run/raziel-verifier/child.sock
+      RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock
+    mem_limit: "2147483648"
+    memswap_limit: "2147483648"
+    network_mode: none
+    read_only: true
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,mode=0700,size=67108864,uid=0,gid=0
+    volumes:
+      - type: volume
+        source: verifierd-worker-runtime
+        target: /opt/raziel-verifier-runtime
+        read_only: true
+      - type: volume
+        source: m5-verifier-ipc
+        target: /run/raziel-verifier
+    depends_on:
+      verifierd-worker-build:
+        condition: service_completed_successfully
+      demo-verifier-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -S /run/raziel-verifier/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-verifier/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-verifier/launcher.sock)" = 0
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    restart: unless-stopped
+    profiles: ["m5-live"]
+
+  demo-verifierd:
+    <<: *secure-rust-service
+    user: "0:0"
+    command: ["cargo", "run", "--locked", "--offline", "-p", "verifierd", "--bin", "verifierd"]
+    environment:
+      CARGO_HOME: /usr/local/cargo
+      CARGO_NET_OFFLINE: "true"
+      CARGO_TARGET_DIR: /tmp/raziel-target
+      HOME: /tmp/raziel-home
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
+      RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RAZIEL_VERIFIER_BIND_ADDRESS: 0.0.0.0:50053
+      RAZIEL_VERIFIER_LAUNCHER_SOCKET_PATH: /run/raziel-verifier/launcher.sock
+      RUSTUP_TOOLCHAIN: "1.97.1"
+    volumes:
+      - .:/workspace:ro
+      - cargo-registry:/usr/local/cargo/registry:ro
+      - cargo-git:/usr/local/cargo/git:ro
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-verifier-ipc:/run/raziel-verifier
+    depends_on:
+      demo-verifier-sandbox:
+        condition: service_healthy
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/50053'
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    profiles: ["m5-live"]
+
   demo-gateway:
     <<: *toolchain-service
     command: ["pnpm", "--filter", "@raziel/demo-gateway", "dev", "--hostname", "0.0.0.0", "--port", "3001"]
+    depends_on:
+      demo-console-init:
+        condition: service_completed_successfully
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-console-sdk-build:
+        condition: service_completed_successfully
+    environment:
+      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m5/receipts.jsonl
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_TRANSACTION_STORE_PATH: /workspace/.raziel/m5/transactions.json
+      RAZIEL_VERIFIER_CLIENT_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-verifier-client
+      RAZIEL_VERIFIERD_ENDPOINT: http://demo-verifierd:50053
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
     ports:
-      - "3001:3001"
+      - "${RAZIEL_GATEWAY_BIND_HOST:-127.0.0.1}:3001:3001"
+    networks:
+      - default
+      - owner-internal
     profiles: ["apps"]
 
   demo-console:
     <<: *toolchain-service
     command: ["pnpm", "--filter", "@raziel/demo-console", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    depends_on:
+      demo-console-init:
+        condition: service_completed_successfully
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-policy-activation:
+        condition: service_healthy
+      demo-access-graph:
+        condition: service_healthy
+      demo-gateway:
+        condition: service_healthy
+    environment:
+      RAZIEL_CAPABILITY_MODE: ${RAZIEL_CAPABILITY_MODE:-recorded}
+      RAZIEL_CAPABILITY_CLIENT_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-capability-client
+      RAZIEL_RAZIELD_ENDPOINT: ${RAZIEL_RAZIELD_ENDPOINT:-http://demo-capability-api:50052}
+      RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS: ${RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS:-}
+      RAZIEL_GATEWAY_INTERNAL_URL: http://demo-gateway:3001
+      RAZIEL_ACCESS_GRAPH_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-access-graph-publish
+      RAZIEL_ACCESS_GRAPH_SOCKET_PATH: /run/raziel-access-graph/access-graph.sock
+      RAZIEL_OPERATOR_EXPECTED_ORIGIN: ${RAZIEL_OPERATOR_EXPECTED_ORIGIN:-http://127.0.0.1:3000}
+      RAZIEL_OPERATOR_LIVE_MODE: "false"
+      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m5/operator-secret.json
+      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_COMPILER_EXECUTABLE: /workspace/.raziel/m5/policy-tools/spicedb-ir-compiler
+      RAZIEL_ADMIN_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-admin
+      RAZIEL_POLICY_ACTIVATION_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-policy-activate
+      RAZIEL_POLICY_ACTIVATION_SOCKET_PATH: /run/raziel-policy-activation/activation.sock
     ports:
-      - "3000:3000"
+      - "${RAZIEL_CONSOLE_BIND_HOST:-127.0.0.1}:3000:3000"
+    volumes:
+      - .:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - pnpm-store:/pnpm/store
+      - m5-access-graph-ipc:/run/raziel-access-graph
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
     profiles: ["apps"]
 
 volumes:
   cargo-git:
   cargo-registry:
+  m5-access-graph-ipc:
+  m5-access-graph-state:
+  m5-policy-activation-ipc:
+  m5-policy-activation-state:
+  m5-policy-authority-ipc:
+  m5-policy-registry:
+  m5-policy-secrets:
+  m5-private-envelopes:
+  m5-private-snapshots:
+  m5-proof-ipc:
+  m5-registry-writer-ipc:
+  m5-verifier-ipc:
   pnpm-store:
   queue-conformance-target:
   redis-data:

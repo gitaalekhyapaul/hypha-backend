@@ -3,6 +3,7 @@ use std::io::Read;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
+use raziel_admin::spicedb_candidate::CandidateRevisionHandoffReader;
 use raziel_admin::writer::{RegistryWriterClient, RegistryWriterClientError};
 use raziel_authority::{AuthorityKeyStatus, AuthorityRole, AuthoritySigner, SnapshotRole};
 use raziel_authorization_core::{TRUSTED_POLICY_CEILINGS, TRUSTED_SNAPSHOT_LIMITS};
@@ -18,6 +19,7 @@ use raziel_verifier::{
 };
 use tokio::sync::Mutex;
 
+use super::snapshot_config::ZedTokenSourceConfig;
 use super::{SnapshotOperations, SnapshotServiceConfig, SystemClock, TrustedClock};
 use crate::private_snapshot::{
     PrivateRelationshipSnapshot, PrivateSnapshotError, PrivateSnapshotStore,
@@ -113,7 +115,7 @@ impl SnapshotCoordinator {
             .ok_or(SnapshotOperationError::StaleEpoch)?;
 
         let auth_token = read_secret(self.config.spicedb_auth_token_path()).await?;
-        let zed_token = read_secret(self.config.zed_token_path()).await?;
+        let zed_token = load_zed_token(&self.config, &request).await?;
         let mut reader =
             SpiceDbSnapshotReader::connect(self.config.spicedb_endpoint(), &auth_token)
                 .await
@@ -307,6 +309,7 @@ impl SnapshotOperations for SnapshotCoordinator {
 }
 
 struct ValidatedBuildRequest {
+    zed_token_secret_ref: String,
     policy_record_id: String,
     policy_hash: [u8; 32],
     expires_at_unix_seconds: i64,
@@ -321,7 +324,7 @@ impl ValidatedBuildRequest {
         now: i64,
     ) -> Result<Self, SnapshotOperationError> {
         if request.spicedb_endpoint_ref != config.spicedb_endpoint_ref()
-            || request.zed_token_secret_ref != config.zed_token_secret_ref()
+            || !config.accepts_zed_token_reference(&request.zed_token_secret_ref)
         {
             return Err(SnapshotOperationError::ConfigurationReferenceMismatch);
         }
@@ -341,12 +344,38 @@ impl ValidatedBuildRequest {
             return Err(SnapshotOperationError::InvalidRequest);
         }
         Ok(Self {
+            zed_token_secret_ref: request.zed_token_secret_ref,
             policy_record_id: request.policy_record_id,
             policy_hash,
             expires_at_unix_seconds: expires_at.seconds,
             expected_previous_epoch: request.expected_previous_epoch,
             authority_key_id: request.authority_key_id,
         })
+    }
+}
+
+async fn load_zed_token(
+    config: &SnapshotServiceConfig,
+    request: &ValidatedBuildRequest,
+) -> Result<String, SnapshotOperationError> {
+    match config.zed_token_source() {
+        ZedTokenSourceConfig::Fixed { path, .. } => read_secret(path).await,
+        ZedTokenSourceConfig::CandidateRoot { root } => {
+            let root = root.clone();
+            let candidate_id = request.zed_token_secret_ref.clone();
+            let policy_record_id = request.policy_record_id.clone();
+            let policy_hash = request.policy_hash;
+            tokio::task::spawn_blocking(move || {
+                let reader = CandidateRevisionHandoffReader::new(root)
+                    .map_err(|_| SnapshotOperationError::SecretRead)?;
+                let revision = reader
+                    .read_bound(&candidate_id, &policy_record_id, &policy_hash)
+                    .map_err(|_| SnapshotOperationError::SecretRead)?;
+                Ok(revision.zed_token().to_owned())
+            })
+            .await
+            .map_err(|_| SnapshotOperationError::BlockingTask)?
+        }
     }
 }
 

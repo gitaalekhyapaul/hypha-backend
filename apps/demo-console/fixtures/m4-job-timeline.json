@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "mode": "recorded",
+  "source": "m4-service-20260826T090300Z-199729",
+  "data_classification": "synthetic",
+  "transitions": [
+    { "after_milliseconds": 0, "state": "PROOF_JOB_STATE_QUEUED" },
+    { "after_milliseconds": 750, "state": "PROOF_JOB_STATE_EXECUTING" },
+    { "after_milliseconds": 1500, "state": "PROOF_JOB_STATE_PROVING" },
+    { "after_milliseconds": 8000, "state": "PROOF_JOB_STATE_SUCCEEDED" }
+  ],
+  "metrics": {
+    "execution_milliseconds": "458",
+    "proving_milliseconds": "955516",
+    "execution_cycle_count": "422138",
+    "proof_size_bytes": "2536"
+  }
+}

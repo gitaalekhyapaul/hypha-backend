@@ -8,6 +8,45 @@ use crate::{
     io::{atomic_write, atomic_write_new, lowercase_hex},
 };
 
+pub struct PolicyCandidateProjection<'a> {
+    pub candidate_id: &'a str,
+    pub compiler_version: &'a str,
+    pub record_id: &'a str,
+    pub policy_name: &'a str,
+    pub policy_version: &'a str,
+    pub resource_type: &'a str,
+    pub permission: &'a str,
+    pub rule_summary: &'a str,
+    pub source_schema_digest: &'a [u8],
+    pub policy_hash: &'a [u8],
+    pub expected_approval_epoch: u64,
+    pub valid_from_unix_seconds: i64,
+    pub valid_until_unix_seconds: i64,
+    pub created_at_unix_seconds: i64,
+    pub expires_at_unix_seconds: i64,
+}
+
+pub fn policy_candidate(value: &PolicyCandidateProjection<'_>) -> Value {
+    json!({
+        "candidate_id": value.candidate_id,
+        "compiler_version": value.compiler_version,
+        "record_id": value.record_id,
+        "policy_name": value.policy_name,
+        "policy_version": value.policy_version,
+        "resource_type": value.resource_type,
+        "permission": value.permission,
+        "rule_summary": value.rule_summary,
+        "source_schema_digest": lowercase_hex(value.source_schema_digest),
+        "policy_hash": lowercase_hex(value.policy_hash),
+        "expected_approval_epoch": value.expected_approval_epoch.to_string(),
+        "valid_from": unix_timestamp(value.valid_from_unix_seconds),
+        "valid_until": unix_timestamp(value.valid_until_unix_seconds),
+        "status": "COMPILED",
+        "created_at": unix_timestamp(value.created_at_unix_seconds),
+        "expires_at": unix_timestamp(value.expires_at_unix_seconds),
+    })
+}
+
 pub fn authority_key(value: &proto::AuthorityKeyRecord) -> Value {
     json!({
         "format_version": value.format_version,
@@ -132,6 +171,13 @@ fn timestamp(value: Option<&prost_types::Timestamp>) -> Value {
             "seconds": value.seconds.to_string(),
             "nanos": value.nanos,
         })
+    })
+}
+
+fn unix_timestamp(seconds: i64) -> Value {
+    json!({
+        "seconds": seconds.to_string(),
+        "nanos": 0,
     })
 }
 

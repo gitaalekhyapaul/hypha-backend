@@ -9,6 +9,7 @@ const SPICEDB_ENDPOINT_ENV: &str = "RAZIEL_SPICEDB_ENDPOINT";
 const SPICEDB_AUTH_TOKEN_PATH_ENV: &str = "RAZIEL_SPICEDB_AUTH_TOKEN_PATH";
 const ZED_TOKEN_SECRET_REF_ENV: &str = "RAZIEL_ZED_TOKEN_SECRET_REF";
 const ZED_TOKEN_PATH_ENV: &str = "RAZIEL_ZED_TOKEN_PATH";
+const ZED_TOKEN_CANDIDATE_ROOT_ENV: &str = "RAZIEL_ZED_TOKEN_CANDIDATE_ROOT";
 const PRIVATE_SNAPSHOT_ROOT_ENV: &str = "RAZIEL_PRIVATE_SNAPSHOT_ROOT";
 const REGISTRY_WRITER_SOCKET_PATH_ENV: &str = "RAZIEL_REGISTRY_WRITER_SOCKET_PATH";
 const REGISTRY_PATH_ENV: &str = "RAZIEL_REGISTRY_PATH";
@@ -20,8 +21,7 @@ pub struct SnapshotServiceConfig {
     spicedb_endpoint_ref: String,
     spicedb_endpoint: String,
     spicedb_auth_token_path: PathBuf,
-    zed_token_secret_ref: String,
-    zed_token_path: PathBuf,
+    zed_token_source: ZedTokenSourceConfig,
     private_snapshot_root: PathBuf,
     registry_writer_socket_path: PathBuf,
     registry_path: PathBuf,
@@ -48,14 +48,26 @@ impl SnapshotServiceConfig {
             lookup(SPICEDB_AUTH_TOKEN_PATH_ENV),
             SnapshotServiceConfigError::InvalidSpiceDbTokenPath,
         )?;
-        let zed_token_secret_ref = required_identifier(
+        let zed_token_source = match (
             lookup(ZED_TOKEN_SECRET_REF_ENV),
-            SnapshotServiceConfigError::InvalidZedTokenReference,
-        )?;
-        let zed_token_path = required_path(
             lookup(ZED_TOKEN_PATH_ENV),
-            SnapshotServiceConfigError::InvalidZedTokenPath,
-        )?;
+            lookup(ZED_TOKEN_CANDIDATE_ROOT_ENV),
+        ) {
+            (Some(secret_ref), Some(path), None) => ZedTokenSourceConfig::Fixed {
+                secret_ref: required_identifier(
+                    Some(secret_ref),
+                    SnapshotServiceConfigError::InvalidZedTokenReference,
+                )?,
+                path: required_path(Some(path), SnapshotServiceConfigError::InvalidZedTokenPath)?,
+            },
+            (None, None, Some(root)) => ZedTokenSourceConfig::CandidateRoot {
+                root: required_path(
+                    Some(root),
+                    SnapshotServiceConfigError::InvalidZedTokenCandidateRoot,
+                )?,
+            },
+            _ => return Err(SnapshotServiceConfigError::InvalidZedTokenSource),
+        };
         let private_snapshot_root = required_path(
             lookup(PRIVATE_SNAPSHOT_ROOT_ENV),
             SnapshotServiceConfigError::InvalidPrivateSnapshotRoot,
@@ -87,8 +99,7 @@ impl SnapshotServiceConfig {
             spicedb_endpoint_ref,
             spicedb_endpoint,
             spicedb_auth_token_path,
-            zed_token_secret_ref,
-            zed_token_path,
+            zed_token_source,
             private_snapshot_root,
             registry_writer_socket_path,
             registry_path,
@@ -109,12 +120,29 @@ impl SnapshotServiceConfig {
         &self.spicedb_auth_token_path
     }
 
-    pub fn zed_token_secret_ref(&self) -> &str {
-        &self.zed_token_secret_ref
+    pub fn fixed_zed_token_secret_ref(&self) -> Option<&str> {
+        match &self.zed_token_source {
+            ZedTokenSourceConfig::Fixed { secret_ref, .. } => Some(secret_ref),
+            ZedTokenSourceConfig::CandidateRoot { .. } => None,
+        }
     }
 
-    pub fn zed_token_path(&self) -> &Path {
-        &self.zed_token_path
+    pub fn candidate_revision_root(&self) -> Option<&Path> {
+        match &self.zed_token_source {
+            ZedTokenSourceConfig::Fixed { .. } => None,
+            ZedTokenSourceConfig::CandidateRoot { root } => Some(root),
+        }
+    }
+
+    pub(super) fn accepts_zed_token_reference(&self, value: &str) -> bool {
+        match &self.zed_token_source {
+            ZedTokenSourceConfig::Fixed { secret_ref, .. } => value == secret_ref,
+            ZedTokenSourceConfig::CandidateRoot { .. } => valid_candidate_reference(value),
+        }
+    }
+
+    pub(super) const fn zed_token_source(&self) -> &ZedTokenSourceConfig {
+        &self.zed_token_source
     }
 
     pub fn private_snapshot_root(&self) -> &Path {
@@ -138,6 +166,12 @@ impl SnapshotServiceConfig {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub(super) enum ZedTokenSourceConfig {
+    Fixed { secret_ref: String, path: PathBuf },
+    CandidateRoot { root: PathBuf },
+}
+
 fn required_identifier(
     value: Option<String>,
     error: SnapshotServiceConfigError,
@@ -150,6 +184,14 @@ fn required_identifier(
                 && !value.bytes().any(|byte| byte.is_ascii_control())
         })
         .ok_or(error)
+}
+
+fn valid_candidate_reference(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'.' | b'_' | b':' | b'-'))
+        })
 }
 
 fn required_path(
@@ -195,6 +237,8 @@ pub enum SnapshotServiceConfigError {
     InvalidSpiceDbTokenPath,
     InvalidZedTokenReference,
     InvalidZedTokenPath,
+    InvalidZedTokenCandidateRoot,
+    InvalidZedTokenSource,
     InvalidPrivateSnapshotRoot,
     InvalidRegistryWriterSocket,
     InvalidRegistryPath,

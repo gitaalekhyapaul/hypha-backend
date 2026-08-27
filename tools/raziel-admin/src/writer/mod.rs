@@ -29,6 +29,24 @@ pub struct RegistryWriterResult {
     pub root_record: proto::AcceptedRootRecord,
 }
 
+/// Public result of one committed approved-policy mutation.
+#[derive(Clone, PartialEq)]
+pub struct PolicyRegistryWriterResult {
+    pub registry_generation: u64,
+    pub policy_record: proto::PolicyRecord,
+}
+
+impl fmt::Debug for PolicyRegistryWriterResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PolicyRegistryWriterResult")
+            .field("registry_generation", &self.registry_generation)
+            .field("record_id", &self.policy_record.record_id)
+            .field("policy_record", &"<redacted>")
+            .finish()
+    }
+}
+
 /// Synchronous client for the local owner-only writer socket.
 #[derive(Clone)]
 pub struct RegistryWriterClient {
@@ -49,13 +67,18 @@ impl RegistryWriterClient {
         expected_registry_generation: u64,
         descriptor: proto::RelationshipSnapshotDescriptor,
     ) -> Result<RegistryWriterResult, RegistryWriterClientError> {
-        self.send(wire::RegistryWriterRequestWire {
-            format_version: PROTOCOL_VERSION,
-            expected_registry_generation,
-            operation: Some(
-                wire::registry_writer_request_wire::Operation::AppendSnapshot(Box::new(descriptor)),
-            ),
-        })
+        codec::send_root_request(
+            &self.socket_path,
+            wire::RegistryWriterRequestWire {
+                format_version: PROTOCOL_VERSION,
+                expected_registry_generation,
+                operation: Some(
+                    wire::registry_writer_request_wire::Operation::AppendSnapshot(Box::new(
+                        descriptor,
+                    )),
+                ),
+            },
+        )
     }
 
     pub fn revoke_snapshot(
@@ -67,25 +90,40 @@ impl RegistryWriterClient {
         if reason.len() > MAX_REVOCATION_REASON_BYTES {
             return Err(RegistryWriterClientError::InvalidRequest);
         }
-        self.send(wire::RegistryWriterRequestWire {
-            format_version: PROTOCOL_VERSION,
-            expected_registry_generation,
-            operation: Some(
-                wire::registry_writer_request_wire::Operation::RevokeSnapshot(
-                    wire::RevokeSnapshotWire {
-                        snapshot_id,
-                        reason,
-                    },
+        codec::send_root_request(
+            &self.socket_path,
+            wire::RegistryWriterRequestWire {
+                format_version: PROTOCOL_VERSION,
+                expected_registry_generation,
+                operation: Some(
+                    wire::registry_writer_request_wire::Operation::RevokeSnapshot(
+                        wire::RevokeSnapshotWire {
+                            snapshot_id,
+                            reason,
+                        },
+                    ),
                 ),
-            ),
-        })
+            },
+        )
     }
 
-    fn send(
+    pub fn append_approved_policy(
         &self,
-        request: wire::RegistryWriterRequestWire,
-    ) -> Result<RegistryWriterResult, RegistryWriterClientError> {
-        codec::send_request(&self.socket_path, request)
+        expected_registry_generation: u64,
+        staged_policy_record: proto::PolicyRecord,
+    ) -> Result<PolicyRegistryWriterResult, RegistryWriterClientError> {
+        codec::send_policy_request(
+            &self.socket_path,
+            wire::RegistryWriterRequestWire {
+                format_version: PROTOCOL_VERSION,
+                expected_registry_generation,
+                operation: Some(
+                    wire::registry_writer_request_wire::Operation::AppendApprovedPolicy(Box::new(
+                        staged_policy_record,
+                    )),
+                ),
+            },
+        )
     }
 }
 

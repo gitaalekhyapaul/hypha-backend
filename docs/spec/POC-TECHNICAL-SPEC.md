@@ -76,6 +76,7 @@ fixtures remain required for tests.
 | D-017 | Use the container-first pinned toolchain in ADR-0003 for M0 and CI |
 | D-018 | Use strict Ed25519 with separate policy and snapshot keys, canonical signed claims, deployment trust-domain binding, and verifier-local registries as defined by ADR-0010 |
 | D-019 | Use local SP1 Plonk for final demo proof artifacts under the validated ADR-0012 profile |
+| D-020 | Use bounded typed policy drafts, a separate policy-authority process, validated registry publication, write-only relationship administration, and private pre-publication revision handoff as defined by ADR-0018 |
 
 ## Open decisions
 

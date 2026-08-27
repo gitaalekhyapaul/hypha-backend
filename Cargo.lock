@@ -3517,16 +3517,22 @@ dependencies = [
 name = "raziel-admin"
 version = "0.0.0"
 dependencies = [
+ "getrandom 0.4.3",
  "prost 0.14.4",
  "prost-types 0.14.4",
  "raziel-authority",
+ "raziel-authorization-core",
  "raziel-canonical",
  "raziel-policy-ir",
  "raziel-proto",
  "raziel-snapshot",
  "raziel-verifier",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
+ "spicedb-rs-proto",
+ "tokio",
+ "tonic 0.14.6",
 ]
 
 [[package]]

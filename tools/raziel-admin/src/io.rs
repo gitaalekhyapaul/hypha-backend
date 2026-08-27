@@ -4,6 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 use crate::error::AdminError;
 
 pub fn read_bounded(path: &Path, max_bytes: u64) -> Result<Vec<u8>, AdminError> {
@@ -28,9 +31,11 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AdminError> {
     std::fs::create_dir_all(parent).map_err(|_| AdminError::FileWrite)?;
     let temporary = temporary_path(path)?;
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
             .open(&temporary)
             .map_err(|_| AdminError::FileWrite)?;
         file.write_all(bytes).map_err(|_| AdminError::FileWrite)?;
@@ -49,9 +54,11 @@ pub fn atomic_write_new(path: &Path, bytes: &[u8]) -> Result<(), AdminError> {
     std::fs::create_dir_all(parent).map_err(|_| AdminError::FileWrite)?;
     let temporary = temporary_path(path)?;
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
             .open(&temporary)
             .map_err(|_| AdminError::FileWrite)?;
         file.write_all(bytes).map_err(|_| AdminError::FileWrite)?;
@@ -94,6 +101,9 @@ pub fn lowercase_hex(bytes: &[u8]) -> String {
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     use super::{atomic_write, atomic_write_new};
     use crate::error::AdminError;
 
@@ -109,6 +119,11 @@ mod tests {
         let path = root.join("record.pb");
 
         atomic_write_new(&path, b"first").unwrap();
+        #[cfg(unix)]
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         assert!(matches!(
             atomic_write_new(&path, b"second"),
             Err(AdminError::FileWrite)
@@ -117,6 +132,11 @@ mod tests {
 
         atomic_write(&path, b"manifest replacement").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"manifest replacement");
+        #[cfg(unix)]
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }

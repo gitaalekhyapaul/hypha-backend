@@ -7,11 +7,18 @@ license.workspace = true
 publish = false
 
 [features]
-default = []
-one-shot-prover = ["raziel-prover/proving"]
+default = ["capability-service"]
+capability-service = [
+  "dep:bullmq",
+  "dep:raziel-prover",
+  "dep:raziel-witness",
+  "dep:serde",
+  "dep:serde_json",
+]
+one-shot-prover = ["capability-service", "raziel-prover/proving"]
 
 [dependencies]
-bullmq.workspace = true
+bullmq = { workspace = true, optional = true }
 ed25519-dalek.workspace = true
 getrandom.workspace = true
 prost.workspace = true
@@ -20,13 +27,13 @@ raziel-admin = { path = "../../tools/raziel-admin" }
 raziel-authority.workspace = true
 raziel-authorization-core.workspace = true
 raziel-policy-ir.workspace = true
-raziel-prover = { workspace = true, features = ["verification"] }
+raziel-prover = { workspace = true, features = ["verification"], optional = true }
 raziel-proto = { workspace = true, features = ["services"] }
 raziel-snapshot.workspace = true
 raziel-verifier = { path = "../../crates/verifier" }
-raziel-witness = { path = "../../crates/witness" }
-serde.workspace = true
-serde_json.workspace = true
+raziel-witness = { path = "../../crates/witness", optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 spicedb-rs-proto.workspace = true
 tokio.workspace = true
 tonic = { workspace = true, features = ["router"] }

@@ -9,14 +9,53 @@ use super::wire::{
     RegistryWriterFailureWire, RegistryWriterRequestWire, RegistryWriterResponseWire,
 };
 use super::{
-    MAX_FRAME_BYTES, PROTOCOL_VERSION, RegistryWriterClientError, RegistryWriterResult,
-    SOCKET_TIMEOUT,
+    MAX_FRAME_BYTES, PROTOCOL_VERSION, PolicyRegistryWriterResult, RegistryWriterClientError,
+    RegistryWriterResult, SOCKET_TIMEOUT,
 };
 
-pub(super) fn send_request(
+pub(super) fn send_root_request(
     socket_path: &Path,
     request: RegistryWriterRequestWire,
 ) -> Result<RegistryWriterResult, RegistryWriterClientError> {
+    let response = send_request(socket_path, request)?;
+    let root_record = response
+        .root_record
+        .ok_or(RegistryWriterClientError::Protocol)?;
+    if response.policy_record.is_some()
+        || root_record.registry_generation != response.registry_generation
+    {
+        return Err(RegistryWriterClientError::Protocol);
+    }
+    Ok(RegistryWriterResult {
+        registry_generation: response.registry_generation,
+        root_record,
+    })
+}
+
+pub(super) fn send_policy_request(
+    socket_path: &Path,
+    request: RegistryWriterRequestWire,
+) -> Result<PolicyRegistryWriterResult, RegistryWriterClientError> {
+    let response = send_request(socket_path, request)?;
+    let policy_record = response
+        .policy_record
+        .ok_or(RegistryWriterClientError::Protocol)?;
+    if response.root_record.is_some()
+        || policy_record.registry_generation != response.registry_generation
+        || policy_record.status != raziel_proto::raziel::v1::PolicyStatus::Approved as i32
+    {
+        return Err(RegistryWriterClientError::Protocol);
+    }
+    Ok(PolicyRegistryWriterResult {
+        registry_generation: response.registry_generation,
+        policy_record,
+    })
+}
+
+fn send_request(
+    socket_path: &Path,
+    request: RegistryWriterRequestWire,
+) -> Result<RegistryWriterResponseWire, RegistryWriterClientError> {
     let mut stream =
         UnixStream::connect(socket_path).map_err(|_| RegistryWriterClientError::Unavailable)?;
     stream
@@ -87,7 +126,7 @@ fn require_eof(stream: &mut UnixStream) -> Result<(), ()> {
 
 fn response_result(
     response: RegistryWriterResponseWire,
-) -> Result<RegistryWriterResult, RegistryWriterClientError> {
+) -> Result<RegistryWriterResponseWire, RegistryWriterClientError> {
     if response.format_version != PROTOCOL_VERSION {
         return Err(RegistryWriterClientError::Protocol);
     }
@@ -95,29 +134,41 @@ fn response_result(
         .map_err(|_| RegistryWriterClientError::Protocol)?;
     match failure {
         RegistryWriterFailureWire::Unspecified => {
-            let root_record = response
-                .root_record
-                .ok_or(RegistryWriterClientError::Protocol)?;
             if response.registry_generation == 0
-                || root_record.registry_generation != response.registry_generation
+                || (response.root_record.is_some() == response.policy_record.is_some())
             {
                 return Err(RegistryWriterClientError::Protocol);
             }
-            Ok(RegistryWriterResult {
-                registry_generation: response.registry_generation,
-                root_record,
-            })
+            Ok(response)
         }
         RegistryWriterFailureWire::StaleGeneration => {
-            Err(RegistryWriterClientError::StaleGeneration)
+            failure_response(&response, RegistryWriterClientError::StaleGeneration)
         }
-        RegistryWriterFailureWire::Conflict => Err(RegistryWriterClientError::Conflict),
-        RegistryWriterFailureWire::InvalidRequest => Err(RegistryWriterClientError::InvalidRequest),
+        RegistryWriterFailureWire::Conflict => {
+            failure_response(&response, RegistryWriterClientError::Conflict)
+        }
+        RegistryWriterFailureWire::InvalidRequest => {
+            failure_response(&response, RegistryWriterClientError::InvalidRequest)
+        }
         RegistryWriterFailureWire::RegistryRejected => {
-            Err(RegistryWriterClientError::RegistryRejected)
+            failure_response(&response, RegistryWriterClientError::RegistryRejected)
         }
         RegistryWriterFailureWire::PublicationFailed => {
-            Err(RegistryWriterClientError::PublicationFailed)
+            failure_response(&response, RegistryWriterClientError::PublicationFailed)
         }
+    }
+}
+
+fn failure_response(
+    response: &RegistryWriterResponseWire,
+    error: RegistryWriterClientError,
+) -> Result<RegistryWriterResponseWire, RegistryWriterClientError> {
+    if response.registry_generation != 0
+        || response.root_record.is_some()
+        || response.policy_record.is_some()
+    {
+        Err(RegistryWriterClientError::Protocol)
+    } else {
+        Err(error)
     }
 }

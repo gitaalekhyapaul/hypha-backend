@@ -10,7 +10,7 @@
     "dev": "next dev",
     "start": "next start",
     "format": "biome format --write app components lib test next.config.ts package.json tsconfig.json",
-    "format:check": "biome format --check app components lib test next.config.ts package.json tsconfig.json",
+    "format:check": "biome format app components lib test next.config.ts package.json tsconfig.json",
     "lint": "biome lint app components lib test next.config.ts",
     "typecheck": "tsc --noEmit",
     "build": "next build",

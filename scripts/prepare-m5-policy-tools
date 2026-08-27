@@ -1,0 +1,150 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+runtime_root=${RAZIEL_M5_POLICY_RUNTIME_ROOT:-"$repo_root/.raziel/m5"}
+tools_root="$runtime_root/policy-tools"
+build_root="$runtime_root/policy-build"
+candidate_root="$runtime_root/policy-candidates"
+activation_root=${RAZIEL_M5_POLICY_ACTIVATION_ROOT:-/var/lib/raziel/m5-policy-activation}
+registry_root=${RAZIEL_M5_POLICY_REGISTRY_ROOT:-/var/lib/raziel/m5-registry}
+secret_root=${RAZIEL_M5_POLICY_SECRET_ROOT:-/var/lib/raziel/m5-secrets}
+trust_domain_id=${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+compiler_tmp="$tools_root/.spicedb-ir-compiler.$$"
+admin_tmp="$tools_root/.raziel-admin.$$"
+authority_tmp="$tools_root/.raziel-policy-authority.$$"
+writer_tmp="$tools_root/.raziel-registry-writer.$$"
+activation_tmp="$tools_root/.raziel-policy-activation.$$"
+activate_tmp="$tools_root/.raziel-policy-activate.$$"
+access_graph_tmp="$tools_root/.raziel-access-graph.$$"
+access_graph_publish_tmp="$tools_root/.raziel-access-graph-publish.$$"
+capability_client_tmp="$tools_root/.raziel-capability-client.$$"
+verifier_client_tmp="$tools_root/.raziel-verifier-client.$$"
+snapshot_tmp="$tools_root/.razield-snapshot.$$"
+
+cleanup() {
+  rm -f \
+    "$compiler_tmp" \
+    "$admin_tmp" \
+    "$authority_tmp" \
+    "$writer_tmp" \
+    "$activation_tmp" \
+    "$activate_tmp" \
+    "$access_graph_tmp" \
+    "$access_graph_publish_tmp" \
+    "$capability_client_tmp" \
+    "$verifier_client_tmp" \
+    "$snapshot_tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+umask 077
+install -d -m 0700 \
+  "$runtime_root" \
+  "$tools_root" \
+  "$build_root" \
+  "$candidate_root" \
+  "$activation_root" \
+  "$registry_root" \
+  "$secret_root"
+chmod 0700 \
+  "$runtime_root" \
+  "$tools_root" \
+  "$build_root" \
+  "$candidate_root" \
+  "$activation_root" \
+  "$registry_root" \
+  "$secret_root"
+
+(
+  cd "$repo_root/tools/spicedb-ir-compiler"
+  GOCACHE="$build_root/go-build" \
+    GOMODCACHE="$build_root/go-mod" \
+    go build -mod=readonly -trimpath -o "$compiler_tmp" ./cmd/spicedb-ir-compiler
+)
+
+CARGO_TARGET_DIR="$build_root/cargo-target" \
+  cargo build \
+    --locked \
+    --release \
+    -p raziel-admin \
+    --bin raziel-admin \
+    --bin raziel-policy-authority \
+    --bin raziel-registry-writer \
+    --bin raziel-policy-activation \
+    --bin raziel-policy-activate \
+    --bin raziel-access-graph \
+    --bin raziel-access-graph-publish \
+    --bin raziel-capability-client \
+    --bin raziel-verifier-client
+
+CARGO_TARGET_DIR="$build_root/cargo-target" \
+  cargo build \
+    --locked \
+    --release \
+    --no-default-features \
+    -p razield \
+    --bin razield-snapshot
+
+install -m 0700 "$build_root/cargo-target/release/raziel-admin" "$admin_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-policy-authority" \
+  "$authority_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-registry-writer" \
+  "$writer_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-policy-activation" \
+  "$activation_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-policy-activate" \
+  "$activate_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-access-graph" \
+  "$access_graph_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-access-graph-publish" \
+  "$access_graph_publish_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-capability-client" \
+  "$capability_client_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/raziel-verifier-client" \
+  "$verifier_client_tmp"
+install -m 0700 \
+  "$build_root/cargo-target/release/razield-snapshot" \
+  "$snapshot_tmp"
+chmod 0700 "$compiler_tmp"
+mv -f "$compiler_tmp" "$tools_root/spicedb-ir-compiler"
+mv -f "$admin_tmp" "$tools_root/raziel-admin"
+mv -f "$authority_tmp" "$tools_root/raziel-policy-authority"
+mv -f "$writer_tmp" "$tools_root/raziel-registry-writer"
+mv -f "$activation_tmp" "$tools_root/raziel-policy-activation"
+mv -f "$activate_tmp" "$tools_root/raziel-policy-activate"
+mv -f "$access_graph_tmp" "$tools_root/raziel-access-graph"
+mv -f "$access_graph_publish_tmp" "$tools_root/raziel-access-graph-publish"
+mv -f "$capability_client_tmp" "$tools_root/raziel-capability-client"
+mv -f "$verifier_client_tmp" "$tools_root/raziel-verifier-client"
+mv -f "$snapshot_tmp" "$tools_root/razield-snapshot"
+
+policy_key="$secret_root/policy-authority.pk8"
+snapshot_key="$secret_root/snapshot-authority.pk8"
+if [ ! -e "$policy_key" ] && [ ! -e "$snapshot_key" ]; then
+  openssl genpkey -algorithm ED25519 -outform DER -out "$policy_key"
+  openssl genpkey -algorithm ED25519 -outform DER -out "$snapshot_key"
+  chmod 0400 "$policy_key" "$snapshot_key"
+fi
+test -f "$policy_key"
+test -f "$snapshot_key"
+test "$(stat --format=%a "$policy_key")" = 400
+test "$(stat --format=%a "$snapshot_key")" = 400
+
+spicedb_token="$secret_root/spicedb-token"
+if [ ! -e "$spicedb_token" ]; then
+  printf '%s' "${RAZIEL_M5_SPICEDB_TOKEN:-raziel-local-development-only}" >"$spicedb_token"
+  chmod 0400 "$spicedb_token"
+fi
+test -f "$spicedb_token"
+test "$(stat --format=%a "$spicedb_token")" = 400
+
+echo "m5_policy_tools=ready compiler=spicedb-ir-compiler activation=isolated access_graph=isolated capability_client=ready verifier_client=ready"

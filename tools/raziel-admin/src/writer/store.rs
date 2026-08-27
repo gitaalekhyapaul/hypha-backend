@@ -33,6 +33,17 @@ pub(super) enum StoreMutationError {
     PublicationFailed,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum StoreMutationResult {
+    Root(proto::AcceptedRootRecord),
+    Policy(proto::PolicyRecord),
+}
+
+enum ChangedRecord {
+    Root(String),
+    Policy(String),
+}
+
 impl RegistryMutationStore {
     pub(super) fn new(
         root: std::path::PathBuf,
@@ -50,7 +61,7 @@ impl RegistryMutationStore {
         &self,
         request: RegistryWriterRequestWire,
         trusted_now_unix_seconds: i64,
-    ) -> Result<proto::AcceptedRootRecord, StoreMutationError> {
+    ) -> Result<StoreMutationResult, StoreMutationError> {
         validate_request(&request)?;
         let loader = RegistryLoader::new(self.config.clone());
         let current = loader
@@ -77,14 +88,25 @@ impl RegistryMutationStore {
                 next_generation,
                 trusted_now_unix_seconds,
                 &self.config,
-            )?,
+            )
+            .map(ChangedRecord::Root)?,
             registry_writer_request_wire::Operation::RevokeSnapshot(revocation) => revoke_root(
                 &mut roots,
                 &revocation.snapshot_id,
                 &revocation.reason,
                 next_generation,
                 trusted_now_unix_seconds,
-            )?,
+            )
+            .map(ChangedRecord::Root)?,
+            registry_writer_request_wire::Operation::AppendApprovedPolicy(staged) => append_policy(
+                &mut policies,
+                &authority_keys,
+                *staged,
+                next_generation,
+                trusted_now_unix_seconds,
+                &self.config,
+            )
+            .map(ChangedRecord::Policy)?,
         };
 
         rewrite_generation_numbers(
@@ -122,11 +144,23 @@ impl RegistryMutationStore {
         atomic_write(&self.root.join("current.pb"), &manifest_bytes)
             .map_err(|_| StoreMutationError::PublicationFailed)?;
 
-        roots
-            .into_iter()
-            .find(|root| root.claims.claims().snapshot_id == changed)
-            .map(|root| root_record_to_proto(&root))
-            .ok_or(StoreMutationError::PublicationFailed)
+        match changed {
+            ChangedRecord::Root(snapshot_id) => roots
+                .into_iter()
+                .find(|root| root.claims.claims().snapshot_id == snapshot_id)
+                .map(|root| StoreMutationResult::Root(root_record_to_proto(&root)))
+                .ok_or(StoreMutationError::PublicationFailed),
+            ChangedRecord::Policy(record_id) => policies
+                .into_iter()
+                .find(|policy| policy.claims.claims().record_id == record_id)
+                .map(|policy| {
+                    policy_record_to_proto(&policy)
+                        .map(StoreMutationResult::Policy)
+                        .map_err(|_| StoreMutationError::PublicationFailed)
+                })
+                .transpose()?
+                .ok_or(StoreMutationError::PublicationFailed),
+        }
     }
 
     fn publish_generation(
@@ -201,6 +235,60 @@ impl RegistryMutationStore {
             published_at: Some(timestamp(published_at)),
         })
     }
+}
+
+fn append_policy(
+    policies: &mut Vec<raziel_verifier::PolicyRegistryRecordV1>,
+    authority_keys: &[raziel_authority::TrustedAuthorityKey],
+    mut staged: proto::PolicyRecord,
+    generation: u64,
+    registered_at: i64,
+    config: &RegistryConfig,
+) -> Result<String, StoreMutationError> {
+    if staged.status != proto::PolicyStatus::Unspecified as i32
+        || staged.registered_at.is_some()
+        || staged.revoked_at.is_some()
+        || !staged.revocation_reason.is_empty()
+        || staged.registry_generation != 0
+    {
+        return Err(StoreMutationError::InvalidRequest);
+    }
+    staged.status = proto::PolicyStatus::Approved as i32;
+    staged.registered_at = Some(timestamp(registered_at));
+    staged.registry_generation = generation;
+    let policy = policy_record_from_proto(staged, config)
+        .map_err(|_| StoreMutationError::RegistryRejected)?;
+    let claims = policy.claims.claims();
+    if policies
+        .iter()
+        .any(|current| current.claims.claims().record_id == claims.record_id)
+    {
+        return Err(StoreMutationError::Conflict);
+    }
+    let expected_epoch = policies
+        .iter()
+        .filter(|current| current.claims.claims().policy_name == claims.policy_name)
+        .map(|current| current.claims.claims().approval_epoch)
+        .max()
+        .map_or(Some(1), |epoch| epoch.checked_add(1))
+        .ok_or(StoreMutationError::RegistryRejected)?;
+    if claims.approval_epoch != expected_epoch {
+        return Err(StoreMutationError::Conflict);
+    }
+    if registered_at < claims.valid_from_unix_seconds
+        || registered_at >= claims.valid_until_unix_seconds
+    {
+        return Err(StoreMutationError::RegistryRejected);
+    }
+    let key = authority_keys
+        .iter()
+        .find(|key| key.key_id() == claims.signing_key_id)
+        .ok_or(StoreMutationError::RegistryRejected)?;
+    key.verify_policy_approval(registered_at, &policy.claims, &policy.authority_signature)
+        .map_err(|_| StoreMutationError::RegistryRejected)?;
+    let record_id = claims.record_id.clone();
+    policies.push(policy);
+    Ok(record_id)
 }
 
 fn append_root(

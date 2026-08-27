@@ -10,7 +10,7 @@
     "dev": "next dev",
     "start": "next start",
     "format": "biome format --write app src test next.config.ts package.json tsconfig.json",
-    "format:check": "biome format --check app src test next.config.ts package.json tsconfig.json",
+    "format:check": "biome format app src test next.config.ts package.json tsconfig.json",
     "lint": "biome lint app src test next.config.ts",
     "typecheck": "tsc --noEmit",
     "build": "next build",
@@ -19,7 +19,8 @@
   "dependencies": {
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "redis": "catalog:"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

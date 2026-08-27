@@ -7,7 +7,7 @@ pub(super) struct RegistryWriterRequestWire {
     pub format_version: u32,
     #[prost(uint64, tag = "2")]
     pub expected_registry_generation: u64,
-    #[prost(oneof = "registry_writer_request_wire::Operation", tags = "3, 4")]
+    #[prost(oneof = "registry_writer_request_wire::Operation", tags = "3, 4, 5")]
     pub operation: Option<registry_writer_request_wire::Operation>,
 }
 
@@ -20,6 +20,8 @@ pub(super) mod registry_writer_request_wire {
         AppendSnapshot(Box<proto::RelationshipSnapshotDescriptor>),
         #[prost(message, tag = "4")]
         RevokeSnapshot(RevokeSnapshotWire),
+        #[prost(message, boxed, tag = "5")]
+        AppendApprovedPolicy(Box<proto::PolicyRecord>),
     }
 }
 
@@ -41,6 +43,8 @@ pub(super) struct RegistryWriterResponseWire {
     pub registry_generation: u64,
     #[prost(message, optional, tag = "4")]
     pub root_record: Option<proto::AcceptedRootRecord>,
+    #[prost(message, optional, tag = "5")]
+    pub policy_record: Option<proto::PolicyRecord>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]

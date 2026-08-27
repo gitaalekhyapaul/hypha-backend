@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+runtime_root=${RAZIEL_M5_POLICY_RUNTIME_ROOT:-"$repo_root/.raziel/m5"}
+tools_root="$runtime_root/policy-tools"
+registry_root=${RAZIEL_M5_POLICY_REGISTRY_ROOT:-/var/lib/raziel/m5-registry}
+secret_root=${RAZIEL_M5_POLICY_SECRET_ROOT:-/var/lib/raziel/m5-secrets}
+trust_domain_id=${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+policy_key="$secret_root/policy-authority.pk8"
+snapshot_key="$secret_root/snapshot-authority.pk8"
+
+umask 077
+test -x "$tools_root/raziel-admin"
+test -f "$policy_key"
+test -f "$snapshot_key"
+test "$(stat --format=%a "$policy_key")" = 400
+test "$(stat --format=%a "$snapshot_key")" = 400
+install -d -m 0700 "$registry_root"
+chmod 0700 "$registry_root"
+
+if [ ! -f "$registry_root/current.pb" ]; then
+  now=$(date -u +%s)
+  valid_from=$((now - 60))
+  valid_until=$((now + 31536000))
+  install -d -m 0700 "$registry_root/drafts"
+  "$tools_root/raziel-admin" inspect-key \
+    --key "$policy_key" \
+    --role policy \
+    --trust-domain "$trust_domain_id" \
+    --valid-from "$valid_from" \
+    --valid-until "$valid_until" \
+    --generation 1 \
+    --output "$registry_root/drafts/policy-key.pb" \
+    --json-output "$registry_root/drafts/policy-key.json"
+  "$tools_root/raziel-admin" inspect-key \
+    --key "$snapshot_key" \
+    --role snapshot \
+    --trust-domain "$trust_domain_id" \
+    --valid-from "$valid_from" \
+    --valid-until "$valid_until" \
+    --generation 1 \
+    --output "$registry_root/drafts/snapshot-key.pb" \
+    --json-output "$registry_root/drafts/snapshot-key.json"
+  "$tools_root/raziel-admin" publish-registry \
+    --root "$registry_root" \
+    --trust-domain "$trust_domain_id" \
+    --generation 1 \
+    --published-at "$now" \
+    --observed-now "$now" \
+    --output-directory generations/1 \
+    --output-manifest "$registry_root/current.pb" \
+    --output-json "$registry_root/current.json" \
+    --authority-key drafts/policy-key.pb \
+    --authority-key drafts/snapshot-key.pb
+fi
+
+test -f "$registry_root/current.pb"
+echo "m5_policy_registry=ready"

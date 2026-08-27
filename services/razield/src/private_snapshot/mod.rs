@@ -75,6 +75,7 @@ impl PrivateRelationshipSnapshot {
         &self.relationship_root
     }
 
+    #[cfg(feature = "capability-service")]
     pub fn into_selected(self) -> crate::input_assembly::SelectedPrivateSnapshot {
         crate::input_assembly::SelectedPrivateSnapshot::new(
             self.snapshot_id,
