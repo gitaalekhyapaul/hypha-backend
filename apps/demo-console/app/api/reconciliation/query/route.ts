@@ -6,6 +6,7 @@ import { encodeHex, signProtectedRequest } from "../../../../lib/agent-capabilit
 import { operatorAgentIdentity } from "../../../../lib/agent-capability/session-store.ts";
 import { CapabilityFlowError } from "../../../../lib/agent-capability/types.ts";
 import { loadDatasetGatewayConfig } from "../../../../lib/dataset-client/index.ts";
+import type { ProtectedReconciliationQueryInput } from "../../../../lib/portal-client/reconciliation.ts";
 import {
   jsonResponse,
   operatorAuthResponse,
@@ -15,8 +16,9 @@ import {
   exactGatewayQueryBody,
   type ProtectedGatewayEnvelope,
   protectedGatewayTarget,
+  type ReconciliationConsoleFailureCode,
   ReconciliationConsoleError,
-  readGatewayReplayRejection,
+  readGatewayAuthorizationRejection,
   readGatewayResult,
   readReconciliationQuery,
 } from "./contract.ts";
@@ -64,7 +66,8 @@ export async function POST(request: Request): Promise<Response> {
       method: "POST",
       target,
       body,
-      requestTimestampUnixSeconds: BigInt(Math.floor(Date.now() / 1_000)),
+      requestTimestampUnixSeconds:
+        BigInt(Math.floor(Date.now() / 1_000)) - (input.request_mode === "EXPIRED" ? 301n : 0n),
     });
     if (
       signed.capabilityId !== input.job_id ||
@@ -87,15 +90,24 @@ export async function POST(request: Request): Promise<Response> {
     };
 
     const config = loadDatasetGatewayConfig();
-    const response = await sendToGateway(config.baseUrl, target, envelope);
+    const response = await sendToGateway(
+      config.baseUrl,
+      target,
+      controlledEnvelope(input.request_mode, envelope),
+    );
     if (input.request_mode === "REPLAY") {
       await readGatewayResult(response, {
         capabilityId: signed.capabilityId,
         datasetId: targetDatasetId,
       });
       const replayResponse = await sendToGateway(config.baseUrl, target, envelope);
-      await readGatewayReplayRejection(replayResponse);
+      await readGatewayAuthorizationRejection(replayResponse);
       return jsonResponse({ error: "RECONCILIATION_REQUEST_REPLAYED" }, 409);
+    }
+    const controlledFailure = controlledFailureCode(input.request_mode);
+    if (controlledFailure) {
+      await readGatewayAuthorizationRejection(response);
+      return jsonResponse({ error: controlledFailure }, 409);
     }
     return jsonResponse(
       await readGatewayResult(response, {
@@ -111,7 +123,7 @@ export async function POST(request: Request): Promise<Response> {
 async function sendToGateway(
   baseUrl: string,
   target: string,
-  envelope: ProtectedGatewayEnvelope,
+  envelope: unknown,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GATEWAY_TIMEOUT_MILLISECONDS);
@@ -128,6 +140,36 @@ async function sendToGateway(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function controlledEnvelope(
+  mode: ProtectedReconciliationQueryInput["request_mode"],
+  envelope: ProtectedGatewayEnvelope,
+): unknown {
+  if (mode === "ALTERED") {
+    return { ...envelope, request_body_hash: "00".repeat(32) };
+  }
+  if (mode === "UNSIGNED") {
+    const unsigned: Record<string, unknown> = { ...envelope };
+    delete unsigned.agent_request_signature;
+    return unsigned;
+  }
+  return envelope;
+}
+
+function controlledFailureCode(
+  mode: ProtectedReconciliationQueryInput["request_mode"],
+): ReconciliationConsoleFailureCode | undefined {
+  if (mode === "EXPIRED") {
+    return "RECONCILIATION_REQUEST_EXPIRED";
+  }
+  if (mode === "ALTERED") {
+    return "RECONCILIATION_REQUEST_ALTERED";
+  }
+  if (mode === "UNSIGNED") {
+    return "RECONCILIATION_REQUEST_UNSIGNED";
+  }
+  return undefined;
 }
 
 function reconciliationErrorResponse(error: unknown): Response {

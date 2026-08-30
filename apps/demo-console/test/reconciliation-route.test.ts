@@ -43,6 +43,23 @@ const environmentNames = [
 const originalEnvironment = Object.fromEntries(
   environmentNames.map((name) => [name, process.env[name]]),
 ) as Record<(typeof environmentNames)[number], string | undefined>;
+const controlledDenialCases = [
+  {
+    label: "expired request",
+    mode: "EXPIRED",
+    expectedCode: "RECONCILIATION_REQUEST_EXPIRED",
+  },
+  {
+    label: "altered request",
+    mode: "ALTERED",
+    expectedCode: "RECONCILIATION_REQUEST_ALTERED",
+  },
+  {
+    label: "unsigned request",
+    mode: "UNSIGNED",
+    expectedCode: "RECONCILIATION_REQUEST_UNSIGNED",
+  },
+] as const;
 
 afterEach(async () => {
   globalThis.fetch = originalFetch;
@@ -231,6 +248,62 @@ describe("B-0051 protected reconciliation console route", () => {
     expect(forwardedBodies[1]).toBe(forwardedBodies[0]);
     expect(JSON.stringify(responseBody)).not.toContain("rows");
   });
+
+  it.each(controlledDenialCases)(
+    "sends one controlled $label to the real gateway and returns no rows",
+    async ({ mode, expectedCode }) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-27T04:05:06Z"));
+      await configureAuth();
+      const session = await login();
+      const jobId = "4b".repeat(32);
+      await prepareLiveCapability(jobId, DATASET_ID);
+
+      let forwarded: Record<string, unknown> | null = null;
+      globalThis.fetch = vi.fn(async (input, init) => {
+        expect(new URL(input instanceof Request ? input.url : input.toString()).pathname).toBe(
+          `/api/datasets/${DATASET_ID}/protected-query`,
+        );
+        forwarded = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return Response.json({ error: "AUTHORIZATION_REJECTED" }, { status: 403 });
+      }) as typeof fetch;
+
+      const response = await queryRoute(
+        mutationRequest(session, {
+          job_id: jobId,
+          dataset_id: DATASET_ID,
+          request_mode: mode,
+          from_occurred_at: "2026-08-01T00:00:00Z",
+          to_occurred_at: "2026-08-02T00:00:00Z",
+          limit: 1,
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      const responseBody = await response.json();
+      expect(responseBody).toEqual({ error: expectedCode });
+      expect(JSON.stringify(responseBody)).not.toContain("rows");
+      expect(forwarded).not.toBeNull();
+      const envelope = forwarded as unknown as Record<string, unknown>;
+      expect(envelope.request_timestamp_unix_seconds).toBe(
+        mode === "EXPIRED" ? "1787803205" : "1787803506",
+      );
+      expect(envelope.request_body_hash).toBe(
+        mode === "ALTERED"
+          ? "00".repeat(32)
+          : createHash("sha256")
+              .update(
+                '{"fromOccurredAt":"2026-08-01T00:00:00Z","toOccurredAt":"2026-08-02T00:00:00Z","limit":1}',
+                "utf8",
+              )
+              .digest("hex"),
+      );
+      if (mode === "UNSIGNED") {
+        expect(envelope).not.toHaveProperty("agent_request_signature");
+      } else {
+        expect(envelope.agent_request_signature).toMatch(/^[0-9a-f]{128}$/);
+      }
+    },
+  );
 
   it("maps a mismatched dataset binding to one generic authorization failure", async () => {
     await configureAuth();

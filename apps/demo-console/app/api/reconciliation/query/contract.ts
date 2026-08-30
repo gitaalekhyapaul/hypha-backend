@@ -17,6 +17,9 @@ export type ReconciliationConsoleFailureCode =
   | "INVALID_RECONCILIATION_QUERY"
   | "RECONCILIATION_AUTHORIZATION_FAILED"
   | "RECONCILIATION_REQUEST_REPLAYED"
+  | "RECONCILIATION_REQUEST_EXPIRED"
+  | "RECONCILIATION_REQUEST_ALTERED"
+  | "RECONCILIATION_REQUEST_UNSIGNED"
   | "RECONCILIATION_UNAVAILABLE";
 
 export class ReconciliationConsoleError extends Error {
@@ -82,7 +85,12 @@ export async function readReconciliationQuery(
     if (
       !LOWER_HEX_DIGEST.test(jobId) ||
       !SAFE_ID.test(datasetId) ||
-      (requestMode !== "IN_SCOPE" && requestMode !== "OUT_OF_SCOPE" && requestMode !== "REPLAY") ||
+      (requestMode !== "IN_SCOPE" &&
+        requestMode !== "OUT_OF_SCOPE" &&
+        requestMode !== "REPLAY" &&
+        requestMode !== "EXPIRED" &&
+        requestMode !== "ALTERED" &&
+        requestMode !== "UNSIGNED") ||
       fromOccurredAt.milliseconds > toOccurredAt.milliseconds ||
       toOccurredAt.milliseconds - fromOccurredAt.milliseconds > MAX_QUERY_RANGE_MILLISECONDS ||
       limit < 1 ||
@@ -117,7 +125,7 @@ export function protectedGatewayTarget(datasetId: string): string {
   return `/api/datasets/${encodeURIComponent(datasetId)}/protected-query`;
 }
 
-export async function readGatewayReplayRejection(response: Response): Promise<void> {
+export async function readGatewayAuthorizationRejection(response: Response): Promise<void> {
   if (response.status !== 403) {
     throw unavailable();
   }

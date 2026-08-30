@@ -2047,6 +2047,15 @@ strong {
   margin-top: 4px;
 }
 
+.denial-action-list {
+  display: grid;
+  gap: 8px;
+}
+
+.denial-action-list .reconciliation-submit {
+  margin-top: 0;
+}
+
 .field-guidance {
   color: #786642;
   font-size: 10px;

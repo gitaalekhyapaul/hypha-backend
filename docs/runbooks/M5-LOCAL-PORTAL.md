@@ -131,6 +131,14 @@ the second nonce before another verifier call or dataset read. The browser recei
 only `REPLAYED`, and the owner receipt uses
 `PUBLIC_ERROR_CODE_REQUEST_REPLAYED`.
 
+The remaining Denial Lab controls send three fixed envelopes to the same live
+gateway. `Test expired request` signs a request 301 seconds before submission. `Test
+altered request` changes the signed body hash. `Test unsigned request` removes the
+agent signature. Each control shows its selected operator label only after the
+gateway returns the generic rejection. None returns transaction rows. These early
+request failures do not create claim-derived receipts because the gateway has not
+established trusted capability claims.
+
 Receipts is an authenticated view over the owner public JSONL ledger. It validates
 and reserializes every record before display or export. The operator can filter exact
 task, capability, proof job, policy, snapshot, or request IDs. The table separates
@@ -149,7 +157,7 @@ server restart.
 
 ## Deploy To The VM
 
-The VM must first pull the commits that contain B-0051 through B-0055. Do not run the
+The VM must first pull the commits that contain B-0051 through B-0056. Do not run the
 live profile from the current remote branch until those commits have been pushed.
 
 ```bash
@@ -244,7 +252,14 @@ Use the live VM profile for this walkthrough:
 12. Select `Test exact replay`. Show `REPLAYED` and no transaction rows. This action
     sends one valid request, then resubmits the exact envelope and nonce. The second
     call does not rerun the verifier or read the dataset.
-13. Open Receipts. Show the capability-verification record, accepted protected
+13. Select `Test expired request`. Show `EXPIRED` and no transaction rows. The
+    console signs the request 301 seconds before submission, outside the five-minute
+    freshness window.
+14. Select `Test altered request`. Show `ALTERED` and no transaction rows. The
+    console changes the signed body hash before gateway submission.
+15. Select `Test unsigned request`. Show `UNSIGNED` and no transaction rows. The
+    console removes the agent signature before gateway submission.
+16. Open Receipts. Show the capability-verification record, accepted protected
     requests, scope denial, and replay rejection. Filter by the capability or request
     ID, then select `Export JSONL` to download the validated public projection.
 
@@ -260,8 +275,7 @@ tail -n 3 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The local M5 feature path now stops after receipt export. Expired, altered, and
-unsigned requests already fail closed in the gateway checks. The live VM walkthrough
+The M5 desktop feature path now reaches receipt export. The live VM walkthrough
 remains the final M5 runtime gate. Recorded mode can demonstrate the portal and public
 proof timeline, but it cannot unlock Reconciliation or Denial Lab.
 
