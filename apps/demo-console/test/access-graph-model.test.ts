@@ -11,7 +11,7 @@ describe("M5 access graph model", () => {
     expect(relationships({ mode: "direct", directRelation: "viewer" })).toEqual([
       {
         resource_type: "dataset",
-        resource_id: "synthetic-reconciliation",
+        resource_id: "reconciliation-demo",
         relation: "viewer",
         subject_type: "agent",
         subject_id: AGENT_SUBJECT_ID,
@@ -23,7 +23,7 @@ describe("M5 access graph model", () => {
     expect(relationships({ mode: "team" })).toEqual([
       {
         resource_type: "dataset",
-        resource_id: "synthetic-reconciliation",
+        resource_id: "reconciliation-demo",
         relation: "team_viewer",
         subject_type: "team",
         subject_id: "finance-operations",
@@ -43,7 +43,7 @@ describe("M5 access graph model", () => {
     expect(relationships({ mode: "caveat", caveatTemplate: "amount_limit" })).toEqual([
       {
         resource_type: "dataset",
-        resource_id: "synthetic-reconciliation",
+        resource_id: "reconciliation-demo",
         relation: "viewer",
         subject_type: "agent",
         subject_id: AGENT_SUBJECT_ID,
@@ -58,6 +58,14 @@ describe("M5 access graph model", () => {
         },
       },
     ]);
+  });
+
+  it("uses the finalized demo dataset as the default capability scope", () => {
+    const builder = defaultPolicyBuilderState();
+    const form = defaultAccessGraphForm();
+
+    expect(form.datasetId).toBe("reconciliation-demo");
+    expect(builder.resourceScope).toBe(form.datasetId);
   });
 });
 

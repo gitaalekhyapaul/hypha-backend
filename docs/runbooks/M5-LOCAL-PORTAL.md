@@ -15,7 +15,7 @@ snapshot service from the pinned Go and Rust lockfiles.
 
 ```bash
 export RAZIEL_M5_OPERATOR_PASSWORD='choose-a-local-password'
-./scripts/compose --profile apps up --build --wait
+./scripts/start-m5-demo --recorded
 ```
 
 Open `http://127.0.0.1:3000` and sign in with the exported password.
@@ -33,7 +33,7 @@ request host:
 ```bash
 export RAZIEL_OPERATOR_EXPECTED_ORIGIN='https://demo.example.ngrok.app'
 export RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS='demo.example.ngrok.app'
-./scripts/compose --profile apps up --build --wait
+./scripts/start-m5-demo --recorded
 ```
 
 The gateway stays on the private Compose network at `http://demo-gateway:3001`.
@@ -119,6 +119,12 @@ The active policy selection currently lasts for one browser session. A page refr
 requires the operator to open Policy and activate the candidate again. This does not
 create another policy record for the same activation request.
 
+Policy version and approval epoch remain explicit operator inputs. A fresh trusted
+registry starts at version 1 and epoch 1. A persistent registry requires the next
+epoch for a new record under the same policy name. The current PoC does not expose a
+registry-history read API to the browser, so it cannot derive that value after a
+server restart.
+
 ## Deploy To The VM
 
 The VM must first pull a commit that contains B-0051. Do not run the live profile
@@ -139,19 +145,16 @@ The live profile needs the prepared Plonk setup already used by the M4 VM run. F
 the repository root on the VM:
 
 ```bash
-export HOST_UID="$(id -u)"
-export HOST_GID="$(id -g)"
 export RAZIEL_M5_OPERATOR_PASSWORD='choose-a-local-password'
-export RAZIEL_CAPABILITY_MODE=live
-export RAZIEL_EXPECTED_VERIFICATION_KEY_ID="$(cat services/verifierd/tests/fixtures/retained-plonk-v1/verification-key-id.txt)"
-export RAZIEL_EXPECTED_SP1_VKEY_HASH="$(cat services/verifierd/tests/fixtures/retained-plonk-v1/sp1-vkey-hash.txt)"
-
-test -d .sp1/circuits/plonk/v6.1.0
-./scripts/compose \
-  --profile apps \
-  --profile m5-live \
-  up --detach --build --wait --wait-timeout 900
+./scripts/start-m5-demo
 ```
+
+`start-m5-demo` defaults to the live server profile. It derives the host user,
+host group, retained verification-key ID, and retained SP1 verification-key hash
+from the current machine and checked-in fixture. It fails before Compose startup
+when the Plonk setup or either pinned verifier value is missing. Raw Compose and
+`start-m5-demo --recorded` retain the lightweight mode for local and programmatic
+testing.
 
 The profile starts the UI, owner services, Redis queue, capability-only API, proof
 worker, 60 GiB no-swap proof sandbox, independent verifier, and two-GiB networkless

@@ -93,7 +93,7 @@ export function defaultPolicyBuilderState(): PolicyBuilderState {
     caveatTemplate: "reconciliation_scope",
     taskId: "reconcile-batch-001",
     purpose: "payment-reconciliation",
-    resourceScope: "dataset:synthetic-reconciliation",
+    resourceScope: "reconciliation-demo",
   };
 }
 

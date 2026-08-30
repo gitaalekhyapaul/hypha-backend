@@ -10,7 +10,7 @@ import type {
 export function defaultAccessGraphForm(): AccessGraphFormState {
   return {
     agentId: "agent-reconciliation-01",
-    datasetId: "synthetic-reconciliation",
+    datasetId: "reconciliation-demo",
     teamId: "finance-operations",
     organizationId: "nus-fintech-lab",
     validForSeconds: "7200",

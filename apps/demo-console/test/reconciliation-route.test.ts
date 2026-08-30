@@ -70,11 +70,11 @@ describe("B-0051 protected reconciliation console route", () => {
   });
 
   it("signs exact deterministic query bytes and returns only safe public output", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-27T04:05:06Z"));
     await configureAuth();
     const session = await login();
     const jobId = "41".repeat(32);
     await prepareLiveCapability(jobId, DATASET_ID);
-    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-27T04:05:06Z"));
 
     let forwarded: Record<string, unknown> | null = null;
     globalThis.fetch = vi.fn(async (input, init) => {

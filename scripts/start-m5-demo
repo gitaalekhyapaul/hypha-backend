@@ -1,0 +1,93 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+mode=live
+build_flag=--build
+wait_timeout=900
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/start-m5-demo [--live|--recorded] [--no-build]
+
+Starts the M5 portal in live proof mode by default. Use --recorded for the
+lightweight public-timeline mode used by local and programmatic tests.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --live)
+      mode=live
+      ;;
+    --recorded)
+      mode=recorded
+      ;;
+    --no-build)
+      build_flag=
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'unknown option: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+export HOST_UID=${HOST_UID:-$(id -u)}
+export HOST_GID=${HOST_GID:-$(id -g)}
+export RAZIEL_CAPABILITY_MODE=$mode
+
+operator_secret=.raziel/m5/operator-secret.json
+if [ ! -f "$operator_secret" ] && [ -z "${RAZIEL_M5_OPERATOR_PASSWORD:-}" ]; then
+  printf '%s\n' \
+    'RAZIEL_M5_OPERATOR_PASSWORD is required for the first M5 portal startup.' >&2
+  exit 1
+fi
+
+start_compose() {
+  if [ -n "$build_flag" ]; then
+    exec ./scripts/compose "$@" up --detach --build --wait --wait-timeout "$wait_timeout"
+  fi
+  exec ./scripts/compose "$@" up --detach --wait --wait-timeout "$wait_timeout"
+}
+
+if [ "$mode" = recorded ]; then
+  start_compose --profile apps
+fi
+
+proof_setup=.sp1/circuits/plonk/v6.1.0
+verification_key_file=services/verifierd/tests/fixtures/retained-plonk-v1/verification-key-id.txt
+vkey_hash_file=services/verifierd/tests/fixtures/retained-plonk-v1/sp1-vkey-hash.txt
+
+for required_path in "$proof_setup" "$verification_key_file" "$vkey_hash_file"; do
+  if [ ! -e "$required_path" ]; then
+    printf 'missing live-demo prerequisite: %s\n' "$required_path" >&2
+    exit 1
+  fi
+done
+
+RAZIEL_EXPECTED_VERIFICATION_KEY_ID=$(sed -n '1p' "$verification_key_file")
+RAZIEL_EXPECTED_SP1_VKEY_HASH=$(sed -n '1p' "$vkey_hash_file")
+export RAZIEL_EXPECTED_VERIFICATION_KEY_ID
+export RAZIEL_EXPECTED_SP1_VKEY_HASH
+
+if ! printf '%s\n' "$RAZIEL_EXPECTED_VERIFICATION_KEY_ID" \
+  | grep -Eq '^sp1-vk-v1:[0-9a-f]{64}$'; then
+  printf '%s\n' 'invalid retained verification-key identifier' >&2
+  exit 1
+fi
+if ! printf '%s\n' "$RAZIEL_EXPECTED_SP1_VKEY_HASH" \
+  | grep -Eq '^0x[0-9a-f]{64}$'; then
+  printf '%s\n' 'invalid retained SP1 verification-key hash' >&2
+  exit 1
+fi
+
+start_compose --profile apps --profile m5-live
