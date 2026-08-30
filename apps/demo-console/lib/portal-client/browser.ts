@@ -22,6 +22,11 @@ import type {
   ProtectedReconciliationQueryInput,
   ProtectedReconciliationQueryResult,
 } from "./reconciliation.ts";
+import {
+  type PublicReceiptLedger,
+  type ReceiptFilterSelection,
+  receiptQueryPath,
+} from "./receipts.ts";
 
 export interface BrowserOperatorSession {
   readonly operatorId: string;
@@ -140,6 +145,10 @@ export function queryReconciliation(
   csrfToken: string,
 ): Promise<ProtectedReconciliationQueryResult> {
   return mutationRequest("/api/reconciliation/query", csrfToken, "POST", input);
+}
+
+export function loadReceipts(filter?: ReceiptFilterSelection): Promise<PublicReceiptLedger> {
+  return request(receiptQueryPath(filter));
 }
 
 async function mutationRequest<T>(

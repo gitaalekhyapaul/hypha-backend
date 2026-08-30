@@ -1469,6 +1469,7 @@ services:
       RAZIEL_OPERATOR_EXPECTED_ORIGIN: ${RAZIEL_OPERATOR_EXPECTED_ORIGIN:-http://127.0.0.1:3000}
       RAZIEL_OPERATOR_LIVE_MODE: "false"
       RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m5/operator-secret.json
+      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m5/receipts.jsonl
       RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
       RAZIEL_POLICY_COMPILER_EXECUTABLE: /workspace/.raziel/m5/policy-tools/spicedb-ir-compiler
       RAZIEL_ADMIN_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-admin

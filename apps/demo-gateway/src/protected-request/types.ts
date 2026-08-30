@@ -75,7 +75,9 @@ export interface NonceStore {
 export interface PublicReceipt {
   readonly format_version: 1;
   readonly receipt_id: string;
-  readonly receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST";
+  readonly receipt_type:
+    | "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION"
+    | "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST";
   readonly occurred_at: string;
   readonly request_id: string;
   readonly task_id: string;

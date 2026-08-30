@@ -1,73 +1,68 @@
 # Current Engineering Baton
 
-- Baton ID: B-0055
+- Baton ID: B-0056
 - State: ACTIVE
-- Milestone: M5, public receipt browsing and export
+- Milestone: M5, remaining fail-closed desktop controls
 - Owner: Codex
-- Started UTC: 2026-08-30T07:56:54Z
-- Last updated UTC: 2026-08-30T07:56:54Z
+- Started UTC: 2026-08-30T08:13:33Z
+- Last updated UTC: 2026-08-30T08:13:33Z
 - Branch: `main`
-- Worktree: B-0054 is archived. Its exact replay implementation awaits a scoped
-  local commit.
+- Worktree: B-0055 is archived. Its public receipt ledger awaits a scoped local
+  commit.
 
 ## Objective
 
-Implement UF-12 as an authenticated desktop receipt ledger. The operator can browse,
-filter, and export the strict public JSONL projections produced by protected queries,
-scope denials, and replay rejection.
+Complete the approved Denial Lab screen inventory with controlled expired, altered,
+and unsigned protected-request actions. Each action must reach the real gateway,
+fail closed, return no rows, and preserve generic public errors.
 
 ## Acceptance Criteria
 
-- [ ] Receipts is an available authenticated portal view.
-- [ ] The server reads a bounded owner receipt file and rejects malformed, unknown,
-      oversized, or private fields.
-- [ ] The operator can filter by task, capability, proof job, policy, snapshot, or
-      request ID.
-- [ ] The view identifies accepted, scope-denied, and replayed records without
-      exposing request bodies, proof bytes, PolicyIR, relationships, or witness data.
-- [ ] Export returns only the validated public projection as JSONL with a download
-      disposition.
-- [ ] Missing receipt storage returns an empty ledger. Read or parse failures return
-      one bounded unavailable response.
+- [ ] Denial Lab offers expired, altered, and unsigned request actions beside scope
+      denial and exact replay.
+- [ ] Expired uses a correctly signed request timestamp outside the approved five
+      minute freshness window.
+- [ ] Altered changes a signed body commitment after signing.
+- [ ] Unsigned removes the signature field from the submitted envelope.
+- [ ] Each gateway call returns a generic rejection with no protected rows or policy
+      details.
+- [ ] Existing scope-denial and exact-replay actions remain unchanged.
 - [ ] Focused console checks and the production build pass.
 
 ## Architecture Constraints
 
-- The browser never receives the raw receipt file or a filesystem path.
-- Every exported line is parsed and reserialized from the approved public schema.
-- Receipt reads require a valid operator session.
-- Filters are exact public-identifier matches with bounded query values.
-- This feature does not change receipt, capability, proof, or policy semantics.
+- These are fixed authenticated demo controls, not a free-form request editor.
+- The gateway remains the real enforcement point. The console cannot synthesize a
+  denied result without receiving the gateway rejection.
+- No request can reach the transaction store after freshness, body, or signature
+  validation fails.
+- No proof, capability, receipt, or policy wire format changes.
 
 ## File Scope
 
-- `apps/demo-console/app/api/receipts/`
-- `apps/demo-console/components/operator-portal.tsx`
-- `apps/demo-console/components/receipts-workspace.tsx`
-- `apps/demo-console/lib/portal-client/`
-- `apps/demo-console/lib/receipt-ledger/`
-- `apps/demo-console/test/receipt-ledger.test.ts`
-- `apps/demo-console/app/globals.css`
-- `docker-compose.yml`
+- `apps/demo-console/app/api/reconciliation/query/`
+- `apps/demo-console/components/denial-lab-workspace.tsx`
+- `apps/demo-console/lib/portal-client/reconciliation.ts`
+- `apps/demo-console/test/reconciliation-route.test.ts`
 - `docs/runbooks/M5-LOCAL-PORTAL.md`
 - `docs/agent/CURRENT-BATON.md`
-- `docs/agent/history/B-0055-public-receipt-ledger.md`
+- `docs/agent/history/B-0056-fail-closed-desktop-controls.md`
 
 ## Out Of Scope
 
-- Private audit diagnostics
-- Receipt mutation or deletion
-- A database migration
+- Free-form envelope editing
+- Detailed gateway rejection reasons
+- Rejected receipts from untrusted malformed envelopes
 - Real transaction data
 - Mobile layout polish
 
 ## Decisions
 
-- Inherited: UF-12 requires public receipt filtering and JSONL export.
-- Inherited: the existing JSONL writer remains append-only and owner-controlled.
-- Local implementation choice: the authenticated console server reads the shared
-  owner file, validates every record, and sends only strict public projections.
-- Local implementation choice: no new package or service is needed.
+- Inherited: ADR-0002 defines the freshness and signed-envelope checks.
+- Inherited: FR-089 keeps gateway denials generic.
+- Local implementation choice: the authenticated console route maps a successful
+  generic gateway rejection back to the selected controlled test label. The gateway
+  response itself remains unchanged.
 
 ## Open Questions And Blockers
 
@@ -76,31 +71,31 @@ scope denials, and replay rejection.
 
 ## Work Completed
 
-- Reconciled UF-12 with the public audit Protobuf and the existing JSONL writer.
-- Recorded the required security review for a new client-visible authorization
-  artifact. The review must inspect authentication, bounds, exact fields, and export.
+- Reconciled the remaining screen inventory with existing gateway validation order
+  and approved public error codes.
 
 ## Validation Plan
 
-- Add parser and route tests for valid records, filters, empty storage, unknown
-  fields, oversized input, authentication, and public JSONL export.
+- Add route tests that inspect each outbound mutation and require one real generic
+  gateway rejection.
+- Confirm no protected rows enter any browser response.
 - Run focused console test, lint, type, format, and production build commands.
-- Run `git diff --check` and inspect both browser JSON and exported JSONL fields.
+- Run `git diff --check` and inspect the final Denial Lab field set.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| Source reconciliation against UF-12 and public audit Protobuf | PASS | Receipt-ledger boundary | 2026-08-30T07:56:54Z |
+| Source reconciliation against ADR-0002 and M5 screen inventory | PASS | Remaining denial controls | 2026-08-30T08:13:33Z |
 
 ## Risks And Private-Data Notes
 
-- Exporting the file verbatim would preserve any accidental extra field. The route
-  must parse and reserialize each record.
-- An unbounded read can exhaust the console process. Both bytes and record count need
-  fixed limits.
+- An operator-facing label can identify the selected controlled test. It cannot claim
+  a gateway-internal failure branch.
+- Malformed and unsigned requests do not create claim-derived receipts because the
+  gateway has not established trusted public claims.
 
 ## Exact Next Action
 
-Commit archived B-0054 locally, then implement the strict receipt-ledger parser before
-adding the authenticated API and desktop view.
+Commit archived B-0055 locally, then extend the exact console query contract with the
+three fixed controlled modes.

@@ -49,11 +49,13 @@ afterEach(async () => {
 });
 
 describe("protected reconciliation query", () => {
-  it("claims, verifies, reads bounded rows, then writes one public receipt", async () => {
+  it("claims, verifies, records verification, reads rows, then records the request", async () => {
     const operations: string[] = [];
+    const receipts: PublicReceipt[] = [];
     const receiptStore: ReceiptStore = {
-      append: vi.fn(async () => {
+      append: vi.fn(async (receipt) => {
         operations.push("receipt");
+        receipts.push(receipt);
       }),
     };
     const service = serviceFixture({
@@ -72,6 +74,7 @@ describe("protected reconciliation query", () => {
       "nonce",
       "cache-get",
       "verify",
+      "receipt",
       "cache-put",
       "query",
       "receipt",
@@ -97,6 +100,12 @@ describe("protected reconciliation query", () => {
     expect(result.receipt).not.toHaveProperty("rows");
     expect(result.receipt).not.toHaveProperty("request_body");
     expect(result.receipt).not.toHaveProperty("capability_proto_hex");
+    expect(receipts).toHaveLength(2);
+    expect(receipts[0]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION",
+      request_id: result.receipt.request_id,
+    });
+    expect(receipts[0]?.receipt_id).not.toBe(result.receipt.receipt_id);
     expect(Object.keys(result.receipt).sort()).toEqual(
       [
         "format_version",
@@ -148,6 +157,7 @@ describe("protected reconciliation query", () => {
       "nonce",
       "cache-get",
       "verify",
+      "receipt",
       "cache-put:600",
       "query",
       "receipt",
@@ -200,18 +210,22 @@ describe("protected reconciliation query", () => {
       ),
     ).rejects.toBeInstanceOf(AuthorizationRejectedError);
 
-    expect(operations).toEqual(["inspect", "nonce", "cache-get", "verify", "receipt"]);
+    expect(operations).toEqual(["inspect", "nonce", "cache-get", "verify", "receipt", "receipt"]);
     expect(queryDataset).not.toHaveBeenCalled();
-    expect(receipts).toHaveLength(1);
+    expect(receipts).toHaveLength(2);
     expect(receipts[0]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION",
+      outcome: "AUDIT_OUTCOME_ACCEPTED",
+    });
+    expect(receipts[1]).toMatchObject({
       receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
       capability_id: CAPABILITY_ID,
       resource_scope: DATASET_ID,
       outcome: "AUDIT_OUTCOME_REJECTED",
       reason_code: "PUBLIC_ERROR_CODE_NOT_AUTHORIZED",
     });
-    expect(receipts[0]).not.toHaveProperty("requested_resource_scope");
-    expect(JSON.stringify(receipts[0])).not.toContain(deniedDatasetId);
+    expect(receipts[1]).not.toHaveProperty("requested_resource_scope");
+    expect(JSON.stringify(receipts[1])).not.toContain(deniedDatasetId);
   });
 
   it("rejects invalid signatures and key bindings on cache hits before data access", async () => {
@@ -323,6 +337,7 @@ describe("protected reconciliation query", () => {
       "nonce",
       "cache-get",
       "verify",
+      "receipt",
       "cache-put",
       "query",
       "receipt",
@@ -333,17 +348,24 @@ describe("protected reconciliation query", () => {
       "receipt",
     ]);
     expect(queryDataset).toHaveBeenCalledTimes(1);
-    expect(receipts).toHaveLength(2);
+    expect(receipts).toHaveLength(3);
     expect(receipts[0]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION",
       outcome: "AUDIT_OUTCOME_ACCEPTED",
       reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED",
     });
     expect(receipts[1]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
+      outcome: "AUDIT_OUTCOME_ACCEPTED",
+      reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED",
+    });
+    expect(receipts[2]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
       outcome: "AUDIT_OUTCOME_REJECTED",
       reason_code: "PUBLIC_ERROR_CODE_REQUEST_REPLAYED",
-      request_id: receipts[0]?.request_id,
+      request_id: receipts[1]?.request_id,
     });
-    expect(receipts[1]?.receipt_id).not.toBe(receipts[0]?.receipt_id);
+    expect(receipts[2]?.receipt_id).not.toBe(receipts[1]?.receipt_id);
   });
 
   it("rejects stale, altered, out-of-scope, and key-mismatched requests before data access", async () => {
@@ -428,6 +450,7 @@ describe("protected reconciliation query", () => {
       "nonce",
       "cache-get",
       "verify",
+      "receipt",
       "cache-put",
       "query",
     ]);

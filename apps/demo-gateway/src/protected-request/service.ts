@@ -102,6 +102,23 @@ export class ProtectedQueryService {
         throw new ProtectedQueryInfrastructureError();
       }
       verification = verifierResult;
+      try {
+        await this.#dependencies.receiptStore.append(
+          createCapabilityVerificationReceipt({
+            claims: verification.claims,
+            policyRecordId: verification.policyRecordId,
+            proofDigestHex: verification.proofDigestHex,
+            requestMethod: envelope.requestMethod,
+            canonicalRequestTarget: envelope.canonicalRequestTarget,
+            requestBodyHashHex: envelope.requestBodyHashHex,
+            requestNonceHex: envelope.requestNonceHex,
+            requestTimestampUnixSeconds: envelope.requestTimestampUnixSeconds,
+            occurredAtUnixSeconds: nowUnixSeconds,
+          }),
+        );
+      } catch {
+        throw new ProtectedQueryInfrastructureError();
+      }
       verificationPath = "VERIFIER";
     }
 
@@ -258,7 +275,71 @@ interface ReceiptInput {
 export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
   const outcome = input.outcome ?? "AUDIT_OUTCOME_ACCEPTED";
   const reasonCode = input.reasonCode ?? "PUBLIC_ERROR_CODE_UNSPECIFIED";
-  const requestId = digestFields("raziel/protected-request-id/v1", [
+  const requestId = protectedRequestId(input);
+  const receiptId = digestFields("raziel/audit-receipt-id/v1", [
+    requestId,
+    input.proofDigestHex,
+    outcome,
+  ]);
+  return projectReceipt({
+    claims: input.claims,
+    occurredAtUnixSeconds: input.occurredAtUnixSeconds,
+    outcome,
+    policyRecordId: input.policyRecordId,
+    proofDigestHex: input.proofDigestHex,
+    reasonCode,
+    receiptId: `receipt-v1:${receiptId}`,
+    receiptType: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
+    requestId: `request-v1:${requestId}`,
+  });
+}
+
+interface CapabilityVerificationReceiptInput {
+  readonly claims: VerifiedCapabilityClaims;
+  readonly policyRecordId: string;
+  readonly proofDigestHex: string;
+  readonly requestMethod: string;
+  readonly canonicalRequestTarget: string;
+  readonly requestBodyHashHex: string;
+  readonly requestNonceHex: string;
+  readonly requestTimestampUnixSeconds: bigint;
+  readonly occurredAtUnixSeconds: bigint;
+}
+
+export function createCapabilityVerificationReceipt(
+  input: CapabilityVerificationReceiptInput,
+): PublicReceipt {
+  const requestId = `request-v1:${protectedRequestId(input)}`;
+  const receiptId = digestFields("raziel/audit-receipt-id/v1", [
+    requestId,
+    input.proofDigestHex,
+    "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION",
+    "AUDIT_OUTCOME_ACCEPTED",
+  ]);
+  return projectReceipt({
+    claims: input.claims,
+    occurredAtUnixSeconds: input.occurredAtUnixSeconds,
+    outcome: "AUDIT_OUTCOME_ACCEPTED",
+    policyRecordId: input.policyRecordId,
+    proofDigestHex: input.proofDigestHex,
+    reasonCode: "PUBLIC_ERROR_CODE_UNSPECIFIED",
+    receiptId: `receipt-v1:${receiptId}`,
+    receiptType: "AUDIT_RECEIPT_TYPE_CAPABILITY_VERIFICATION",
+    requestId,
+  });
+}
+
+interface ProtectedRequestIdentityInput {
+  readonly claims: VerifiedCapabilityClaims;
+  readonly requestMethod: string;
+  readonly canonicalRequestTarget: string;
+  readonly requestBodyHashHex: string;
+  readonly requestNonceHex: string;
+  readonly requestTimestampUnixSeconds: bigint;
+}
+
+function protectedRequestId(input: ProtectedRequestIdentityInput): string {
+  return digestFields("raziel/protected-request-id/v1", [
     input.claims.capabilityId,
     input.requestMethod,
     input.canonicalRequestTarget,
@@ -266,37 +347,27 @@ export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
     input.requestNonceHex,
     input.requestTimestampUnixSeconds.toString(),
   ]);
-  const receiptId = digestFields("raziel/audit-receipt-id/v1", [
-    requestId,
-    input.proofDigestHex,
-    outcome,
-  ]);
-  const publicClaimsDigest = createHash("sha256")
-    .update(
-      JSON.stringify({
-        format_version: input.claims.formatVersion,
-        capability_id: input.claims.capabilityId,
-        agent_key_thumbprint: input.claims.agentKeyThumbprintHex,
-        task_id: input.claims.taskId,
-        purpose: input.claims.purpose,
-        action: input.claims.action,
-        resource_type: input.claims.resourceType,
-        resource_scope: input.claims.resourceScope,
-        policy_hash: input.claims.policyHashHex,
-        relationship_snapshot_root: input.claims.relationshipSnapshotRootHex,
-        snapshot_id: input.claims.snapshotId,
-        issued_at_unix_seconds: input.claims.issuedAtUnixSeconds.toString(),
-        expires_at_unix_seconds: input.claims.expiresAtUnixSeconds.toString(),
-      }),
-      "utf8",
-    )
-    .digest("hex");
+}
+
+interface ReceiptProjectionInput {
+  readonly claims: VerifiedCapabilityClaims;
+  readonly occurredAtUnixSeconds: bigint;
+  readonly outcome: PublicReceipt["outcome"];
+  readonly policyRecordId: string;
+  readonly proofDigestHex: string;
+  readonly reasonCode: PublicReceipt["reason_code"];
+  readonly receiptId: string;
+  readonly receiptType: PublicReceipt["receipt_type"];
+  readonly requestId: string;
+}
+
+function projectReceipt(input: ReceiptProjectionInput): PublicReceipt {
   return {
     format_version: 1,
-    receipt_id: `receipt-v1:${receiptId}`,
-    receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
+    receipt_id: input.receiptId,
+    receipt_type: input.receiptType,
     occurred_at: wholeSecondUtc(input.occurredAtUnixSeconds),
-    request_id: `request-v1:${requestId}`,
+    request_id: input.requestId,
     task_id: input.claims.taskId,
     capability_id: input.claims.capabilityId,
     proof_job_id: input.claims.capabilityId,
@@ -304,14 +375,37 @@ export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
     policy_hash: input.claims.policyHashHex,
     snapshot_id: input.claims.snapshotId,
     relationship_snapshot_root: input.claims.relationshipSnapshotRootHex,
-    public_claims_digest: publicClaimsDigest,
+    public_claims_digest: publicClaimsDigest(input.claims),
     proof_digest: input.proofDigestHex,
     action: input.claims.action,
     resource_type: input.claims.resourceType,
     resource_scope: input.claims.resourceScope,
-    outcome,
-    reason_code: reasonCode,
+    outcome: input.outcome,
+    reason_code: input.reasonCode,
   };
+}
+
+function publicClaimsDigest(claims: VerifiedCapabilityClaims): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        format_version: claims.formatVersion,
+        capability_id: claims.capabilityId,
+        agent_key_thumbprint: claims.agentKeyThumbprintHex,
+        task_id: claims.taskId,
+        purpose: claims.purpose,
+        action: claims.action,
+        resource_type: claims.resourceType,
+        resource_scope: claims.resourceScope,
+        policy_hash: claims.policyHashHex,
+        relationship_snapshot_root: claims.relationshipSnapshotRootHex,
+        snapshot_id: claims.snapshotId,
+        issued_at_unix_seconds: claims.issuedAtUnixSeconds.toString(),
+        expires_at_unix_seconds: claims.expiresAtUnixSeconds.toString(),
+      }),
+      "utf8",
+    )
+    .digest("hex");
 }
 
 function digestFields(domain: string, fields: readonly string[]): string {

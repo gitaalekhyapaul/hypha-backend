@@ -21,6 +21,7 @@ import { DatasetWorkspace } from "./dataset-workspace.tsx";
 import { DenialLabWorkspace } from "./denial-lab-workspace.tsx";
 import { LoginView } from "./login-view.tsx";
 import { PolicyWorkspace } from "./policy-workspace.tsx";
+import { ReceiptsWorkspace } from "./receipts-workspace.tsx";
 import { ReconciliationWorkspace } from "./reconciliation-workspace.tsx";
 import { WorkspaceOverview } from "./workspace-overview.tsx";
 
@@ -31,6 +32,7 @@ type ActiveView =
   | "dataset"
   | "denials"
   | "policy"
+  | "receipts"
   | "reconciliation"
   | "workspace";
 
@@ -42,7 +44,7 @@ const navigation = [
   { id: "capability", label: "Capability", available: true },
   { id: "reconciliation", label: "Reconciliation", available: false },
   { id: "denials", label: "Denial lab", available: false },
-  { id: "receipts", label: "Receipts", available: false },
+  { id: "receipts", label: "Receipts", available: true },
 ] as const;
 
 export function OperatorPortal() {
@@ -254,6 +256,7 @@ export function OperatorPortal() {
               onSessionExpired={signOut}
             />
           ) : null}
+          {activeView === "receipts" ? <ReceiptsWorkspace onSessionExpired={signOut} /> : null}
         </div>
       </main>
     </div>
@@ -275,9 +278,9 @@ function navigationAvailable(
   if (id === "reconciliation" || id === "denials") {
     return reconciliationReady;
   }
-  return id === "workspace" || id === "dataset" || id === "policy";
+  return id === "workspace" || id === "dataset" || id === "policy" || id === "receipts";
 }
 
 function isActiveView(id: (typeof navigation)[number]["id"]): id is ActiveView {
-  return id !== "receipts";
+  return true;
 }

@@ -7,6 +7,7 @@ export {
   createAgentSession,
   finalizeDataset,
   listDatasets,
+  loadReceipts,
   loadCapabilityJob,
   loadPolicyCandidate,
   loginOperator,
@@ -23,3 +24,10 @@ export type {
   ProtectedReconciliationQueryResult,
   PublicReconciliationReceipt,
 } from "./reconciliation.ts";
+export {
+  type PublicAuditReceipt,
+  type PublicReceiptLedger,
+  type ReceiptFilterField,
+  type ReceiptFilterSelection,
+  receiptQueryPath,
+} from "./receipts.ts";

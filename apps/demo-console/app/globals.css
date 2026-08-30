@@ -2220,6 +2220,155 @@ strong {
   padding-top: 9px;
 }
 
+.receipts-workspace {
+  min-width: 0;
+}
+
+.receipts-view-header {
+  align-items: flex-end;
+}
+
+.receipts-count {
+  display: grid;
+  min-width: 84px;
+  gap: 3px;
+  border-left: 1px solid #ccd2cc;
+  padding-left: 14px;
+}
+
+.receipts-count span,
+.receipts-toolbar label > span {
+  color: #727a74;
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.receipts-count strong {
+  color: #276044;
+  font-size: 18px;
+}
+
+.receipts-toolbar {
+  display: grid;
+  grid-template-columns: 190px minmax(260px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid #cbd1ca;
+  border-bottom: 0;
+  padding: 14px;
+  background: #f6f7f4;
+}
+
+.receipts-toolbar label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.receipts-toolbar select,
+.receipts-toolbar input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #c7cdc6;
+  border-radius: 4px;
+  padding: 7px 9px;
+  background: #ffffff;
+  color: #222724;
+  font-size: 12px;
+}
+
+.receipts-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.receipts-message {
+  margin: 0;
+}
+
+.receipts-table-wrap {
+  min-height: 480px;
+  overflow-x: auto;
+  border: 1px solid #cbd1ca;
+  background: #ffffff;
+}
+
+.receipts-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.receipts-table th {
+  border-right: 1px solid #d9ddd8;
+  border-bottom: 1px solid #cbd1ca;
+  padding: 9px 10px;
+  background: #eef1ed;
+  color: #646c66;
+  font-size: 9px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.receipts-table td {
+  overflow: hidden;
+  border-right: 1px solid #e2e5e1;
+  border-bottom: 1px solid #e2e5e1;
+  padding: 10px;
+  color: #303632;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipts-table th:first-child {
+  width: 152px;
+}
+
+.receipts-table th:nth-child(2) {
+  width: 150px;
+}
+
+.receipts-table th:nth-child(3) {
+  width: 82px;
+}
+
+.receipts-table th:nth-child(4) {
+  width: 96px;
+}
+
+.receipts-table th:nth-child(5) {
+  width: 138px;
+}
+
+.receipt-outcome {
+  display: inline-flex;
+  border: 1px solid #9bb6a5;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: #edf6f0;
+  color: #275a40;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.receipt-outcome[data-outcome="AUDIT_OUTCOME_REJECTED"],
+.receipt-outcome[data-outcome="AUDIT_OUTCOME_ERROR"] {
+  border-color: #d3ae73;
+  background: #fff7e7;
+  color: #7a4c0b;
+}
+
+.receipts-empty {
+  height: 260px;
+  color: #737b75;
+  text-align: center;
+}
+
 @media (max-width: 1180px) {
   .policy-builder-shell {
     grid-template-columns: minmax(560px, 1.45fr) minmax(280px, 0.75fr);

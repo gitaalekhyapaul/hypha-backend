@@ -1,8 +1,8 @@
 # M5 Local Portal
 
-Status: synthetic M5 workflow through UF-10 implemented locally
+Status: synthetic M5 workflow through UF-12 implemented locally
 
-UF-08 through UF-10 pass their focused local checks. A live VM walkthrough still
+UF-08 through UF-12 pass their focused local checks. A live VM walkthrough still
 requires the current local commits to be pushed and pulled onto the VM.
 
 ## Start
@@ -131,6 +131,12 @@ the second nonce before another verifier call or dataset read. The browser recei
 only `REPLAYED`, and the owner receipt uses
 `PUBLIC_ERROR_CODE_REQUEST_REPLAYED`.
 
+Receipts is an authenticated view over the owner public JSONL ledger. It validates
+and reserializes every record before display or export. The operator can filter exact
+task, capability, proof job, policy, snapshot, or request IDs. The table separates
+capability-verification records from protected requests and shows accepted, denied,
+and replayed outcomes.
+
 The active policy selection currently lasts for one browser session. A page refresh
 requires the operator to open Policy and activate the candidate again. This does not
 create another policy record for the same activation request.
@@ -143,7 +149,7 @@ server restart.
 
 ## Deploy To The VM
 
-The VM must first pull the commits that contain B-0051 through B-0053. Do not run the
+The VM must first pull the commits that contain B-0051 through B-0055. Do not run the
 live profile from the current remote branch until those commits have been pushed.
 
 ```bash
@@ -238,8 +244,11 @@ Use the live VM profile for this walkthrough:
 12. Select `Test exact replay`. Show `REPLAYED` and no transaction rows. This action
     sends one valid request, then resubmits the exact envelope and nonce. The second
     call does not rerun the verifier or read the dataset.
+13. Open Receipts. Show the capability-verification record, accepted protected
+    requests, scope denial, and replay rejection. Filter by the capability or request
+    ID, then select `Export JSONL` to download the validated public projection.
 
-After UF-08 succeeds, inspect the owner-side receipt and bounded service logs on the
+After the walkthrough, inspect the owner-side receipt and bounded service logs on the
 VM:
 
 ```bash
@@ -251,10 +260,10 @@ tail -n 3 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The current demo stops after exact replay rejection. Expired, altered, and unsigned
-requests already fail closed in the gateway checks. Receipt filtering, browsing, and
-export remain in UF-12. Recorded mode can demonstrate the portal and public proof
-timeline, but it cannot unlock Reconciliation or Denial Lab.
+The local M5 feature path now stops after receipt export. Expired, altered, and
+unsigned requests already fail closed in the gateway checks. The live VM walkthrough
+remains the final M5 runtime gate. Recorded mode can demonstrate the portal and public
+proof timeline, but it cannot unlock Reconciliation or Denial Lab.
 
 ## Stop
 
