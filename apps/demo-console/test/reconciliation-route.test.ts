@@ -194,6 +194,44 @@ describe("B-0051 protected reconciliation console route", () => {
     expect(JSON.stringify(forwarded)).not.toContain("relationships");
   });
 
+  it("sends one valid envelope and then replays the exact bytes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-27T04:05:06Z"));
+    await configureAuth();
+    const session = await login();
+    const jobId = "4a".repeat(32);
+    await prepareLiveCapability(jobId, DATASET_ID);
+
+    const forwardedBodies: string[] = [];
+    globalThis.fetch = vi.fn(async (input, init) => {
+      expect(new URL(input instanceof Request ? input.url : input.toString()).pathname).toBe(
+        `/api/datasets/${DATASET_ID}/protected-query`,
+      );
+      forwardedBodies.push(String(init?.body));
+      if (forwardedBodies.length === 1) {
+        return Response.json(gatewaySuccess(jobId));
+      }
+      return Response.json({ error: "AUTHORIZATION_REJECTED" }, { status: 403 });
+    }) as typeof fetch;
+
+    const response = await queryRoute(
+      mutationRequest(session, {
+        job_id: jobId,
+        dataset_id: DATASET_ID,
+        request_mode: "REPLAY",
+        from_occurred_at: "2026-08-01T00:00:00Z",
+        to_occurred_at: "2026-08-02T00:00:00Z",
+        limit: 1,
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    const responseBody = await response.json();
+    expect(responseBody).toEqual({ error: "RECONCILIATION_REQUEST_REPLAYED" });
+    expect(forwardedBodies).toHaveLength(2);
+    expect(forwardedBodies[1]).toBe(forwardedBodies[0]);
+    expect(JSON.stringify(responseBody)).not.toContain("rows");
+  });
+
   it("maps a mismatched dataset binding to one generic authorization failure", async () => {
     await configureAuth();
     const session = await login();

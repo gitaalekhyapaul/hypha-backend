@@ -125,6 +125,12 @@ verifies the capability and request, rejects the scope before any dataset read, 
 writes a public rejected receipt. The browser receives one generic denial and no
 transaction rows or policy details.
 
+`Test exact replay` sends one valid signed request and then sends the byte-identical
+envelope again. The first result stays inside the server route. The gateway rejects
+the second nonce before another verifier call or dataset read. The browser receives
+only `REPLAYED`, and the owner receipt uses
+`PUBLIC_ERROR_CODE_REQUEST_REPLAYED`.
+
 The active policy selection currently lasts for one browser session. A page refresh
 requires the operator to open Policy and activate the candidate again. This does not
 create another policy record for the same activation request.
@@ -229,6 +235,9 @@ Use the live VM profile for this walkthrough:
     and the absence of transaction rows. The owner-side receipt records
     `AUDIT_OUTCOME_REJECTED` with `PUBLIC_ERROR_CODE_NOT_AUTHORIZED` but does not
     expose the denied dataset identifier or a policy path.
+12. Select `Test exact replay`. Show `REPLAYED` and no transaction rows. This action
+    sends one valid request, then resubmits the exact envelope and nonce. The second
+    call does not rerun the verifier or read the dataset.
 
 After UF-08 succeeds, inspect the owner-side receipt and bounded service logs on the
 VM:
@@ -242,10 +251,10 @@ tail -n 3 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The current demo stops after the controlled scope denial. Replay, expiry, alteration,
-and unsigned-request controls remain in UF-11. Receipt filtering and export remain in
-UF-12. Recorded mode can demonstrate the portal and public proof timeline, but it
-cannot unlock Reconciliation or Denial Lab.
+The current demo stops after exact replay rejection. Expired, altered, and unsigned
+requests already fail closed in the gateway checks. Receipt filtering, browsing, and
+export remain in UF-12. Recorded mode can demonstrate the portal and public proof
+timeline, but it cannot unlock Reconciliation or Denial Lab.
 
 ## Stop
 

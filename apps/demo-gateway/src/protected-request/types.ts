@@ -91,7 +91,10 @@ export interface PublicReceipt {
   readonly resource_type: string;
   readonly resource_scope: string;
   readonly outcome: "AUDIT_OUTCOME_ACCEPTED" | "AUDIT_OUTCOME_REJECTED";
-  readonly reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED" | "PUBLIC_ERROR_CODE_NOT_AUTHORIZED";
+  readonly reason_code:
+    | "PUBLIC_ERROR_CODE_UNSPECIFIED"
+    | "PUBLIC_ERROR_CODE_NOT_AUTHORIZED"
+    | "PUBLIC_ERROR_CODE_REQUEST_REPLAYED";
 }
 
 export interface ReceiptStore {

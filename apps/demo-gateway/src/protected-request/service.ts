@@ -50,6 +50,13 @@ export class ProtectedQueryService {
       throw new ProtectedQueryInfrastructureError();
     }
     if (!claimed) {
+      await this.#recordTrustedReplayReceipt(
+        inspection.capabilityId,
+        inspection.proofDigestHex,
+        datasetId,
+        envelope,
+        nowUnixSeconds,
+      );
       throw new AuthorizationRejectedError();
     }
 
@@ -167,6 +174,68 @@ export class ProtectedQueryService {
       if (error instanceof DatasetNotFoundError || error instanceof ReconciliationValidationError) {
         throw new AuthorizationRejectedError();
       }
+      throw new ProtectedQueryInfrastructureError();
+    }
+  }
+
+  async #recordTrustedReplayReceipt(
+    capabilityId: string,
+    proofDigestHex: string,
+    datasetId: string,
+    envelope: ReturnType<typeof parseProtectedRequestEnvelope>,
+    nowUnixSeconds: bigint,
+  ): Promise<void> {
+    let verification: VerifiedCapability | undefined;
+    try {
+      verification = await this.#dependencies.verificationCache.get(capabilityId, proofDigestHex);
+    } catch {
+      throw new ProtectedQueryInfrastructureError();
+    }
+    if (!verification) {
+      return;
+    }
+
+    let signatureValid: boolean;
+    try {
+      signatureValid = await this.#dependencies.signatureVerifier.verify(capabilityId, envelope);
+    } catch {
+      throw new ProtectedQueryInfrastructureError();
+    }
+    if (!signatureValid) {
+      return;
+    }
+    try {
+      validateVerifiedClaims(
+        verification.claims,
+        capabilityId,
+        datasetId,
+        envelope.agentPublicKeyHex,
+        envelope.requestTimestampUnixSeconds,
+        nowUnixSeconds,
+      );
+    } catch (error) {
+      if (error instanceof AuthorizationRejectedError) {
+        return;
+      }
+      throw error;
+    }
+
+    const receipt = createPublicReceipt({
+      claims: verification.claims,
+      policyRecordId: verification.policyRecordId,
+      proofDigestHex: verification.proofDigestHex,
+      requestMethod: envelope.requestMethod,
+      canonicalRequestTarget: envelope.canonicalRequestTarget,
+      requestBodyHashHex: envelope.requestBodyHashHex,
+      requestNonceHex: envelope.requestNonceHex,
+      requestTimestampUnixSeconds: envelope.requestTimestampUnixSeconds,
+      occurredAtUnixSeconds: nowUnixSeconds,
+      outcome: "AUDIT_OUTCOME_REJECTED",
+      reasonCode: "PUBLIC_ERROR_CODE_REQUEST_REPLAYED",
+    });
+    try {
+      await this.#dependencies.receiptStore.append(receipt);
+    } catch {
       throw new ProtectedQueryInfrastructureError();
     }
   }

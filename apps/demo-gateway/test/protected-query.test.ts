@@ -268,8 +268,82 @@ describe("protected reconciliation query", () => {
     await expect(service.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
       AuthorizationRejectedError,
     );
-    expect(operations).toEqual(["inspect", "nonce"]);
+    expect(operations).toEqual(["inspect", "nonce", "cache-get"]);
     expect(queryDataset).not.toHaveBeenCalled();
+  });
+
+  it("records a trusted replay receipt without a second verification or dataset read", async () => {
+    const operations: string[] = [];
+    const receipts: PublicReceipt[] = [];
+    let nonceAvailable = true;
+    let cached: VerifiedCapability | undefined;
+    const queryDataset = vi.fn(async () => {
+      operations.push("query");
+      return [transaction()];
+    });
+    const service = serviceFixture({
+      operations,
+      nonceStore: {
+        claim: async () => {
+          operations.push("nonce");
+          if (nonceAvailable) {
+            nonceAvailable = false;
+            return true;
+          }
+          return false;
+        },
+      },
+      verificationCache: {
+        get: async () => {
+          operations.push("cache-get");
+          return cached;
+        },
+        put: async (verification) => {
+          operations.push("cache-put");
+          cached = verification;
+        },
+      },
+      queryDataset,
+      receiptStore: {
+        append: async (receipt) => {
+          operations.push("receipt");
+          receipts.push(receipt);
+        },
+      },
+    });
+    const replayedEnvelope = envelope();
+
+    await service.execute(DATASET_ID, replayedEnvelope);
+    await expect(service.execute(DATASET_ID, replayedEnvelope)).rejects.toBeInstanceOf(
+      AuthorizationRejectedError,
+    );
+
+    expect(operations).toEqual([
+      "inspect",
+      "nonce",
+      "cache-get",
+      "verify",
+      "cache-put",
+      "query",
+      "receipt",
+      "inspect",
+      "nonce",
+      "cache-get",
+      "signature",
+      "receipt",
+    ]);
+    expect(queryDataset).toHaveBeenCalledTimes(1);
+    expect(receipts).toHaveLength(2);
+    expect(receipts[0]).toMatchObject({
+      outcome: "AUDIT_OUTCOME_ACCEPTED",
+      reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED",
+    });
+    expect(receipts[1]).toMatchObject({
+      outcome: "AUDIT_OUTCOME_REJECTED",
+      reason_code: "PUBLIC_ERROR_CODE_REQUEST_REPLAYED",
+      request_id: receipts[0]?.request_id,
+    });
+    expect(receipts[1]?.receipt_id).not.toBe(receipts[0]?.receipt_id);
   });
 
   it("rejects stale, altered, out-of-scope, and key-mismatched requests before data access", async () => {

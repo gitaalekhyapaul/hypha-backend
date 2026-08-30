@@ -16,6 +16,7 @@ import {
   type ProtectedGatewayEnvelope,
   protectedGatewayTarget,
   ReconciliationConsoleError,
+  readGatewayReplayRejection,
   readGatewayResult,
   readReconciliationQuery,
 } from "./contract.ts";
@@ -87,6 +88,15 @@ export async function POST(request: Request): Promise<Response> {
 
     const config = loadDatasetGatewayConfig();
     const response = await sendToGateway(config.baseUrl, target, envelope);
+    if (input.request_mode === "REPLAY") {
+      await readGatewayResult(response, {
+        capabilityId: signed.capabilityId,
+        datasetId: targetDatasetId,
+      });
+      const replayResponse = await sendToGateway(config.baseUrl, target, envelope);
+      await readGatewayReplayRejection(replayResponse);
+      return jsonResponse({ error: "RECONCILIATION_REQUEST_REPLAYED" }, 409);
+    }
     return jsonResponse(
       await readGatewayResult(response, {
         capabilityId: signed.capabilityId,

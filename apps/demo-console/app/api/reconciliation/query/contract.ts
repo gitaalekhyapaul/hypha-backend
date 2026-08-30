@@ -16,6 +16,7 @@ const WHOLE_SECOND_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 export type ReconciliationConsoleFailureCode =
   | "INVALID_RECONCILIATION_QUERY"
   | "RECONCILIATION_AUTHORIZATION_FAILED"
+  | "RECONCILIATION_REQUEST_REPLAYED"
   | "RECONCILIATION_UNAVAILABLE";
 
 export class ReconciliationConsoleError extends Error {
@@ -81,7 +82,7 @@ export async function readReconciliationQuery(
     if (
       !LOWER_HEX_DIGEST.test(jobId) ||
       !SAFE_ID.test(datasetId) ||
-      (requestMode !== "IN_SCOPE" && requestMode !== "OUT_OF_SCOPE") ||
+      (requestMode !== "IN_SCOPE" && requestMode !== "OUT_OF_SCOPE" && requestMode !== "REPLAY") ||
       fromOccurredAt.milliseconds > toOccurredAt.milliseconds ||
       toOccurredAt.milliseconds - fromOccurredAt.milliseconds > MAX_QUERY_RANGE_MILLISECONDS ||
       limit < 1 ||
@@ -114,6 +115,31 @@ export function exactGatewayQueryBody(input: ProtectedReconciliationQueryInput):
 
 export function protectedGatewayTarget(datasetId: string): string {
   return `/api/datasets/${encodeURIComponent(datasetId)}/protected-query`;
+}
+
+export async function readGatewayReplayRejection(response: Response): Promise<void> {
+  if (response.status !== 403) {
+    throw unavailable();
+  }
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null) {
+    const parsed = Number(declaredLength);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_GATEWAY_RESPONSE_BYTES) {
+      throw unavailable();
+    }
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_GATEWAY_RESPONSE_BYTES) {
+    throw unavailable();
+  }
+  try {
+    const object = exactObject(JSON.parse(bytes.toString("utf8")) as unknown, ["error"]);
+    if (object.error !== "AUTHORIZATION_REJECTED") {
+      throw unavailable();
+    }
+  } catch {
+    throw unavailable();
+  }
 }
 
 export async function readGatewayResult(

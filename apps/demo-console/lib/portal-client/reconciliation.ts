@@ -3,7 +3,7 @@ import type { SyntheticTransaction } from "../dataset-client/types.ts";
 export interface ProtectedReconciliationQueryInput {
   readonly job_id: string;
   readonly dataset_id: string;
-  readonly request_mode: "IN_SCOPE" | "OUT_OF_SCOPE";
+  readonly request_mode: "IN_SCOPE" | "OUT_OF_SCOPE" | "REPLAY";
   readonly from_occurred_at: string;
   readonly to_occurred_at: string;
   readonly limit: number;
