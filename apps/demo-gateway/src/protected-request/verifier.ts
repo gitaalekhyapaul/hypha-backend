@@ -4,6 +4,7 @@ import { AuthorizationRejectedError, ProtectedQueryInfrastructureError } from ".
 import type {
   ProtectedRequestEnvelope,
   ProtectedRequestVerifier,
+  InspectedCapability,
   VerifiedCapabilityClaims,
   VerifierResult,
 } from "./types";
@@ -36,7 +37,7 @@ const CLAIM_FIELDS = [
   "issued_at_unix_seconds",
   "expires_at_unix_seconds",
 ] as const;
-const INSPECTION_FIELDS = ["capability_id"] as const;
+const INSPECTION_FIELDS = ["capability_id", "proof_digest"] as const;
 
 export interface ProcessVerifierConfig {
   readonly executablePath: string;
@@ -54,7 +55,7 @@ export class ProcessProtectedRequestVerifier implements ProtectedRequestVerifier
     this.#config = config;
   }
 
-  public async inspectCapabilityId(envelope: ProtectedRequestEnvelope): Promise<string> {
+  public async inspectCapability(envelope: ProtectedRequestEnvelope): Promise<InspectedCapability> {
     const input = Buffer.from(
       JSON.stringify({
         operation: "inspect",
@@ -143,14 +144,17 @@ export function parseVerifierOutput(bytes: Uint8Array): VerifierResult {
   }
 }
 
-export function parseCapabilityInspectionOutput(bytes: Uint8Array): string {
+export function parseCapabilityInspectionOutput(bytes: Uint8Array): InspectedCapability {
   if (bytes.length === 0 || bytes.length > MAX_VERIFIER_OUTPUT_BYTES) {
     throw new ProtectedQueryInfrastructureError();
   }
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     const output = strictRecord(JSON.parse(text) as unknown, INSPECTION_FIELDS);
-    return canonicalHex(output.capability_id, 32);
+    return {
+      capabilityId: canonicalHex(output.capability_id, 32),
+      proofDigestHex: canonicalHex(output.proof_digest, 32),
+    };
   } catch {
     throw new ProtectedQueryInfrastructureError();
   }

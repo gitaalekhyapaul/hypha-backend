@@ -11,6 +11,7 @@ use raziel_proto::raziel::v1::{
     VerifyCapabilityResponse,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 const MAX_INPUT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_CAPABILITY_PROTO_BYTES: usize = 2 * 1024 * 1024;
@@ -71,6 +72,7 @@ struct VerifyInput {
 #[derive(Debug, Serialize, PartialEq, Eq)]
 struct InspectOutput {
     capability_id: String,
+    proof_digest: String,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -145,8 +147,12 @@ fn parse_command(bytes: &[u8]) -> Result<VerifierCommand, VerifierClientError> {
 
 fn inspect_capability(input: InspectInput) -> Result<InspectOutput, VerifierClientError> {
     let capability = decode_capability(&input.capability_proto_hex)?;
+    if capability.zk_proof.is_empty() {
+        return Err(VerifierClientError::InvalidRequest);
+    }
     Ok(InspectOutput {
         capability_id: exact_capability_id(capability.capability_id)?,
+        proof_digest: lowercase_hex(&Sha256::digest(capability.zk_proof)),
     })
 }
 
@@ -389,6 +395,7 @@ mod tests {
     fn minimal_capability() -> ProofCapability {
         ProofCapability {
             capability_id: "ab".repeat(32),
+            zk_proof: b"proof-artifact".to_vec(),
             ..ProofCapability::default()
         }
     }
@@ -548,6 +555,10 @@ mod tests {
         };
 
         assert_eq!(output.capability_id, "ab".repeat(32));
+        assert_eq!(
+            output.proof_digest,
+            lowercase_hex(&Sha256::digest(b"proof-artifact"))
+        );
     }
 
     #[test]
@@ -575,6 +586,19 @@ mod tests {
         };
         assert_eq!(
             inspect_capability(invalid),
+            Err(VerifierClientError::InvalidRequest)
+        );
+
+        assert_eq!(
+            inspect_capability(InspectInput {
+                capability_proto_hex: lowercase_hex(
+                    &ProofCapability {
+                        capability_id: "ab".repeat(32),
+                        ..ProofCapability::default()
+                    }
+                    .encode_to_vec()
+                ),
+            }),
             Err(VerifierClientError::InvalidRequest)
         );
     }

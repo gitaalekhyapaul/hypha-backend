@@ -14,14 +14,21 @@ import { JsonlReceiptStore } from "../src/protected-request/receipt-store.ts";
 import { createPublicReceipt, ProtectedQueryService } from "../src/protected-request/service.ts";
 import type {
   NonceStore,
+  ProtectedRequestSignatureVerifier,
   ProtectedRequestVerifier,
   ReceiptStore,
+  VerificationCache,
+  VerifiedCapability,
   VerifiedCapabilityClaims,
 } from "../src/protected-request/types.ts";
 import {
   parseCapabilityInspectionOutput,
   parseVerifierOutput,
 } from "../src/protected-request/verifier.ts";
+import {
+  encodeCachedVerification,
+  parseCachedVerification,
+} from "../src/protected-request/verified-cache.ts";
 
 const NOW = 1_800_000_000n;
 const DATASET_ID = "reconciliation-demo";
@@ -59,10 +66,19 @@ describe("protected reconciliation query", () => {
 
     const result = await service.execute(DATASET_ID, envelope());
 
-    expect(operations).toEqual(["inspect", "nonce", "verify", "query", "receipt"]);
+    expect(operations).toEqual([
+      "inspect",
+      "nonce",
+      "cache-get",
+      "verify",
+      "cache-put",
+      "query",
+      "receipt",
+    ]);
     expect(result).toMatchObject({
       classification: "SYNTHETIC",
       dataset_id: DATASET_ID,
+      verification_path: "VERIFIER",
       row_count: 1,
       rows: [{ transactionId: "txn-001" }],
       receipt: {
@@ -103,6 +119,85 @@ describe("protected reconciliation query", () => {
         "reason_code",
       ].sort(),
     );
+  });
+
+  it("reuses cached verification with a fresh nonce and writes a new receipt", async () => {
+    const operations: string[] = [];
+    let cached: VerifiedCapability | undefined;
+    const verificationCache: VerificationCache = {
+      get: async () => {
+        operations.push("cache-get");
+        return cached;
+      },
+      put: async (verification, ttlSeconds) => {
+        operations.push(`cache-put:${ttlSeconds}`);
+        cached = verification;
+      },
+    };
+    const service = serviceFixture({ operations, verificationCache });
+
+    const cold = await service.execute(DATASET_ID, envelope());
+    const hit = await service.execute(DATASET_ID, envelope({ request_nonce: "34".repeat(32) }));
+
+    expect(cold.verification_path).toBe("VERIFIER");
+    expect(hit.verification_path).toBe("CACHE");
+    expect(cold.receipt.receipt_id).not.toBe(hit.receipt.receipt_id);
+    expect(operations).toEqual([
+      "inspect",
+      "nonce",
+      "cache-get",
+      "verify",
+      "cache-put:600",
+      "query",
+      "receipt",
+      "inspect",
+      "nonce",
+      "cache-get",
+      "signature",
+      "query",
+      "receipt",
+    ]);
+  });
+
+  it("does not reuse a cached entry for a changed proof digest", async () => {
+    const verificationCache: VerificationCache = {
+      get: vi.fn(async () => undefined),
+      put: vi.fn(async () => undefined),
+    };
+    const changedDigest = "55".repeat(32);
+    const service = serviceFixture({ verificationCache, inspectionProofDigest: changedDigest });
+
+    await expect(service.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
+      ProtectedQueryInfrastructureError,
+    );
+    expect(verificationCache.get).toHaveBeenCalledWith(CAPABILITY_ID, changedDigest);
+    expect(verificationCache.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid signatures and key bindings on cache hits before data access", async () => {
+    const queryDataset = vi.fn(async () => [transaction()]);
+    const cached: VerificationCache = {
+      get: async () => verifiedCapability(),
+      put: async () => undefined,
+    };
+    const invalidSignature = serviceFixture({
+      verificationCache: cached,
+      signatureValid: false,
+      queryDataset,
+    });
+    await expect(invalidSignature.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
+      AuthorizationRejectedError,
+    );
+
+    const wrongKey: VerificationCache = {
+      get: async () => verifiedCapability({ agentKeyThumbprintHex: "66".repeat(32) }),
+      put: async () => undefined,
+    };
+    const keyMismatch = serviceFixture({ verificationCache: wrongKey, queryDataset });
+    await expect(keyMismatch.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
+      AuthorizationRejectedError,
+    );
+    expect(queryDataset).not.toHaveBeenCalled();
   });
 
   it("uses the encoded route target and the 24-hour M5 nonce TTL", async () => {
@@ -191,7 +286,7 @@ describe("protected reconciliation query", () => {
     await expect(verifierFailure.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
       ProtectedQueryInfrastructureError,
     );
-    expect(verifierFailureOperations).toEqual(["inspect", "nonce", "verify"]);
+    expect(verifierFailureOperations).toEqual(["inspect", "nonce", "cache-get", "verify"]);
 
     const redisFailure = serviceFixture({ nonceFailure: true });
     await expect(redisFailure.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
@@ -214,7 +309,14 @@ describe("protected reconciliation query", () => {
     await expect(queryFailure.execute(DATASET_ID, envelope())).rejects.toBeInstanceOf(
       ProtectedQueryInfrastructureError,
     );
-    expect(queryFailureOperations).toEqual(["inspect", "nonce", "verify", "query"]);
+    expect(queryFailureOperations).toEqual([
+      "inspect",
+      "nonce",
+      "cache-get",
+      "verify",
+      "cache-put",
+      "query",
+    ]);
   });
 
   it("maps authorization and infrastructure failures to bounded public responses", async () => {
@@ -239,9 +341,11 @@ describe("protected reconciliation query", () => {
   it("parses the bounded safe verifier projection and rejects unknown output fields", () => {
     expect(
       parseCapabilityInspectionOutput(
-        Buffer.from(JSON.stringify({ capability_id: CAPABILITY_ID })),
+        Buffer.from(
+          JSON.stringify({ capability_id: CAPABILITY_ID, proof_digest: PROOF_DIGEST_HEX }),
+        ),
       ),
-    ).toBe(CAPABILITY_ID);
+    ).toEqual({ capabilityId: CAPABILITY_ID, proofDigestHex: PROOF_DIGEST_HEX });
     const parsed = parseVerifierOutput(
       Buffer.from(
         JSON.stringify({
@@ -284,6 +388,19 @@ describe("protected reconciliation query", () => {
     ).toThrow(ProtectedQueryInfrastructureError);
   });
 
+  it("round-trips only the bounded public cache projection", () => {
+    const encoded = encodeCachedVerification(verifiedCapability());
+
+    expect(parseCachedVerification(encoded)).toEqual(verifiedCapability());
+    expect(encoded).not.toContain("zk_proof");
+    expect(encoded).not.toContain("relationships");
+    expect(encoded).not.toContain("caveat");
+    const altered = { ...(JSON.parse(encoded) as Record<string, unknown>), witness: {} };
+    expect(() => parseCachedVerification(JSON.stringify(altered))).toThrow(
+      ProtectedQueryInfrastructureError,
+    );
+  });
+
   it("appends a stable mode-0600 JSONL receipt without private request material", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "raziel-receipt-test-"));
     temporaryDirectories.push(directory);
@@ -319,22 +436,32 @@ interface FixtureOverrides {
   readonly nonceClaimed?: boolean;
   readonly inspectionFailure?: boolean;
   readonly verificationFailure?: boolean;
+  readonly inspectionProofDigest?: string;
   readonly nonceFailure?: boolean;
+  readonly cacheFailure?: boolean;
+  readonly cachePutFailure?: boolean;
+  readonly signatureFailure?: boolean;
+  readonly signatureValid?: boolean;
   readonly receiptFailure?: boolean;
   readonly receiptStore?: ReceiptStore;
   readonly nonceStore?: NonceStore;
+  readonly verificationCache?: VerificationCache;
+  readonly signatureVerifier?: ProtectedRequestSignatureVerifier;
   readonly queryDataset?: () => Promise<readonly ReturnType<typeof transaction>[]>;
 }
 
 function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService {
   const operations = overrides.operations ?? [];
   const verifier: ProtectedRequestVerifier = {
-    inspectCapabilityId: async () => {
+    inspectCapability: async () => {
       operations.push("inspect");
       if (overrides.inspectionFailure) {
         throw new Error("verifier unavailable");
       }
-      return CAPABILITY_ID;
+      return {
+        capabilityId: CAPABILITY_ID,
+        proofDigestHex: overrides.inspectionProofDigest ?? PROOF_DIGEST_HEX,
+      };
     },
     verify: async () => {
       operations.push("verify");
@@ -360,6 +487,34 @@ function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService
         return overrides.nonceClaimed ?? true;
       },
     } satisfies NonceStore);
+  const verificationCache: VerificationCache =
+    overrides.verificationCache ??
+    ({
+      get: async () => {
+        operations.push("cache-get");
+        if (overrides.cacheFailure) {
+          throw new Error("Redis unavailable");
+        }
+        return undefined;
+      },
+      put: async () => {
+        operations.push("cache-put");
+        if (overrides.cachePutFailure) {
+          throw new Error("Redis unavailable");
+        }
+      },
+    } satisfies VerificationCache);
+  const signatureVerifier: ProtectedRequestSignatureVerifier =
+    overrides.signatureVerifier ??
+    ({
+      verify: async () => {
+        operations.push("signature");
+        if (overrides.signatureFailure) {
+          throw new Error("signature verifier unavailable");
+        }
+        return overrides.signatureValid ?? true;
+      },
+    } satisfies ProtectedRequestSignatureVerifier);
   const receiptStore: ReceiptStore =
     overrides.receiptStore ??
     ({
@@ -372,6 +527,8 @@ function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService
     } satisfies ReceiptStore);
   return new ProtectedQueryService({
     verifier,
+    verificationCache,
+    signatureVerifier,
     nonceStore,
     receiptStore,
     queryDataset:
@@ -382,6 +539,17 @@ function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService
       }),
     nowUnixSeconds: () => NOW,
   });
+}
+
+function verifiedCapability(
+  claimOverrides: Partial<VerifiedCapabilityClaims> = {},
+): VerifiedCapability {
+  return {
+    outcome: "verified",
+    claims: claims(claimOverrides),
+    policyRecordId: "policy-record-1",
+    proofDigestHex: PROOF_DIGEST_HEX,
+  };
 }
 
 function envelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {

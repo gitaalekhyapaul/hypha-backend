@@ -100,6 +100,7 @@ describe("B-0051 protected reconciliation console route", () => {
     expect(result).toMatchObject({
       classification: "SYNTHETIC",
       dataset_id: DATASET_ID,
+      verification_path: "VERIFIER",
       row_count: 1,
       receipt: {
         receipt_id: "receipt-001",
@@ -338,6 +339,7 @@ function gatewaySuccess(jobId: string) {
   return {
     classification: "SYNTHETIC",
     dataset_id: DATASET_ID,
+    verification_path: "VERIFIER",
     row_count: 1,
     rows: [
       {

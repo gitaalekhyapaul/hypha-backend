@@ -102,6 +102,37 @@ export async function signProtectedRequest(
   };
 }
 
+export async function verifyProtectedRequestSignature(
+  request: SignedProtectedRequest,
+): Promise<boolean> {
+  const message = protectedRequestSignatureMessage({
+    formatVersion: request.formatVersion,
+    capabilityId: request.capabilityId,
+    requestMethod: request.requestMethod,
+    canonicalRequestTarget: request.canonicalRequestTarget,
+    requestBodyHash: request.requestBodyHash,
+    requestNonce: request.requestNonce,
+    requestTimestampUnixSeconds: request.requestTimestampUnixSeconds,
+  });
+  try {
+    const verifyingKey = await webcrypto.subtle.importKey(
+      "raw",
+      request.agentPublicKey,
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    return await webcrypto.subtle.verify(
+      "Ed25519",
+      verifyingKey,
+      request.agentRequestSignature,
+      message,
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function randomDigest(): Uint8Array {
   return webcrypto.getRandomValues(new Uint8Array(DIGEST_BYTES));
 }

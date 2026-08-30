@@ -230,8 +230,8 @@ export function ReconciliationWorkspace({
                   <strong>{result.row_count}</strong>
                 </div>
                 <div>
-                  <span>Receipt type</span>
-                  <strong>PROTECTED REQUEST</strong>
+                  <span>Verification</span>
+                  <strong>{result.verification_path === "CACHE" ? "CACHE HIT" : "VERIFIER"}</strong>
                 </div>
                 <div>
                   <span>Classification</span>

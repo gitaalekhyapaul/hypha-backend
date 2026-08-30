@@ -149,9 +149,11 @@ export function projectGatewayResult(
   const object = objectValue(input);
   const rows = arrayValue(object.rows);
   const rowCount = integerValue(object.row_count);
+  const verificationPath = object.verification_path;
   if (
     object.classification !== "SYNTHETIC" ||
     object.dataset_id !== expected.datasetId ||
+    (verificationPath !== "VERIFIER" && verificationPath !== "CACHE") ||
     rowCount !== rows.length ||
     rowCount < 0 ||
     rowCount > MAX_QUERY_ROWS
@@ -161,6 +163,7 @@ export function projectGatewayResult(
   return {
     classification: "SYNTHETIC",
     dataset_id: expected.datasetId,
+    verification_path: verificationPath,
     row_count: rowCount,
     rows: rows.map(projectTransaction),
     receipt: projectReceipt(object.receipt, expected),

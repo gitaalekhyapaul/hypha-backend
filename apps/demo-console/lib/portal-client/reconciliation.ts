@@ -33,6 +33,7 @@ export interface PublicReconciliationReceipt {
 export interface ProtectedReconciliationQueryResult {
   readonly classification: "SYNTHETIC";
   readonly dataset_id: string;
+  readonly verification_path: "VERIFIER" | "CACHE";
   readonly row_count: number;
   readonly rows: readonly SyntheticTransaction[];
   readonly receipt: PublicReconciliationReceipt;

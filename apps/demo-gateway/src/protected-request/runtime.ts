@@ -3,7 +3,9 @@ import { ProtectedQueryInfrastructureError } from "./errors";
 import { RedisNonceStore } from "./nonce-store";
 import { JsonlReceiptStore } from "./receipt-store";
 import { ProtectedQueryService } from "./service";
+import { SdkProtectedRequestSignatureVerifier } from "./signature";
 import { ProcessProtectedRequestVerifier } from "./verifier";
+import { RedisVerificationCache } from "./verified-cache";
 
 const SERVICE_SYMBOL = Symbol.for("raziel.m5.protected-query-service");
 
@@ -24,6 +26,8 @@ function createService(): ProtectedQueryService {
   const receiptPath = requiredEnvironment("RAZIEL_RECEIPT_STORE_PATH");
   return new ProtectedQueryService({
     verifier: new ProcessProtectedRequestVerifier({ executablePath, endpoint }),
+    verificationCache: new RedisVerificationCache(redisUrl),
+    signatureVerifier: new SdkProtectedRequestSignatureVerifier(),
     nonceStore: new RedisNonceStore(redisUrl),
     receiptStore: new JsonlReceiptStore(receiptPath),
     queryDataset: (datasetId, query) => getSyntheticDatasetStore().query(datasetId, query),

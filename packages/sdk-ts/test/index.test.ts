@@ -15,6 +15,7 @@ import {
   sha256,
   signCapabilityRequest,
   signProtectedRequest,
+  verifyProtectedRequestSignature,
 } from "../src/index.ts";
 
 describe("SDK package info", () => {
@@ -211,6 +212,13 @@ describe("agent signatures", () => {
         protectedRequest.agentRequestSignature,
         alteredTargetMessage,
       ),
+    ).resolves.toBe(false);
+    await expect(verifyProtectedRequestSignature(protectedRequest)).resolves.toBe(true);
+    await expect(
+      verifyProtectedRequestSignature({
+        ...protectedRequest,
+        canonicalRequestTarget: "/payments/reconcile?account=a-2&status=pending",
+      }),
     ).resolves.toBe(false);
   });
 });

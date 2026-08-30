@@ -6,6 +6,7 @@ import type {
   ProtectedQueryDependencies,
   ProtectedQueryResult,
   PublicReceipt,
+  VerifiedCapability,
   VerifiedCapabilityClaims,
 } from "./types";
 import { MAX_M5_CAPABILITY_VALIDITY_SECONDS } from "./types";
@@ -26,9 +27,11 @@ export class ProtectedQueryService {
     const nowUnixSeconds = this.#dependencies.nowUnixSeconds();
     validateRequestFreshness(envelope.requestTimestampUnixSeconds, nowUnixSeconds);
 
-    let inspectedCapabilityId: string;
+    let inspection: Awaited<
+      ReturnType<ProtectedQueryDependencies["verifier"]["inspectCapability"]>
+    >;
     try {
-      inspectedCapabilityId = await this.#dependencies.verifier.inspectCapabilityId(envelope);
+      inspection = await this.#dependencies.verifier.inspectCapability(envelope);
     } catch (error) {
       if (error instanceof AuthorizationRejectedError) {
         throw error;
@@ -39,7 +42,7 @@ export class ProtectedQueryService {
     let claimed: boolean;
     try {
       claimed = await this.#dependencies.nonceStore.claim(
-        inspectedCapabilityId,
+        inspection.capabilityId,
         envelope.requestNonceHex,
         MAX_M5_CAPABILITY_VALIDITY_SECONDS,
       );
@@ -50,26 +53,68 @@ export class ProtectedQueryService {
       throw new AuthorizationRejectedError();
     }
 
-    let verification: Awaited<ReturnType<ProtectedQueryDependencies["verifier"]["verify"]>>;
+    let verification: VerifiedCapability | undefined;
     try {
-      verification = await this.#dependencies.verifier.verify(envelope);
-    } catch (error) {
-      if (error instanceof AuthorizationRejectedError) {
-        throw error;
-      }
+      verification = await this.#dependencies.verificationCache.get(
+        inspection.capabilityId,
+        inspection.proofDigestHex,
+      );
+    } catch {
       throw new ProtectedQueryInfrastructureError();
     }
-    if (verification.outcome !== "verified") {
-      throw new AuthorizationRejectedError();
+
+    let verificationPath: ProtectedQueryResult["verification_path"];
+    if (verification) {
+      let signatureValid: boolean;
+      try {
+        signatureValid = await this.#dependencies.signatureVerifier.verify(
+          inspection.capabilityId,
+          envelope,
+        );
+      } catch {
+        throw new ProtectedQueryInfrastructureError();
+      }
+      if (!signatureValid) {
+        throw new AuthorizationRejectedError();
+      }
+      verificationPath = "CACHE";
+    } else {
+      let verifierResult: Awaited<ReturnType<ProtectedQueryDependencies["verifier"]["verify"]>>;
+      try {
+        verifierResult = await this.#dependencies.verifier.verify(envelope);
+      } catch (error) {
+        if (error instanceof AuthorizationRejectedError) {
+          throw error;
+        }
+        throw new ProtectedQueryInfrastructureError();
+      }
+      if (verifierResult.outcome !== "verified") {
+        throw new AuthorizationRejectedError();
+      }
+      if (verifierResult.proofDigestHex !== inspection.proofDigestHex) {
+        throw new ProtectedQueryInfrastructureError();
+      }
+      verification = verifierResult;
+      verificationPath = "VERIFIER";
     }
+
     validateVerifiedClaims(
       verification.claims,
-      inspectedCapabilityId,
+      inspection.capabilityId,
       datasetId,
       envelope.agentPublicKeyHex,
       envelope.requestTimestampUnixSeconds,
       nowUnixSeconds,
     );
+
+    if (verificationPath === "VERIFIER") {
+      const cacheTtlSeconds = Number(verification.claims.expiresAtUnixSeconds - nowUnixSeconds);
+      try {
+        await this.#dependencies.verificationCache.put(verification, cacheTtlSeconds);
+      } catch {
+        throw new ProtectedQueryInfrastructureError();
+      }
+    }
 
     try {
       const rows = await this.#dependencies.queryDataset(datasetId, envelope.query);
@@ -92,6 +137,7 @@ export class ProtectedQueryService {
       return {
         classification: "SYNTHETIC",
         dataset_id: datasetId,
+        verification_path: verificationPath,
         row_count: rows.length,
         rows,
         receipt,

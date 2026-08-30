@@ -38,6 +38,11 @@ export interface VerifiedCapabilityClaims {
   readonly expiresAtUnixSeconds: bigint;
 }
 
+export interface InspectedCapability {
+  readonly capabilityId: string;
+  readonly proofDigestHex: string;
+}
+
 export type VerifierResult =
   | { readonly outcome: "rejected" }
   | {
@@ -48,8 +53,19 @@ export type VerifierResult =
     };
 
 export interface ProtectedRequestVerifier {
-  inspectCapabilityId(envelope: ProtectedRequestEnvelope): Promise<string>;
+  inspectCapability(envelope: ProtectedRequestEnvelope): Promise<InspectedCapability>;
   verify(envelope: ProtectedRequestEnvelope): Promise<VerifierResult>;
+}
+
+export type VerifiedCapability = Extract<VerifierResult, { readonly outcome: "verified" }>;
+
+export interface VerificationCache {
+  get(capabilityId: string, proofDigestHex: string): Promise<VerifiedCapability | undefined>;
+  put(verification: VerifiedCapability, ttlSeconds: number): Promise<void>;
+}
+
+export interface ProtectedRequestSignatureVerifier {
+  verify(capabilityId: string, envelope: ProtectedRequestEnvelope): Promise<boolean>;
 }
 
 export interface NonceStore {
@@ -85,6 +101,7 @@ export interface ReceiptStore {
 export interface ProtectedQueryResult {
   readonly classification: "SYNTHETIC";
   readonly dataset_id: string;
+  readonly verification_path: "VERIFIER" | "CACHE";
   readonly row_count: number;
   readonly rows: readonly SyntheticTransaction[];
   readonly receipt: PublicReceipt;
@@ -92,6 +109,8 @@ export interface ProtectedQueryResult {
 
 export interface ProtectedQueryDependencies {
   readonly verifier: ProtectedRequestVerifier;
+  readonly verificationCache: VerificationCache;
+  readonly signatureVerifier: ProtectedRequestSignatureVerifier;
   readonly nonceStore: NonceStore;
   readonly receiptStore: ReceiptStore;
   readonly queryDataset: (

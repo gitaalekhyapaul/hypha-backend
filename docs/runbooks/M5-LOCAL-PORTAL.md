@@ -209,8 +209,12 @@ Use the live VM profile for this walkthrough:
 8. Open Reconciliation. Keep the default UTC window or choose a bounded window, set a
    row limit from 1 to 100, then select `Run protected query`.
 9. Show the returned `SYNTHETIC` transaction rows and the public receipt. Point out
-   the capability, proof job, policy, snapshot, request, proof digest, and accepted
-   outcome fields.
+   the `VERIFIER` result, capability, proof job, policy, snapshot, request, proof
+   digest, and accepted outcome fields.
+10. Select `Run protected query` again without requesting another capability. The
+    console signs a fresh nonce. Show `CACHE HIT`, the same capability and proof
+    digest, and a different request and receipt ID. The gateway still checks the
+    agent signature, freshness, replay nonce, key binding, target, and scope.
 
 After UF-08 succeeds, inspect the owner-side receipt and bounded service logs on the
 VM:
@@ -224,10 +228,10 @@ tail -n 1 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The current demo stops at the first verified query. Verification-cache reuse,
-user-controlled scope denial, replay controls, and receipt filtering or export are
-scheduled in UF-09 through UF-12. Recorded mode can demonstrate the portal and public
-proof timeline, but it cannot unlock Reconciliation.
+The current demo stops after verified capability reuse. User-controlled scope denial,
+replay controls, and receipt filtering or export are scheduled in UF-10 through
+UF-12. Recorded mode can demonstrate the portal and public proof timeline, but it
+cannot unlock Reconciliation.
 
 ## Stop
 
