@@ -1,10 +1,9 @@
 # M5 Local Portal
 
-Status: synthetic recorded workflow and UF-08 live VM deployment prepared
+Status: synthetic M5 workflow through UF-10 implemented locally
 
-UF-08 is implemented and passes local build, type, lint, unit, Rust bridge, and
-Compose configuration checks. A live VM walkthrough is still required after the
-B-0051 worktree is committed, pushed, and pulled onto the VM.
+UF-08 through UF-10 pass their focused local checks. A live VM walkthrough still
+requires the current local commits to be pushed and pulled onto the VM.
 
 ## Start
 
@@ -115,6 +114,17 @@ the bounded synthetic rows, and writes a public JSONL receipt before returning t
 result. The browser receives no raw capability proof, private key, PolicyIR,
 relationship data, caveat values, or witness material.
 
+A second query reuses the verified public capability projection from Redis. The
+gateway still checks the fresh nonce, request time, agent signature, key binding,
+target, action, and dataset scope. The browser marks this path as `CACHE HIT` and
+shows a new request receipt.
+
+Denial Lab unlocks from the same live capability. `Test scope denial` signs a fresh
+request for a fixed synthetic dataset outside the capability scope. The gateway
+verifies the capability and request, rejects the scope before any dataset read, and
+writes a public rejected receipt. The browser receives one generic denial and no
+transaction rows or policy details.
+
 The active policy selection currently lasts for one browser session. A page refresh
 requires the operator to open Policy and activate the candidate again. This does not
 create another policy record for the same activation request.
@@ -127,8 +137,8 @@ server restart.
 
 ## Deploy To The VM
 
-The VM must first pull a commit that contains B-0051. Do not run the live profile
-from the current remote branch until that commit has been pushed.
+The VM must first pull the commits that contain B-0051 through B-0053. Do not run the
+live profile from the current remote branch until those commits have been pushed.
 
 ```bash
 cd ~/hypha-backend
@@ -215,12 +225,16 @@ Use the live VM profile for this walkthrough:
     console signs a fresh nonce. Show `CACHE HIT`, the same capability and proof
     digest, and a different request and receipt ID. The gateway still checks the
     agent signature, freshness, replay nonce, key binding, target, and scope.
+11. Open Denial lab and select `Test scope denial`. Show the generic `DENIED` result
+    and the absence of transaction rows. The owner-side receipt records
+    `AUDIT_OUTCOME_REJECTED` with `PUBLIC_ERROR_CODE_NOT_AUTHORIZED` but does not
+    expose the denied dataset identifier or a policy path.
 
 After UF-08 succeeds, inspect the owner-side receipt and bounded service logs on the
 VM:
 
 ```bash
-tail -n 1 .raziel/m5/receipts.jsonl
+tail -n 3 .raziel/m5/receipts.jsonl
 
 ./scripts/compose \
   --profile apps \
@@ -228,10 +242,10 @@ tail -n 1 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The current demo stops after verified capability reuse. User-controlled scope denial,
-replay controls, and receipt filtering or export are scheduled in UF-10 through
+The current demo stops after the controlled scope denial. Replay, expiry, alteration,
+and unsigned-request controls remain in UF-11. Receipt filtering and export remain in
 UF-12. Recorded mode can demonstrate the portal and public proof timeline, but it
-cannot unlock Reconciliation.
+cannot unlock Reconciliation or Denial Lab.
 
 ## Stop
 

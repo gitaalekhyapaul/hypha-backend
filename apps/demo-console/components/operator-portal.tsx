@@ -18,13 +18,21 @@ import {
 import { AccessGraphWorkspace } from "./access-graph-workspace.tsx";
 import { AgentCapabilityWorkspace } from "./agent-capability-workspace.tsx";
 import { DatasetWorkspace } from "./dataset-workspace.tsx";
+import { DenialLabWorkspace } from "./denial-lab-workspace.tsx";
 import { LoginView } from "./login-view.tsx";
 import { PolicyWorkspace } from "./policy-workspace.tsx";
 import { ReconciliationWorkspace } from "./reconciliation-workspace.tsx";
 import { WorkspaceOverview } from "./workspace-overview.tsx";
 
 type PortalState = "checking" | "signed-out" | "signed-in";
-type ActiveView = "access" | "capability" | "dataset" | "policy" | "reconciliation" | "workspace";
+type ActiveView =
+  | "access"
+  | "capability"
+  | "dataset"
+  | "denials"
+  | "policy"
+  | "reconciliation"
+  | "workspace";
 
 const navigation = [
   { id: "workspace", label: "Workspace", available: true },
@@ -60,7 +68,7 @@ export function OperatorPortal() {
   }, []);
 
   useEffect(() => {
-    if (activeView === "reconciliation" && !reconciliationReady) {
+    if ((activeView === "reconciliation" || activeView === "denials") && !reconciliationReady) {
       setActiveView("capability");
     }
   }, [activeView, reconciliationReady]);
@@ -238,6 +246,14 @@ export function OperatorPortal() {
               onSessionExpired={signOut}
             />
           ) : null}
+          {activeView === "denials" && publishedAccess && capabilityJob ? (
+            <DenialLabWorkspace
+              access={publishedAccess}
+              csrfToken={session.csrfToken}
+              job={capabilityJob}
+              onSessionExpired={signOut}
+            />
+          ) : null}
         </div>
       </main>
     </div>
@@ -256,12 +272,12 @@ function navigationAvailable(
   if (id === "capability") {
     return publishedAccess !== null;
   }
-  if (id === "reconciliation") {
+  if (id === "reconciliation" || id === "denials") {
     return reconciliationReady;
   }
   return id === "workspace" || id === "dataset" || id === "policy";
 }
 
 function isActiveView(id: (typeof navigation)[number]["id"]): id is ActiveView {
-  return id !== "denials" && id !== "receipts";
+  return id !== "receipts";
 }

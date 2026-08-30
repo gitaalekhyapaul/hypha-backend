@@ -16,6 +16,7 @@ import type {
   NonceStore,
   ProtectedRequestSignatureVerifier,
   ProtectedRequestVerifier,
+  PublicReceipt,
   ReceiptStore,
   VerificationCache,
   VerifiedCapability,
@@ -172,6 +173,45 @@ describe("protected reconciliation query", () => {
     );
     expect(verificationCache.get).toHaveBeenCalledWith(CAPABILITY_ID, changedDigest);
     expect(verificationCache.put).not.toHaveBeenCalled();
+  });
+
+  it("records a coarse rejected receipt for a correctly signed out-of-scope request", async () => {
+    const deniedDatasetId = "reconciliation-denied-scope";
+    const operations: string[] = [];
+    const receipts: PublicReceipt[] = [];
+    const queryDataset = vi.fn(async () => [transaction()]);
+    const service = serviceFixture({
+      operations,
+      queryDataset,
+      receiptStore: {
+        append: async (receipt) => {
+          operations.push("receipt");
+          receipts.push(receipt);
+        },
+      },
+    });
+
+    await expect(
+      service.execute(
+        deniedDatasetId,
+        envelope({
+          canonical_request_target: "/api/datasets/reconciliation-denied-scope/protected-query",
+        }),
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationRejectedError);
+
+    expect(operations).toEqual(["inspect", "nonce", "cache-get", "verify", "receipt"]);
+    expect(queryDataset).not.toHaveBeenCalled();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({
+      receipt_type: "AUDIT_RECEIPT_TYPE_PROTECTED_REQUEST",
+      capability_id: CAPABILITY_ID,
+      resource_scope: DATASET_ID,
+      outcome: "AUDIT_OUTCOME_REJECTED",
+      reason_code: "PUBLIC_ERROR_CODE_NOT_AUTHORIZED",
+    });
+    expect(receipts[0]).not.toHaveProperty("requested_resource_scope");
+    expect(JSON.stringify(receipts[0])).not.toContain(deniedDatasetId);
   });
 
   it("rejects invalid signatures and key bindings on cache hits before data access", async () => {

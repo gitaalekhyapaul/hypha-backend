@@ -23,6 +23,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const GATEWAY_TIMEOUT_MILLISECONDS = 15_000;
+const CONTROLLED_OUT_OF_SCOPE_DATASET_ID = "reconciliation-denied-scope";
 
 export async function POST(request: Request): Promise<Response> {
   let operatorId: string;
@@ -50,8 +51,13 @@ export async function POST(request: Request): Promise<Response> {
       throw authorizationFailure();
     }
 
+    const targetDatasetId =
+      input.request_mode === "OUT_OF_SCOPE" ? CONTROLLED_OUT_OF_SCOPE_DATASET_ID : input.dataset_id;
+    if (input.request_mode === "OUT_OF_SCOPE" && targetDatasetId === binding.resourceScope) {
+      throw authorizationFailure();
+    }
     const body = exactGatewayQueryBody(input);
-    const target = protectedGatewayTarget(input.dataset_id);
+    const target = protectedGatewayTarget(targetDatasetId);
     const signed = await signProtectedRequest(identity, {
       capabilityId: input.job_id,
       method: "POST",
@@ -84,7 +90,7 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse(
       await readGatewayResult(response, {
         capabilityId: signed.capabilityId,
-        datasetId: input.dataset_id,
+        datasetId: targetDatasetId,
       }),
     );
   } catch (error) {

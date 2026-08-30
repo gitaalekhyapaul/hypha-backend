@@ -90,6 +90,7 @@ describe("B-0051 protected reconciliation console route", () => {
       mutationRequest(session, {
         job_id: jobId,
         dataset_id: DATASET_ID,
+        request_mode: "IN_SCOPE",
         from_occurred_at: "2026-08-01T00:00:00Z",
         to_occurred_at: "2026-08-02T00:00:00Z",
         limit: 25,
@@ -154,6 +155,45 @@ describe("B-0051 protected reconciliation console route", () => {
     );
   });
 
+  it("signs the controlled out-of-scope target and returns one generic denial", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-27T04:05:06Z"));
+    await configureAuth();
+    const session = await login();
+    const jobId = "49".repeat(32);
+    await prepareLiveCapability(jobId, DATASET_ID);
+
+    let forwarded: Record<string, unknown> | null = null;
+    globalThis.fetch = vi.fn(async (input, init) => {
+      expect(new URL(input instanceof Request ? input.url : input.toString()).pathname).toBe(
+        "/api/datasets/reconciliation-denied-scope/protected-query",
+      );
+      forwarded = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ error: "AUTHORIZATION_REJECTED" }, { status: 403 });
+    }) as typeof fetch;
+
+    const response = await queryRoute(
+      mutationRequest(session, {
+        job_id: jobId,
+        dataset_id: DATASET_ID,
+        request_mode: "OUT_OF_SCOPE",
+        from_occurred_at: "2026-08-01T00:00:00Z",
+        to_occurred_at: "2026-08-02T00:00:00Z",
+        limit: 1,
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: "RECONCILIATION_AUTHORIZATION_FAILED",
+    });
+    expect(forwarded).toMatchObject({
+      request_method: "POST",
+      canonical_request_target: "/api/datasets/reconciliation-denied-scope/protected-query",
+    });
+    expect(JSON.stringify(forwarded)).not.toContain("policy_path");
+    expect(JSON.stringify(forwarded)).not.toContain("relationships");
+  });
+
   it("maps a mismatched dataset binding to one generic authorization failure", async () => {
     await configureAuth();
     const session = await login();
@@ -166,6 +206,7 @@ describe("B-0051 protected reconciliation console route", () => {
       mutationRequest(session, {
         job_id: jobId,
         dataset_id: DATASET_ID,
+        request_mode: "IN_SCOPE",
         from_occurred_at: "2026-08-01T00:00:00Z",
         to_occurred_at: "2026-08-02T00:00:00Z",
         limit: 25,
@@ -185,6 +226,7 @@ describe("B-0051 protected reconciliation console route", () => {
         body: JSON.stringify({
           job_id: "43".repeat(32),
           dataset_id: DATASET_ID,
+          request_mode: "IN_SCOPE",
           from_occurred_at: "2026-08-01T00:00:00Z",
           to_occurred_at: "2026-08-02T00:00:00Z",
           limit: 10,

@@ -1,71 +1,75 @@
 # Current Engineering Baton
 
-- Baton ID: B-0053
+- Baton ID: B-0054
 - State: ACTIVE
-- Milestone: M5, controlled scope denial
+- Milestone: M5, exact-envelope replay rejection
 - Owner: Codex
-- Started UTC: 2026-08-30T07:04:52Z
-- Last updated UTC: 2026-08-30T07:04:52Z
+- Started UTC: 2026-08-30T07:48:58Z
+- Last updated UTC: 2026-08-30T07:48:58Z
 - Branch: `main`
-- Worktree: B-0052 is archived. Its UF-09 cache implementation awaits a scoped local
-  commit. No B-0053 source edits have started.
+- Worktree: B-0053 is archived. Its controlled scope-denial implementation awaits a
+  scoped local commit.
 
 ## Objective
 
-Add one explicit desktop action that sends a correctly signed request outside the
-capability dataset scope. The gateway must deny it without returning rows or policy
-details and must append a bounded public rejected receipt.
+Add the UF-11 desktop action that sends one valid protected request, resubmits the
+exact signed envelope and nonce, and shows a generic replay rejection without
+returning the first request's transaction rows to the browser.
 
 ## Acceptance Criteria
 
-- [ ] The Reconciliation view offers one clearly labeled out-of-scope denial action.
-- [ ] The console signs a fresh request for a controlled synthetic dataset outside
-      the live capability scope.
-- [ ] The request reaches the gateway and passes shape, freshness, nonce, and agent
-      signature checks before scope enforcement rejects it.
-- [ ] The browser receives one generic authorization failure and no transaction rows,
-      policy path, relationships, caveat values, or witness data.
-- [ ] The gateway appends one public rejected receipt with a coarse
-      `PUBLIC_ERROR_CODE_NOT_AUTHORIZED` reason.
-- [ ] The accepted first-use and cache-hit query paths remain unchanged.
+- [ ] Denial Lab offers one replay action after a live capability succeeds.
+- [ ] The console sends one valid request and then resubmits the exact same signed
+      envelope and nonce.
+- [ ] The first request completes normally and records its accepted receipt.
+- [ ] The replay is rejected by the gateway-owned nonce store before a second proof
+      verification or dataset read.
+- [ ] The browser receives a replay result with no protected rows or policy details.
+- [ ] The gateway records one coarse rejected replay receipt from an existing trusted
+      cache entry without accepting unverified claim data.
+- [ ] Existing in-scope, cache-hit, and scope-denial paths remain unchanged.
 - [ ] Focused gateway and console checks pass.
 
 ## Architecture Constraints
 
-- Gateway denials cannot identify the failing relationship, policy node, or caveat.
-- A rejected request cannot read the transaction store.
-- The denial receipt contains public claim identifiers and digests only.
-- The console cannot forge a success response or evaluate PolicyIR locally.
-- No new dependency, proof field, capability field, or policy semantic is added.
+- The gateway remains the sole replay authority.
+- A service failure never releases a consumed nonce.
+- The replay receipt can use only a previously verified cache entry bound to the same
+  capability ID and proof digest.
+- The replay path cannot call `razield`, rerun the SP1 verifier, or read transactions.
+- Public responses remain generic and disclose no policy branch or private witness.
 
 ## File Scope
 
 - `apps/demo-console/app/api/reconciliation/query/`
-- `apps/demo-console/components/reconciliation-workspace.tsx`
+- `apps/demo-console/components/denial-lab-workspace.tsx`
 - `apps/demo-console/lib/portal-client/`
 - `apps/demo-console/test/reconciliation-route.test.ts`
 - `apps/demo-gateway/src/protected-request/`
 - `apps/demo-gateway/test/protected-query.test.ts`
 - `docs/runbooks/M5-LOCAL-PORTAL.md`
 - `docs/agent/CURRENT-BATON.md`
-- `docs/agent/history/B-0053-controlled-scope-denial.md`
+- `docs/agent/history/B-0054-exact-envelope-replay.md`
 
 ## Out Of Scope
 
-- Exact replay, expiry, alteration, and unsigned-request controls
-- Receipt history, filtering, and export
+- A second replay store in `verifierd`
+- Free-form request mutation controls
+- Receipt browsing, filtering, and export
 - Real transaction data
 - Mobile layout polish
 
 ## Decisions
 
-- Inherited: FR-089 requires generic public denials.
-- Inherited: FR-100 requires receipts for protected requests.
-- Local implementation choice: the controlled target uses a fixed safe synthetic
-  dataset identifier. It is not a free-form request editor.
-- Local implementation choice: a rejected receipt is written only after the gateway
-  has trusted verified claims and a valid agent signature. Earlier malformed input
-  remains a generic rejection without claim-derived receipt fields.
+- Inherited: ADR-0002 fixes the gateway as the sole atomic nonce authority.
+- Inherited: UF-11 requires an exact signed-envelope replay, not a newly signed request
+  that happens to reuse one field.
+- Local implementation choice: the console performs the valid request and exact
+  resubmission inside one authenticated server route. It returns only the replay
+  outcome to the browser.
+- Local implementation choice: a replay receipt is written only when the matching
+  public verification cache entry already exists and its signature and claims still
+  validate. A cache miss remains a generic rejection without claim-derived fields.
 
 ## Open Questions And Blockers
 
@@ -74,30 +78,33 @@ details and must append a bounded public rejected receipt.
 
 ## Work Completed
 
-- Reconciled UF-10 with FR-087, FR-089, FR-100, and the existing generic route error.
+- Reconciled UF-11 with ADR-0002, FR-085, FR-086, and the existing nonce-first
+  gateway order.
 
 ## Validation Plan
 
-- Add focused service tests proving valid signature and nonce processing precede the
-  scope denial, no dataset read occurs, and one coarse receipt is appended.
-- Add console route and presentation checks for the controlled denial action.
+- Add a service test proving replay rejection uses the same envelope and causes no
+  second verification or dataset read.
+- Add a console route test proving the two gateway calls carry byte-identical
+  envelopes and only the generic replay result reaches the browser.
 - Run focused gateway and console test, lint, type, format, and production builds.
-- Run `git diff --check` and inspect the denied response and receipt field set.
+- Run `git diff --check` and inspect the replay receipt field set.
 
 ## Validation Evidence
 
 | Command or check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| Source reconciliation against FR-087, FR-089, and FR-100 | PASS | UF-10 boundary | 2026-08-30T07:04:52Z |
+| Source reconciliation against ADR-0002 and FR-085/FR-086 | PASS | UF-11 replay boundary | 2026-08-30T07:48:58Z |
 
 ## Risks And Private-Data Notes
 
-- A denial receipt cannot include the requested out-of-scope identifier if that value
-  is not an approved public claim. It records the capability public scope and a coarse
-  denial reason.
-- Receipt failures must fail closed. No transaction read can occur first.
+- An arbitrary replay rejection cannot trust claim fields from the submitted
+  capability. Receipt creation needs the bound cached verification from the accepted
+  first request.
+- The console must discard the first request rows during this controlled action. The
+  normal Reconciliation path remains the place to display protected results.
 
 ## Exact Next Action
 
-Commit archived B-0052 locally, then add a typed denied receipt path to the gateway
-service before wiring the console action.
+Commit archived B-0053 locally, then add a trusted-cache replay receipt path to the
+gateway before wiring the two-send console action.

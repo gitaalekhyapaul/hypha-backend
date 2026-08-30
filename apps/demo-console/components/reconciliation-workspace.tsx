@@ -94,6 +94,7 @@ export function ReconciliationWorkspace({
           {
             job_id: job.job_id,
             dataset_id: dataset.datasetId,
+            request_mode: "IN_SCOPE",
             from_occurred_at: inputToUtc(window.from),
             to_occurred_at: inputToUtc(window.to),
             limit: Number(limit),

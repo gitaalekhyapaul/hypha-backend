@@ -67,18 +67,21 @@ export async function readReconciliationQuery(
     const object = exactObject(input, [
       "job_id",
       "dataset_id",
+      "request_mode",
       "from_occurred_at",
       "to_occurred_at",
       "limit",
     ]);
     const jobId = stringValue(object.job_id);
     const datasetId = stringValue(object.dataset_id);
+    const requestMode = object.request_mode;
     const fromOccurredAt = utcSecond(object.from_occurred_at);
     const toOccurredAt = utcSecond(object.to_occurred_at);
     const limit = integerValue(object.limit);
     if (
       !LOWER_HEX_DIGEST.test(jobId) ||
       !SAFE_ID.test(datasetId) ||
+      (requestMode !== "IN_SCOPE" && requestMode !== "OUT_OF_SCOPE") ||
       fromOccurredAt.milliseconds > toOccurredAt.milliseconds ||
       toOccurredAt.milliseconds - fromOccurredAt.milliseconds > MAX_QUERY_RANGE_MILLISECONDS ||
       limit < 1 ||
@@ -89,6 +92,7 @@ export async function readReconciliationQuery(
     return {
       job_id: jobId,
       dataset_id: datasetId,
+      request_mode: requestMode,
       from_occurred_at: fromOccurredAt.value,
       to_occurred_at: toOccurredAt.value,
       limit,

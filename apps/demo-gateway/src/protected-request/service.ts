@@ -98,14 +98,42 @@ export class ProtectedQueryService {
       verificationPath = "VERIFIER";
     }
 
-    validateVerifiedClaims(
-      verification.claims,
-      inspection.capabilityId,
-      datasetId,
-      envelope.agentPublicKeyHex,
-      envelope.requestTimestampUnixSeconds,
-      nowUnixSeconds,
-    );
+    const receiptInput: ReceiptInput = {
+      claims: verification.claims,
+      policyRecordId: verification.policyRecordId,
+      proofDigestHex: verification.proofDigestHex,
+      requestMethod: envelope.requestMethod,
+      canonicalRequestTarget: envelope.canonicalRequestTarget,
+      requestBodyHashHex: envelope.requestBodyHashHex,
+      requestNonceHex: envelope.requestNonceHex,
+      requestTimestampUnixSeconds: envelope.requestTimestampUnixSeconds,
+      occurredAtUnixSeconds: nowUnixSeconds,
+    };
+    try {
+      validateVerifiedClaims(
+        verification.claims,
+        inspection.capabilityId,
+        datasetId,
+        envelope.agentPublicKeyHex,
+        envelope.requestTimestampUnixSeconds,
+        nowUnixSeconds,
+      );
+    } catch (error) {
+      if (!(error instanceof AuthorizationRejectedError)) {
+        throw error;
+      }
+      const deniedReceipt = createPublicReceipt({
+        ...receiptInput,
+        outcome: "AUDIT_OUTCOME_REJECTED",
+        reasonCode: "PUBLIC_ERROR_CODE_NOT_AUTHORIZED",
+      });
+      try {
+        await this.#dependencies.receiptStore.append(deniedReceipt);
+      } catch {
+        throw new ProtectedQueryInfrastructureError();
+      }
+      throw error;
+    }
 
     if (verificationPath === "VERIFIER") {
       const cacheTtlSeconds = Number(verification.claims.expiresAtUnixSeconds - nowUnixSeconds);
@@ -118,17 +146,7 @@ export class ProtectedQueryService {
 
     try {
       const rows = await this.#dependencies.queryDataset(datasetId, envelope.query);
-      const receipt = createPublicReceipt({
-        claims: verification.claims,
-        policyRecordId: verification.policyRecordId,
-        proofDigestHex: verification.proofDigestHex,
-        requestMethod: envelope.requestMethod,
-        canonicalRequestTarget: envelope.canonicalRequestTarget,
-        requestBodyHashHex: envelope.requestBodyHashHex,
-        requestNonceHex: envelope.requestNonceHex,
-        requestTimestampUnixSeconds: envelope.requestTimestampUnixSeconds,
-        occurredAtUnixSeconds: nowUnixSeconds,
-      });
+      const receipt = createPublicReceipt(receiptInput);
       try {
         await this.#dependencies.receiptStore.append(receipt);
       } catch {
@@ -164,9 +182,13 @@ interface ReceiptInput {
   readonly requestNonceHex: string;
   readonly requestTimestampUnixSeconds: bigint;
   readonly occurredAtUnixSeconds: bigint;
+  readonly outcome?: PublicReceipt["outcome"];
+  readonly reasonCode?: PublicReceipt["reason_code"];
 }
 
 export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
+  const outcome = input.outcome ?? "AUDIT_OUTCOME_ACCEPTED";
+  const reasonCode = input.reasonCode ?? "PUBLIC_ERROR_CODE_UNSPECIFIED";
   const requestId = digestFields("raziel/protected-request-id/v1", [
     input.claims.capabilityId,
     input.requestMethod,
@@ -178,7 +200,7 @@ export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
   const receiptId = digestFields("raziel/audit-receipt-id/v1", [
     requestId,
     input.proofDigestHex,
-    "AUDIT_OUTCOME_ACCEPTED",
+    outcome,
   ]);
   const publicClaimsDigest = createHash("sha256")
     .update(
@@ -218,8 +240,8 @@ export function createPublicReceipt(input: ReceiptInput): PublicReceipt {
     action: input.claims.action,
     resource_type: input.claims.resourceType,
     resource_scope: input.claims.resourceScope,
-    outcome: "AUDIT_OUTCOME_ACCEPTED",
-    reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED",
+    outcome,
+    reason_code: reasonCode,
   };
 }
 
