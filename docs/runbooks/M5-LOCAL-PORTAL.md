@@ -1,10 +1,8 @@
 # M5 Local Portal
 
-Status: synthetic M5 workflow through UF-12 implemented locally. Live VM validation
-and screenshots remain pending.
-
-UF-08 through UF-12 pass their focused local checks. A live VM walkthrough still
-requires the current local commits to be pushed and pulled onto the VM.
+Status: complete. The synthetic UF-01 through UF-14 workflow passed on the NUS VM in
+live Plonk mode on 2026-08-30 UTC. The walkthrough evidence and screenshots are
+recorded below.
 
 ## Start
 
@@ -66,9 +64,9 @@ The initializer preserves an existing verifier. Set
 | Local recorded | Operator login, synthetic dataset revisions, visual policy compilation and activation, Access Graph publication, public proof-job playback, and receipt browsing | Capability issuance, protected queries, cache reuse, and Denial Lab controls |
 | Live NUS VM | The complete UF-01 through UF-12 path, one fresh Plonk proof, verifier and cache query paths, five denial controls, and public receipt export | M6 real-transaction acceptance and any second scenario |
 
-The local commits contain the complete desktop feature path. The live row above is a
-deployment claim only after the final VM walkthrough passes. Every screen keeps the
-`SYNTHETIC` classification visible. M5 does not claim real payment reconciliation.
+The complete desktop feature path passed through the live NUS VM deployment. Every
+screen keeps the `SYNTHETIC` classification visible. M5 does not claim real payment
+reconciliation.
 
 ## Panel Map
 
@@ -97,32 +95,43 @@ only after a live succeeded capability authorizes the finalized dataset.
 | UF-04 Review And Activate A Policy | Policy | Review the candidate and approve activation | Active policy record ID, version, epoch, generation, and `policy_hash` | Implemented, recorded and live |
 | UF-05 Publish Relationships And Snapshot | Access graph | Create the agent, review relationships, and publish | Snapshot ID, root, policy binding, count, and expiry | Implemented, recorded and live |
 | UF-06 Request A Capability | Capability | Review the bound request and submit it once | Stable proof-job ID and asynchronous state | Implemented, recorded and live |
-| UF-07 Monitor A Real Proof | Capability | Keep the status panel open through proving | Public progress, succeeded capability claims, proof size, and timings | Recorded playback locally, real proof pending final VM run |
+| UF-07 Monitor A Real Proof | Capability | Keep the status panel open through proving | Public progress, succeeded capability claims, proof size, and timings | Live VM passed |
 | UF-08 Run The First Protected Query | Reconciliation | Submit one signed bounded query | `VERIFIER`, synthetic rows, and an accepted receipt | Implemented, live VM only |
 | UF-09 Reuse A Verified Capability | Reconciliation | Run another query with a fresh nonce | `CACHE HIT`, same capability and proof digest, new request and receipt IDs | Implemented, live VM only |
 | UF-10 Demonstrate Scope Denial | Denial lab | Submit the fixed out-of-scope request | Generic `DENIED`, no rows, and an owner public rejection receipt | Implemented, live VM only |
 | UF-11 Demonstrate Replay Rejection | Denial lab | Replay the exact envelope and run the fixed expired, altered, and unsigned controls | `REPLAYED`, `EXPIRED`, `ALTERED`, and `UNSIGNED`, each with no rows | Implemented, live VM only |
 | UF-12 Inspect And Export Receipts | Receipts | Filter public records and export JSONL | Validated public audit history | Implemented, meaningful after completed actions |
 | UF-13 Use Local Recorded Mode | All available recorded panels | Start with `--recorded` and inspect the public timeline | Fast UI walkthrough with protected success visibly locked | Implemented locally |
-| UF-14 Run The Live VM Demo | All panels | Start live Compose on the VM and open it through the SSH tunnel | One connected draft-to-proof-to-query walkthrough | Pending final VM validation |
+| UF-14 Run The Live VM Demo | All panels | Start live Compose on the VM and open it through the SSH tunnel | One connected draft-to-proof-to-query walkthrough | Passed on 2026-08-30 UTC |
 
 ## Screenshot Set
 
-Capture screenshots during the live VM walkthrough after the matching action passes:
+Screenshot files live under `docs/images/m5-live/`. Each image came from the live VM
+portal through the Mac SSH tunnel. The Access Graph frame shows the operator-authored
+synthetic relationship preview. The frames contain no passwords, private keys, raw
+capability bytes, hidden snapshot records, salts, Merkle openings, private caveat
+values, witness data, or private logs.
 
-1. Finalized Dataset with checksum, fingerprint, and row count.
-2. Policy visual blocks beside the compiled candidate summary.
-3. Access Graph preview beside the accepted public snapshot record.
-4. Capability in `PROVING`, then the succeeded public status.
-5. First Reconciliation result marked `VERIFIER`.
-6. Second Reconciliation result marked `CACHE HIT`.
-7. Denial Lab controls with a generic no-rows result.
-8. Receipts filtered to the live capability, including verification and request rows.
+## Live VM Evidence
 
-Add each image beneath its matching walkthrough step. Keep passwords, private keys,
-raw capability bytes, witness data, relationships, caveat values, and private logs
-outside every frame. Recorded-mode images cannot stand in for screenshots 4 through
-8.
+The passing walkthrough used these public records:
+
+- Dataset `reconciliation-demo`, finalized with three synthetic rows.
+- Policy `reconciliation-query-demo-20260831`, record
+  `policy-97242c50492567db4dca1b64d6dd134d`, and policy hash
+  `0bb81b18a3de63db816659b3b444fb4b5ce4e4afb684cc040d759990b8f71411`.
+- Snapshot
+  `snapshot-v1:8fbe317a2ce81d53be6c7a5b04159ebc1412d2e5f7aad70c82d90e907f047222`.
+- Proof job `81ef092832f868903ac79c66f45d6f049eee38eacd9af07e99b11cb92f4c130d`.
+- Guest execution took 427 ms. Plonk proving took 937,078 ms, about 15 minutes
+  37 seconds. The proof artifact was 2,536 bytes.
+- The first protected request used the independent verifier. The second request used
+  the verified-capability cache with a fresh nonce and receipt.
+- Scope, replay, expired, altered, and unsigned requests returned no transaction
+  rows.
+- The receipt ledger showed six public records. An exact request-ID filter returned
+  the linked verification and protected-request rows. JSONL export downloaded.
+- The browser console reported no warnings or errors during the final receipt check.
 
 ## Current Workflows
 
@@ -211,20 +220,24 @@ task, capability, proof job, policy, snapshot, or request IDs. The table separat
 capability-verification records from protected requests and shows accepted, denied,
 and replayed outcomes.
 
-The active policy selection currently lasts for one browser session. A page refresh
-requires the operator to open Policy and activate the candidate again. This does not
-create another policy record for the same activation request.
+The portal keeps each unlocked panel mounted for the authenticated page session.
+Sidebar navigation retains the compiled policy, active policy record, accepted
+snapshot, terminal capability, query results, denial results, and receipt filter.
+
+A full page reload clears that browser orchestration state. It does not revoke or
+delete the trusted server records. The receipt ledger remains available after reload.
+Do not reload the page during the connected live walkthrough.
 
 Policy version and approval epoch remain explicit operator inputs. A fresh trusted
 registry starts at version 1 and epoch 1. A persistent registry requires the next
 epoch for a new record under the same policy name. The current PoC does not expose a
 registry-history read API to the browser, so it cannot derive that value after a
-server restart.
+server restart or full browser reload. A conflicting activation returns the typed
+version-or-epoch message rather than a false service-unavailable message.
 
 ## Deploy To The VM
 
-The VM must first pull the commits that contain B-0051 through B-0056. Do not run the
-live profile from the current remote branch until those commits have been pushed.
+Pull the current reviewed `main` branch before starting the live profile.
 
 ```bash
 cd ~/hypha-backend
@@ -290,44 +303,84 @@ Use the live VM profile for this walkthrough:
 1. Sign in with `RAZIEL_M5_OPERATOR_PASSWORD`.
 2. Open Dataset. Create or select the synthetic reconciliation revision, then save
    and finalize it. Show its row count, checksum, and schema fingerprint.
+
+   ![Finalized synthetic reconciliation dataset](../images/m5-live/01-dataset-finalized.png)
+
 3. Open Policy. Pick one supported visual rule shape, review the visual blocks, then
    select `Compile candidate`.
+
+   ![Compiled visual policy candidate](../images/m5-live/02-policy-compiled.png)
+
 4. Review the compiled public summary, then select `Approve and activate`. Show the
    active policy record and `policy_hash`.
+
+   ![Approved and active policy record](../images/m5-live/02-policy-approved.png)
+
 5. Open Access Graph. Create the ephemeral agent, review the policy-bound access
    inputs, then select `Publish access graph`. Show the snapshot ID and relationship
    root. Private relationships remain hidden.
+
+   ![Published access snapshot public record](../images/m5-live/03-access-snapshot.png)
+
 6. Open Agent and capability. Review the agent, task, purpose, action, dataset scope,
    policy hash, and snapshot. Select `Request capability` once.
 7. Keep the page open during queued and proving states. The current VM profile should
    finish in about 16 minutes based on the accepted M4 run. Wait for `SUCCEEDED` and
    the public capability claims.
+
+   ![Live capability proof in progress](../images/m5-live/04-capability-proving.png)
+
+   ![Live capability proof succeeded](../images/m5-live/05-capability-succeeded.png)
+
 8. Open Reconciliation. Keep the default UTC window or choose a bounded window, set a
    row limit from 1 to 100, then select `Run protected query`.
 9. Show the returned `SYNTHETIC` transaction rows and the public receipt. Point out
    the `VERIFIER` result, capability, proof job, policy, snapshot, request, proof
    digest, and accepted outcome fields.
+
+   ![First protected query accepted by the verifier](../images/m5-live/06-query-verifier.png)
+
 10. Select `Run protected query` again without requesting another capability. The
     console signs a fresh nonce. Show `CACHE HIT`, the same capability and proof
     digest, and a different request and receipt ID. The gateway still checks the
     agent signature, freshness, replay nonce, key binding, target, and scope.
+
+    ![Second protected query accepted through the cache](../images/m5-live/07-query-cache-hit.png)
+
 11. Open Denial lab and select `Test scope denial`. Show the generic `DENIED` result
     and the absence of transaction rows. The owner-side receipt records
     `AUDIT_OUTCOME_REJECTED` with `PUBLIC_ERROR_CODE_NOT_AUTHORIZED` but does not
     expose the denied dataset identifier or a policy path.
+
+    ![Out-of-scope request denied](../images/m5-live/08-denial-scope.png)
+
 12. Select `Test exact replay`. Show `REPLAYED` and no transaction rows. This action
     sends one valid request, then resubmits the exact envelope and nonce. The second
     call does not rerun the verifier or read the dataset.
+
+    ![Exact request replay rejected](../images/m5-live/09-denial-replay.png)
+
 13. Select `Test expired request`. Show `EXPIRED` and no transaction rows. The
     console signs the request 301 seconds before submission, outside the five-minute
     freshness window.
+
+    ![Expired request rejected](../images/m5-live/10-denial-expired.png)
+
 14. Select `Test altered request`. Show `ALTERED` and no transaction rows. The
     console changes the signed body hash before gateway submission.
+
+    ![Altered signed request rejected](../images/m5-live/11-denial-altered.png)
+
 15. Select `Test unsigned request`. Show `UNSIGNED` and no transaction rows. The
     console removes the agent signature before gateway submission.
+
+    ![Unsigned request rejected](../images/m5-live/12-denial-unsigned.png)
+
 16. Open Receipts. Show the capability-verification record, accepted protected
     requests, scope denial, and replay rejection. Filter by the capability or request
     ID, then select `Export JSONL` to download the validated public projection.
+
+    ![Receipts filtered by exact request ID](../images/m5-live/13-receipts-filtered.png)
 
 After the walkthrough, inspect the owner-side receipt and bounded service logs on the
 VM:
@@ -341,9 +394,9 @@ tail -n 3 .raziel/m5/receipts.jsonl
   logs --tail 100 demo-gateway demo-verifierd demo-proof-worker
 ```
 
-The M5 desktop feature path now reaches receipt export. The live VM walkthrough
-remains the final M5 runtime gate. Recorded mode can demonstrate the portal and public
-proof timeline, but it cannot unlock Reconciliation or Denial Lab.
+The M5 desktop feature path passed through receipt export on the live VM. Recorded
+mode can demonstrate the portal and public proof timeline, but it cannot unlock
+Reconciliation or Denial Lab.
 
 ## Stop
 

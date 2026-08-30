@@ -89,6 +89,19 @@ describe("M5 explicit policy activation route", () => {
     });
     expect(invalid.status).toBe(400);
   });
+
+  it("preserves a typed trusted-state conflict from the activation client", async () => {
+    await configureFixture(`#!/usr/bin/env node
+console.error("raziel-policy-activate: policy activation conflicts with trusted state");
+process.exit(1);
+`);
+    const session = await login();
+    const response = await activationRoute(activationRequest(session), {
+      params: Promise.resolve({ candidateId: "candidate-activation-001" }),
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: "POLICY_ACTIVATION_CONFLICT" });
+  });
 });
 
 interface LoggedInSession {
@@ -123,7 +136,7 @@ function activationRequest(session: LoggedInSession): Request {
   });
 }
 
-async function configureFixture(): Promise<void> {
+async function configureFixture(source = activationSource()): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "raziel-policy-activation-route-"));
   roots.push(root);
   await chmod(root, 0o700);
@@ -142,7 +155,7 @@ async function configureFixture(): Promise<void> {
     { mode: 0o600 },
   );
   const executable = join(root, "activate.mjs");
-  await writeFile(executable, activationSource(), { mode: 0o700 });
+  await writeFile(executable, source, { mode: 0o700 });
   process.env.RAZIEL_OPERATOR_SECRET_PATH = secretPath;
   process.env.RAZIEL_OPERATOR_EXPECTED_ORIGIN = ORIGIN;
   process.env.RAZIEL_OPERATOR_LIVE_MODE = "false";

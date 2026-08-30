@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: active baseline; M0 through M4 validated; M5 ready
+Status: active baseline; M0 through M5 validated; M6 pending real-data approval
 
-Last updated: 2026-08-26
+Last updated: 2026-08-31
 
 ## Human-readable overview
 
@@ -41,7 +41,7 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M2 | Complete | Canonical commitments, blinded snapshots, authority signatures, and local registries |
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
-| M5 | Ready | Next.js console and gateway shells exist; gateway, SDK, replay, transaction, receipt, and console wiring remains |
+| M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
 | M6 | Pending | No approved real transaction source or acceptance run |
 | M7 | Pending | Starts only after the M6 reconciliation gate |
 
@@ -50,12 +50,15 @@ The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced
 and verified in 438 milliseconds. This closes the cryptographic M3 gate. It does not
 claim real-data acceptance.
 
-M5 can produce the first connected visual checkpoint once M4 services exist. The
-portal can create and review synthetic transaction records in the existing
-reconciliation scenario. It labels the dataset `SYNTHETIC`, records the local source,
-checksum, schema fingerprint, and row count, then sends protected queries through the
-gateway. This is a development demonstration, not the M6 acceptance run. It does not
-create a second scenario.
+M5 produced the first connected visual checkpoint on the NUS VM. The portal created
+and reviewed synthetic transaction records in the existing reconciliation scenario.
+It labeled the dataset `SYNTHETIC`, recorded the local source, checksum, schema
+fingerprint, and row count, then sent protected queries through the gateway. One live
+Plonk capability supported an independent-verifier query and a cache-backed query.
+Scope, replay, expiry, alteration, and missing-signature controls returned no rows.
+The [M5 portal runbook](docs/runbooks/M5-LOCAL-PORTAL.md) records the public evidence
+and screenshots. This development demonstration is not the M6 acceptance run. It does
+not create a second scenario.
 
 ### The key distinction from a signed token
 

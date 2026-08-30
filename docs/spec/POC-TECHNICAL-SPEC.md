@@ -1234,7 +1234,13 @@ Exit gate:
 
 ### M5: Next.js gateway and console
 
-Status: ready for implementation; process and application shells only.
+Status: complete on 2026-08-30. The live NUS VM walkthrough created and finalized a
+three-row synthetic dataset, compiled and activated a visual policy, published a
+key-bound relationship snapshot, generated one local Plonk capability, ran one
+verifier-backed query and one cache-backed query, rejected all five Denial Lab
+requests without rows, filtered the public receipt ledger, and downloaded its JSONL
+projection. The [M5 portal runbook](../runbooks/M5-LOCAL-PORTAL.md) records the public
+evidence and screenshots. This synthetic gate does not satisfy M6.
 
 Deliver:
 

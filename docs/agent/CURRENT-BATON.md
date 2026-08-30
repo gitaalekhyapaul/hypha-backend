@@ -5,10 +5,11 @@
 - Milestone: M5, live VM desktop walkthrough
 - Owner: Codex
 - Started UTC: 2026-08-30T08:45:14Z
-- Last updated UTC: 2026-08-30T08:58:22Z
+- Last updated UTC: 2026-08-30T20:32:13Z
 - Branch: `main`
-- Worktree: B-0051 through B-0056 are committed locally but are not on
-  `origin/main`. The expanded live demo guide is uncommitted.
+- Worktree: `main` and the VM ran commit `8700537`. One scoped navigation and typed
+  error fix, M5 status documents, the expanded runbook, and live screenshots are
+  uncommitted locally.
 
 ## Objective
 
@@ -18,17 +19,17 @@ controls, public receipt export, and screenshots of the verified panel states.
 
 ## Acceptance Criteria
 
-- [ ] The VM pulls the reviewed B-0051 through B-0056 commits from `origin/main`.
-- [ ] `./scripts/start-m5-demo` starts the live stack from Docker-only host tooling.
-- [ ] Dataset, policy, access graph, and capability flows complete through one real
+- [x] The VM pulls the reviewed B-0051 through B-0056 commits from `origin/main`.
+- [x] `./scripts/start-m5-demo` starts the live stack from Docker-only host tooling.
+- [x] Dataset, policy, access graph, and capability flows complete through one real
       Plonk proof.
-- [ ] Reconciliation returns one verifier-backed result and one cache-backed result.
-- [ ] Scope, replay, expired, altered, and unsigned controls return no protected rows.
-- [ ] Receipts browse, filter, and export the validated public projection.
-- [ ] Runtime findings and exact evidence are recorded without private witness data.
+- [x] Reconciliation returns one verifier-backed result and one cache-backed result.
+- [x] Scope, replay, expired, altered, and unsigned controls return no protected rows.
+- [x] Receipts browse, filter, and export the validated public projection.
+- [x] Runtime findings and exact evidence are recorded without private witness data.
 - [x] The runbook maps every panel, UF-01 through UF-14, unlock prerequisite, and
       recorded-versus-live boundary.
-- [ ] The runbook includes screenshots captured from the passing live VM flow.
+- [x] The runbook includes screenshots captured from the passing live VM flow.
 
 ## Architecture Constraints
 
@@ -45,7 +46,9 @@ controls, public receipt export, and screenshots of the verified panel states.
 - `docs/runbooks/M5-LOCAL-PORTAL.md`
 - `docs/agent/CURRENT-BATON.md`
 - `docs/agent/history/B-0057-live-vm-desktop-walkthrough.md`
-- Runtime fixes discovered by the walkthrough only after local scope reconciliation
+- `apps/demo-console/components/operator-portal.tsx`
+- `apps/demo-console/lib/policy-activation/process.ts`
+- `apps/demo-console/test/policy-activation-route.test.ts`
 
 ## Out Of Scope
 
@@ -63,25 +66,35 @@ controls, public receipt export, and screenshots of the verified panel states.
 
 ## Open Questions And Blockers
 
-- Maintainer approval is required to push the local M5 commits to `origin/main`.
+- Maintainer approval is required before pushing the scoped runtime fix and M5
+  evidence commit to `origin/main` for the final VM navigation regression.
 
 ## Work Completed
 
 - B-0051 through B-0056 implement the complete synthetic M5 desktop feature set.
-- The local recorded stack is running at `http://127.0.0.1:3000`.
-- Docker and the SSH ControlMaster are currently available.
-- The runbook now includes the panel map, user-flow map, demo boundaries, and live
-  screenshot checklist.
+- The VM ran the live stack from commit `8700537` through the Mac SSH tunnel.
+- One Plonk capability succeeded after 937,078 ms and produced a 2,536-byte proof.
+- Verifier and cache queries returned three synthetic rows with separate receipts.
+- All five Denial Lab controls returned no protected rows.
+- Exact receipt filtering returned the two linked records, and JSONL export
+  downloaded.
+- Fourteen live screenshots now cover the public panel states.
+- Browser navigation exposed two presentation-state defects. Unmounting panels
+  discarded their public review state, and typed activation conflicts became false
+  `503` errors.
+- The local fix keeps unlocked panels mounted for the page session and maps fixed
+  Rust conflict and rejection messages to their existing HTTP failure codes.
+- The runbook and current-status documents now record M5 completion and the M6
+  synthetic-versus-real-data boundary.
 
 ## Validation Plan
 
-- Push only after explicit maintainer approval.
-- Pull the reviewed commits on the VM without editing source there.
-- Start the live stack through `scripts/start-m5-demo`.
-- Follow the 16-step walkthrough in `docs/runbooks/M5-LOCAL-PORTAL.md`.
-- Capture the eight approved public UI states during that walkthrough and place them
-  beneath their matching runbook steps.
-- Record bounded public results and service health without witness data.
+- Verify every screenshot exists and renders.
+- Check all current-state milestone claims for stale M5 text.
+- Run `git diff --check` and inspect the scoped diff.
+- Run privacy and secret scans over the new documentation and images.
+- After an approved push, pull the commit on the VM and verify that sidebar navigation
+  retains the active public records without another activation request.
 
 ## Validation Evidence
 
@@ -90,6 +103,15 @@ controls, public receipt export, and screenshots of the verified panel states.
 | B-0056 demo-console tests, lint, typecheck, and build | PASS | Final local M5 desktop feature controls | 2026-08-30T08:45:14Z |
 | Docker Compose running-service check | PASS | Local recorded M5 stack | 2026-08-30T08:42:19Z |
 | Runbook reconciliation against the M5 plan and current panel source | PASS | Eight panels and UF-01 through UF-14 | 2026-08-30T08:58:22Z |
+| Live VM browser walkthrough | PASS | UF-01 through UF-14, one real Plonk proof | 2026-08-30T19:33:58Z |
+| Exact request-ID receipt filter and JSONL download | PASS | Two linked public records and export | 2026-08-30T20:13:25Z |
+| Browser console warning and error check | PASS, no entries | Final live receipt state | 2026-08-30T20:13:25Z |
+| Live conflict diagnosis through the fixed local client boundary | PASS, typed trusted-state conflict found | Policy reactivation after panel remount | 2026-08-30T20:22:00Z |
+| `pnpm --filter @raziel/demo-console test` in pinned toolchain | PASS, 65 tests | Demo console and typed conflict regression | 2026-08-30T20:26:41Z |
+| Demo-console format, lint, typecheck, and production build | PASS | Scoped M5 navigation and error mapping fix | 2026-08-30T20:29:54Z |
+| PNG format and visual inspection | PASS, 14 images | Live public panel evidence | 2026-08-30T20:32:13Z |
+| Current-state stale-claim search and scoped private-data scan | PASS | M5 completion documents | 2026-08-30T20:32:13Z |
+| `git diff --check` | PASS | Complete uncommitted B-0057 diff | 2026-08-30T20:32:13Z |
 
 ## Risks And Private-Data Notes
 
@@ -101,6 +123,5 @@ controls, public receipt export, and screenshots of the verified panel states.
 
 ## Exact Next Action
 
-Commit the expanded demo guide locally. Obtain maintainer approval to push the M5
-commits to `origin/main`, then pull them on the NUS VM and run
-`./scripts/start-m5-demo`.
+Finish the documentation, image, privacy, and diff checks. Commit locally, request
+push approval, then run the scoped VM navigation regression before archiving B-0057.

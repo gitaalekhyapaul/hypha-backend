@@ -201,11 +201,13 @@ export function OperatorPortal() {
               {logoutError}
             </p>
           ) : null}
-          {activeView === "workspace" ? <WorkspaceOverview /> : null}
-          {activeView === "dataset" ? (
+          <div hidden={activeView !== "workspace"}>
+            <WorkspaceOverview />
+          </div>
+          <div hidden={activeView !== "dataset"}>
             <DatasetWorkspace csrfToken={session.csrfToken} onSessionExpired={signOut} />
-          ) : null}
-          {activeView === "policy" ? (
+          </div>
+          <div hidden={activeView !== "policy"}>
             <PolicyWorkspace
               csrfToken={session.csrfToken}
               onSessionExpired={signOut}
@@ -215,48 +217,62 @@ export function OperatorPortal() {
                 setCapabilityJob(null);
               }}
             />
+          </div>
+          {activePolicy ? (
+            <div hidden={activeView !== "access"}>
+              <AccessGraphWorkspace
+                key={activePolicy.candidate.candidate_id}
+                activePolicy={activePolicy}
+                agentSession={agentSession}
+                csrfToken={session.csrfToken}
+                operatorId={session.operatorId}
+                onAgentSessionCreated={setAgentSession}
+                onSessionExpired={signOut}
+                onSnapshotPublished={(selection) => {
+                  setPublishedAccess(selection);
+                  setCapabilityJob(null);
+                }}
+              />
+            </div>
           ) : null}
-          {activeView === "access" && activePolicy ? (
-            <AccessGraphWorkspace
-              activePolicy={activePolicy}
-              agentSession={agentSession}
-              csrfToken={session.csrfToken}
-              operatorId={session.operatorId}
-              onAgentSessionCreated={setAgentSession}
-              onSessionExpired={signOut}
-              onSnapshotPublished={(selection) => {
-                setPublishedAccess(selection);
-                setCapabilityJob(null);
-              }}
-            />
+          {activePolicy && publishedAccess ? (
+            <div hidden={activeView !== "capability"}>
+              <AgentCapabilityWorkspace
+                key={publishedAccess.snapshotId}
+                activePolicy={activePolicy}
+                access={publishedAccess}
+                csrfToken={session.csrfToken}
+                job={capabilityJob}
+                onJobChange={setCapabilityJob}
+                onSessionExpired={signOut}
+              />
+            </div>
           ) : null}
-          {activeView === "capability" && activePolicy && publishedAccess ? (
-            <AgentCapabilityWorkspace
-              activePolicy={activePolicy}
-              access={publishedAccess}
-              csrfToken={session.csrfToken}
-              job={capabilityJob}
-              onJobChange={setCapabilityJob}
-              onSessionExpired={signOut}
-            />
+          {publishedAccess && capabilityJob ? (
+            <div hidden={activeView !== "reconciliation"}>
+              <ReconciliationWorkspace
+                key={capabilityJob.job_id}
+                access={publishedAccess}
+                csrfToken={session.csrfToken}
+                job={capabilityJob}
+                onSessionExpired={signOut}
+              />
+            </div>
           ) : null}
-          {activeView === "reconciliation" && publishedAccess && capabilityJob ? (
-            <ReconciliationWorkspace
-              access={publishedAccess}
-              csrfToken={session.csrfToken}
-              job={capabilityJob}
-              onSessionExpired={signOut}
-            />
+          {publishedAccess && capabilityJob ? (
+            <div hidden={activeView !== "denials"}>
+              <DenialLabWorkspace
+                key={capabilityJob.job_id}
+                access={publishedAccess}
+                csrfToken={session.csrfToken}
+                job={capabilityJob}
+                onSessionExpired={signOut}
+              />
+            </div>
           ) : null}
-          {activeView === "denials" && publishedAccess && capabilityJob ? (
-            <DenialLabWorkspace
-              access={publishedAccess}
-              csrfToken={session.csrfToken}
-              job={capabilityJob}
-              onSessionExpired={signOut}
-            />
-          ) : null}
-          {activeView === "receipts" ? <ReceiptsWorkspace onSessionExpired={signOut} /> : null}
+          <div hidden={activeView !== "receipts"}>
+            <ReceiptsWorkspace onSessionExpired={signOut} />
+          </div>
         </div>
       </main>
     </div>

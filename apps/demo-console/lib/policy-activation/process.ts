@@ -33,6 +33,7 @@ async function runActivationClient(
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let stdout = Buffer.alloc(0);
+    let stderr = Buffer.alloc(0);
     let outputBytes = 0;
     let failed = false;
     let settled = false;
@@ -64,7 +65,9 @@ async function runActivationClient(
       }
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      count(chunk);
+      if (count(chunk)) {
+        stderr = Buffer.concat([stderr, chunk]);
+      }
     });
     child.on("error", () => {
       if (!settled) {
@@ -84,10 +87,27 @@ async function runActivationClient(
       }
       settled = true;
       if (code !== 0 || failed || stdout.byteLength === 0) {
-        reject(new PolicyActivationError("POLICY_ACTIVATION_UNAVAILABLE"));
+        reject(
+          new PolicyActivationError(
+            failed ? "POLICY_ACTIVATION_UNAVAILABLE" : activationFailureCode(stderr),
+          ),
+        );
         return;
       }
       resolve(stdout.toString("utf8"));
     });
   });
+}
+
+function activationFailureCode(
+  stderr: Buffer,
+): "POLICY_ACTIVATION_CONFLICT" | "POLICY_ACTIVATION_REJECTED" | "POLICY_ACTIVATION_UNAVAILABLE" {
+  switch (stderr.toString("utf8").trim()) {
+    case "raziel-policy-activate: policy activation conflicts with trusted state":
+      return "POLICY_ACTIVATION_CONFLICT";
+    case "raziel-policy-activate: policy candidate was rejected":
+      return "POLICY_ACTIVATION_REJECTED";
+    default:
+      return "POLICY_ACTIVATION_UNAVAILABLE";
+  }
 }

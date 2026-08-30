@@ -10,7 +10,7 @@ acceptance run.
 
 ## Current status
 
-M0 through M4 are complete. M3 produced and independently verified a real local SP1
+M0 through M5 are complete. M3 produced and independently verified a real local SP1
 Plonk proof. The approved eight-CPU profile records a 2,537-byte proof,
 929,660-millisecond proving time, 438-millisecond verification time, and a
 45,592,842,240-byte memory peak. See the
@@ -124,8 +124,17 @@ checks, launcher cancellation and exit, terminal capability publication, rendere
 sandbox controls, exact-revision snapshot publication, atomic root registration,
 revocation, expiry bounds, public lifecycle projection, queued and active
 cancellation, duplicate cancellation, and cancellation recovery. The retained-proof
-independent-verifier gate and the complete B-0032 service-flow gate pass. M5 gateway,
-SDK, replay-control, transaction, receipt, and console work is ready to start.
+independent-verifier gate and the complete B-0032 service-flow gate pass.
+
+M5 completed the synthetic desktop demonstration on the NUS VM. The portal created
+and finalized a synthetic transaction revision, compiled and activated a visual
+SpiceDB policy, published a key-bound snapshot, and generated one live Plonk
+capability. The first protected query used the independent verifier. The second used
+the verified-capability cache with a fresh nonce. Scope, replay, expired, altered,
+and unsigned requests returned no rows. Exact receipt filtering and JSONL export
+passed. The [M5 portal runbook](docs/runbooks/M5-LOCAL-PORTAL.md) contains the public
+evidence and screenshots. M6 remains blocked on an approved real transaction source
+and provenance record.
 
 ## Read first
 
