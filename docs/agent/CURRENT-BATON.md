@@ -1,20 +1,20 @@
 # Current Engineering Baton
 
 - Baton ID: B-0057
-- State: READY
+- State: ACTIVE
 - Milestone: M5, live VM desktop walkthrough
-- Owner: unassigned
+- Owner: Codex
 - Started UTC: 2026-08-30T08:45:14Z
-- Last updated UTC: 2026-08-30T08:45:14Z
+- Last updated UTC: 2026-08-30T08:58:22Z
 - Branch: `main`
-- Worktree: B-0056 is archived and awaits a scoped local commit. B-0051 through
-  B-0055 are committed locally but are not on `origin/main`.
+- Worktree: B-0051 through B-0056 are committed locally but are not on
+  `origin/main`. The expanded live demo guide is uncommitted.
 
 ## Objective
 
-Run the complete M5 desktop feature path on the NUS VM in live Plonk mode. Record one
-successful proof-backed query, cache reuse, all five Denial Lab controls, and public
-receipt export.
+Run and document the complete M5 desktop feature path on the NUS VM in live Plonk
+mode. Record one successful proof-backed query, cache reuse, all five Denial Lab
+controls, public receipt export, and screenshots of the verified panel states.
 
 ## Acceptance Criteria
 
@@ -26,6 +26,9 @@ receipt export.
 - [ ] Scope, replay, expired, altered, and unsigned controls return no protected rows.
 - [ ] Receipts browse, filter, and export the validated public projection.
 - [ ] Runtime findings and exact evidence are recorded without private witness data.
+- [x] The runbook maps every panel, UF-01 through UF-14, unlock prerequisite, and
+      recorded-versus-live boundary.
+- [ ] The runbook includes screenshots captured from the passing live VM flow.
 
 ## Architecture Constraints
 
@@ -60,13 +63,15 @@ receipt export.
 
 ## Open Questions And Blockers
 
-- Maintainer approval is required to push the six local M5 commits to `origin/main`.
+- Maintainer approval is required to push the local M5 commits to `origin/main`.
 
 ## Work Completed
 
 - B-0051 through B-0056 implement the complete synthetic M5 desktop feature set.
 - The local recorded stack is running at `http://127.0.0.1:3000`.
 - Docker and the SSH ControlMaster are currently available.
+- The runbook now includes the panel map, user-flow map, demo boundaries, and live
+  screenshot checklist.
 
 ## Validation Plan
 
@@ -74,6 +79,8 @@ receipt export.
 - Pull the reviewed commits on the VM without editing source there.
 - Start the live stack through `scripts/start-m5-demo`.
 - Follow the 16-step walkthrough in `docs/runbooks/M5-LOCAL-PORTAL.md`.
+- Capture the eight approved public UI states during that walkthrough and place them
+  beneath their matching runbook steps.
 - Record bounded public results and service health without witness data.
 
 ## Validation Evidence
@@ -82,6 +89,7 @@ receipt export.
 | --- | --- | --- | --- |
 | B-0056 demo-console tests, lint, typecheck, and build | PASS | Final local M5 desktop feature controls | 2026-08-30T08:45:14Z |
 | Docker Compose running-service check | PASS | Local recorded M5 stack | 2026-08-30T08:42:19Z |
+| Runbook reconciliation against the M5 plan and current panel source | PASS | Eight panels and UF-01 through UF-14 | 2026-08-30T08:58:22Z |
 
 ## Risks And Private-Data Notes
 
@@ -93,5 +101,6 @@ receipt export.
 
 ## Exact Next Action
 
-Obtain maintainer approval to push B-0051 through B-0056 to `origin/main`, then pull
-them on the NUS VM and run `./scripts/start-m5-demo`.
+Commit the expanded demo guide locally. Obtain maintainer approval to push the M5
+commits to `origin/main`, then pull them on the NUS VM and run
+`./scripts/start-m5-demo`.

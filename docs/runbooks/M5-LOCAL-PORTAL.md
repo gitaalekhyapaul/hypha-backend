@@ -1,6 +1,7 @@
 # M5 Local Portal
 
-Status: synthetic M5 workflow through UF-12 implemented locally
+Status: synthetic M5 workflow through UF-12 implemented locally. Live VM validation
+and screenshots remain pending.
 
 UF-08 through UF-12 pass their focused local checks. A live VM walkthrough still
 requires the current local commits to be pushed and pulled onto the VM.
@@ -57,6 +58,71 @@ Later starts reuse the local cache.
 
 The initializer preserves an existing verifier. Set
 `RAZIEL_M5_RESET_OPERATOR=1` for one startup to replace it with the current password.
+
+## What Is Demoable
+
+| Mode | Demoable | Not demoable |
+| --- | --- | --- |
+| Local recorded | Operator login, synthetic dataset revisions, visual policy compilation and activation, Access Graph publication, public proof-job playback, and receipt browsing | Capability issuance, protected queries, cache reuse, and Denial Lab controls |
+| Live NUS VM | The complete UF-01 through UF-12 path, one fresh Plonk proof, verifier and cache query paths, five denial controls, and public receipt export | M6 real-transaction acceptance and any second scenario |
+
+The local commits contain the complete desktop feature path. The live row above is a
+deployment claim only after the final VM walkthrough passes. Every screen keeps the
+`SYNTHETIC` classification visible. M5 does not claim real payment reconciliation.
+
+## Panel Map
+
+| Panel | Main areas and controls | What it does | Evidence to show | Available |
+| --- | --- | --- | --- | --- |
+| Workspace | Scenario header and Workflow status | Orients the operator to the payment-reconciliation scenario and current service state | M5 label, synthetic classification, and workflow state | Recorded and live |
+| Dataset | Revisions list, Transactions editor, `New draft`, `Save`, `Finalize`, and `Clone` | Creates bounded synthetic transactions and freezes an immutable dataset revision | Rows, validation, checksum, schema fingerprint, row count, and finalization time | Recorded and live |
+| Policy | Candidate identity, Rule family blocks, `Compile candidate`, Compiled candidate review, and `Approve and activate` | Renders one supported visual rule shape, runs the real compiler path, and publishes an approved policy record | Visual rule summary, compiler status, policy record ID, version, epoch, and `policy_hash` | Recorded and live |
+| Access graph | Key-bound agent, Assignment context, optional caveat values, Graph preview, `Publish access graph`, and Public record | Creates the server-owned agent identity, writes the selected relationships, and publishes a signed snapshot | Agent thumbprint, accepted relationship count, snapshot ID, relationship root, epoch, and expiry | After policy activation |
+| Capability | Agent binding, Capability scope, Private request context, `Request capability`, cancel control, and Public status | Signs the exact capability request through the SDK and submits the asynchronous proof job | Stable job ID, queued and proving progress, public capability claims, proof size, and timings | Recorded playback locally, real proof on VM |
+| Reconciliation | Query window, `Run protected query`, Transactions, and Receipt summary | Signs a protected request, checks the capability through the verifier or cache, and reads bounded matching rows | `VERIFIER` or `CACHE HIT`, synthetic rows, request ID, receipt ID, proof digest, and accepted outcome | Live capability only |
+| Denial lab | Scope, replay, expired, altered, and unsigned controls with one result area | Sends fixed invalid or unauthorized envelopes to the real gateway | `DENIED`, `REPLAYED`, `EXPIRED`, `ALTERED`, or `UNSIGNED` and no transaction rows | Live capability only |
+| Receipts | Filter field, exact filter value, receipt table, refresh, and `Export JSONL` | Reads and reserializes the bounded public audit ledger | Verification, cache, accepted, scope-denied, and replay records with public identifiers | Recorded and live, populated by completed actions |
+
+The sidebar communicates prerequisites. Access graph unlocks after policy activation.
+Capability unlocks after snapshot publication. Reconciliation and Denial Lab unlock
+only after a live succeeded capability authorizes the finalized dataset.
+
+## User Flow Map
+
+| Flow | Panels | Operator action | Demo output | Status |
+| --- | --- | --- | --- | --- |
+| UF-01 Create Synthetic Transactions | Dataset | Add and save bounded payment records | Editable rows and field validation | Implemented, recorded and live |
+| UF-02 Finalize A Synthetic Dataset | Dataset | Review, finalize, and optionally clone a revision | Immutable checksum, schema fingerprint, count, and timestamp | Implemented, recorded and live |
+| UF-03 Build A Policy Candidate | Policy | Select one of five visual rule families and compile it | Normalized visual summary, compiler status, and candidate hash | Implemented, recorded and live |
+| UF-04 Review And Activate A Policy | Policy | Review the candidate and approve activation | Active policy record ID, version, epoch, generation, and `policy_hash` | Implemented, recorded and live |
+| UF-05 Publish Relationships And Snapshot | Access graph | Create the agent, review relationships, and publish | Snapshot ID, root, policy binding, count, and expiry | Implemented, recorded and live |
+| UF-06 Request A Capability | Capability | Review the bound request and submit it once | Stable proof-job ID and asynchronous state | Implemented, recorded and live |
+| UF-07 Monitor A Real Proof | Capability | Keep the status panel open through proving | Public progress, succeeded capability claims, proof size, and timings | Recorded playback locally, real proof pending final VM run |
+| UF-08 Run The First Protected Query | Reconciliation | Submit one signed bounded query | `VERIFIER`, synthetic rows, and an accepted receipt | Implemented, live VM only |
+| UF-09 Reuse A Verified Capability | Reconciliation | Run another query with a fresh nonce | `CACHE HIT`, same capability and proof digest, new request and receipt IDs | Implemented, live VM only |
+| UF-10 Demonstrate Scope Denial | Denial lab | Submit the fixed out-of-scope request | Generic `DENIED`, no rows, and an owner public rejection receipt | Implemented, live VM only |
+| UF-11 Demonstrate Replay Rejection | Denial lab | Replay the exact envelope and run the fixed expired, altered, and unsigned controls | `REPLAYED`, `EXPIRED`, `ALTERED`, and `UNSIGNED`, each with no rows | Implemented, live VM only |
+| UF-12 Inspect And Export Receipts | Receipts | Filter public records and export JSONL | Validated public audit history | Implemented, meaningful after completed actions |
+| UF-13 Use Local Recorded Mode | All available recorded panels | Start with `--recorded` and inspect the public timeline | Fast UI walkthrough with protected success visibly locked | Implemented locally |
+| UF-14 Run The Live VM Demo | All panels | Start live Compose on the VM and open it through the SSH tunnel | One connected draft-to-proof-to-query walkthrough | Pending final VM validation |
+
+## Screenshot Set
+
+Capture screenshots during the live VM walkthrough after the matching action passes:
+
+1. Finalized Dataset with checksum, fingerprint, and row count.
+2. Policy visual blocks beside the compiled candidate summary.
+3. Access Graph preview beside the accepted public snapshot record.
+4. Capability in `PROVING`, then the succeeded public status.
+5. First Reconciliation result marked `VERIFIER`.
+6. Second Reconciliation result marked `CACHE HIT`.
+7. Denial Lab controls with a generic no-rows result.
+8. Receipts filtered to the live capability, including verification and request rows.
+
+Add each image beneath its matching walkthrough step. Keep passwords, private keys,
+raw capability bytes, witness data, relationships, caveat values, and private logs
+outside every frame. Recorded-mode images cannot stand in for screenshots 4 through
+8.
 
 ## Current Workflows
 
