@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCapabilityRequestInput } from "../lib/agent-capability/request.ts";
+import {
+  buildCapabilityRequestInput,
+  prepareCapabilitySubmission,
+} from "../lib/agent-capability/request.ts";
 import type { PublishedAccessSelection } from "../lib/agent-capability/types.ts";
 import { defaultPolicyBuilderState } from "../lib/policy-builder/index.ts";
 
@@ -32,6 +35,37 @@ describe("M5 capability request binding", () => {
       ),
     ).toThrow("Published dataset does not match the policy-bound resource scope");
   });
+
+  it("reuses one submission ID for an unchanged browser retry", () => {
+    const request = buildCapabilityRequestInput(
+      { ...defaultPolicyBuilderState(), mode: "alternative" },
+      publishedAccess("august-close"),
+      5_400,
+      [],
+    );
+    const first = prepareCapabilitySubmission(request, null, () => SUBMISSION_ID);
+    const retry = prepareCapabilitySubmission(request, first.state, () => "unused");
+
+    expect(first.input.submission_id).toBe(SUBMISSION_ID);
+    expect(retry.input).toEqual(first.input);
+  });
+
+  it("starts a new submission after the request fields change", () => {
+    const firstRequest = buildCapabilityRequestInput(
+      { ...defaultPolicyBuilderState(), mode: "alternative" },
+      publishedAccess("august-close"),
+      5_400,
+      [],
+    );
+    const first = prepareCapabilitySubmission(firstRequest, null, () => SUBMISSION_ID);
+    const changed = prepareCapabilitySubmission(
+      { ...firstRequest, requested_valid_for_seconds: 6_000 },
+      first.state,
+      () => NEXT_SUBMISSION_ID,
+    );
+
+    expect(changed.input.submission_id).toBe(NEXT_SUBMISSION_ID);
+  });
 });
 
 function publishedAccess(datasetId: string): PublishedAccessSelection {
@@ -52,3 +86,5 @@ function publishedAccess(datasetId: string): PublishedAccessSelection {
 }
 
 const SNAPSHOT_ID = `snapshot-v1:${"74".repeat(32)}`;
+const SUBMISSION_ID = "123e4567-e89b-42d3-a456-426614174000";
+const NEXT_SUBMISSION_ID = "123e4567-e89b-42d3-a456-426614174001";

@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
-use bullmq::options::RedisConnectionOptions;
+use bullmq::options::{DeduplicationOptions, RedisConnectionOptions};
 use bullmq::types::{BackoffStrategy, KeepJobs, RemoveOnFinish};
 use bullmq::{JobOptions, QueueOptions, WorkerOptions};
 
@@ -16,6 +16,9 @@ pub const CANCELLATION_QUEUE_NAME: &str = "cancellation-commands";
 
 /// The API and every proof worker use this queue-wide ceiling.
 pub const GLOBAL_CONCURRENCY: u64 = 1;
+
+/// Atomic BullMQ slot held by the one nonterminal PoC proof job.
+pub const PROOF_CAPACITY_DEDUPLICATION_ID: &str = "raziel-proof-capacity-v1";
 
 /// One worker process can invoke at most one proof processor at a time.
 pub const WORKER_CONCURRENCY: usize = 1;
@@ -154,6 +157,7 @@ fn terminal_retention() -> RemoveOnFinish {
 pub(crate) fn retained_job_options() -> JobOptions {
     JobOptions::new()
         .attempts(JOB_ATTEMPTS)
+        .deduplication(proof_capacity_deduplication())
         .remove_on_complete(terminal_retention())
         .remove_on_fail(terminal_retention())
 }
@@ -180,7 +184,7 @@ pub(crate) fn valid_claimed_job_options(options: &JobOptions) -> bool {
         && options.timestamp.is_none()
         && options.stack_trace_limit.is_none()
         && options.parent.is_none()
-        && options.deduplication.is_none()
+        && valid_proof_capacity_deduplication(options.deduplication.as_ref())
         && options.repeat.is_none()
         && options.prev_millis.is_none()
         && options.repeat_job_key.is_none()
@@ -189,6 +193,29 @@ pub(crate) fn valid_claimed_job_options(options: &JobOptions) -> bool {
         && options.remove_dependency_on_failure.is_none()
         && options.continue_parent_on_failure.is_none()
         && options.size_limit.is_none()
+}
+
+fn proof_capacity_deduplication() -> DeduplicationOptions {
+    DeduplicationOptions {
+        id: PROOF_CAPACITY_DEDUPLICATION_ID.to_owned(),
+        ttl: None,
+        extend: None,
+        replace: None,
+        keep_last_if_active: None,
+    }
+}
+
+fn valid_proof_capacity_deduplication(options: Option<&DeduplicationOptions>) -> bool {
+    matches!(
+        options,
+        Some(DeduplicationOptions {
+            id,
+            ttl: None,
+            extend: None,
+            replace: None,
+            keep_last_if_active: None,
+        }) if id == PROOF_CAPACITY_DEDUPLICATION_ID
+    )
 }
 
 pub(crate) fn valid_cancellation_job_options(options: &JobOptions) -> bool {
@@ -281,6 +308,9 @@ mod tests {
         assert_eq!(job.keep_logs, None);
         assert_eq!(job.stack_trace_limit, None);
         assert_eq!(job.size_limit, Some(MAX_PUBLIC_JOB_PAYLOAD_BYTES));
+        assert!(valid_proof_capacity_deduplication(
+            job.deduplication.as_ref()
+        ));
         assert_terminal_retention(job.remove_on_complete.as_ref());
         assert_terminal_retention(job.remove_on_fail.as_ref());
         assert_terminal_retention(worker.remove_on_complete.as_ref());
@@ -293,6 +323,13 @@ mod tests {
         let mut repeated = stored_job;
         repeated.repeat_job_key = Some("not-accepted".into());
         assert!(!valid_claimed_job_options(&repeated));
+
+        let mut wrong_capacity = retained_job_options();
+        wrong_capacity.deduplication = Some(DeduplicationOptions {
+            id: "another-capacity-slot".into(),
+            ..Default::default()
+        });
+        assert!(!valid_claimed_job_options(&wrong_capacity));
     }
 
     #[test]

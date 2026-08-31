@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bullmq::Queue;
+use bullmq::options::DeduplicationOptions;
 use bullmq::types::{JobState, KeepJobs, RemoveOnFinish};
 use ed25519_dalek::{Signer, SigningKey};
 use prost_types::Timestamp;
@@ -25,8 +26,8 @@ use razield::publication::{
 };
 use razield::queue::{
     CAPABILITY_QUEUE_NAME, GLOBAL_CONCURRENCY, JOB_ATTEMPTS, MAX_PUBLIC_JOB_PAYLOAD_BYTES,
-    QueueConfig, TERMINAL_RETENTION_AGE_SECONDS, TERMINAL_RETENTION_COUNT,
-    TERMINAL_RETENTION_EVICTION_LIMIT,
+    PROOF_CAPACITY_DEDUPLICATION_ID, QueueConfig, TERMINAL_RETENTION_AGE_SECONDS,
+    TERMINAL_RETENTION_COUNT, TERMINAL_RETENTION_EVICTION_LIMIT,
 };
 
 const TRUSTED_NOW: i64 = 1_800_000_000;
@@ -48,6 +49,13 @@ async fn publishes_minimal_waiting_job_and_returns_exact_duplicate() -> TestResu
     let publisher = CapabilityJobPublisher::connect(store.clone(), &config).await?;
     let signing_key = signing_key();
     let transport = signed_request(valid_request(&signing_key), &signing_key);
+    let mut distinct_transport = transport.clone();
+    distinct_transport.issuance_nonce = vec![0xc2; 32];
+    distinct_transport.request_signature.clear();
+    let distinct = admit_create_capability_request(
+        signed_request(distinct_transport, &signing_key),
+        TRUSTED_NOW,
+    )?;
     let mut renamed_transport = transport.clone();
     renamed_transport.agent_id = "renamed-display-label".into();
     let admitted = admit_create_capability_request(transport, TRUSTED_NOW)?;
@@ -118,6 +126,16 @@ async fn publishes_minimal_waiting_job_and_returns_exact_duplicate() -> TestResu
     assert_eq!(counts.completed, 0);
     assert_eq!(counts.failed, 0);
     assert_eq!(std::fs::read_dir(root.path())?.count(), 1);
+
+    assert_eq!(
+        publisher.publish(&distinct).await,
+        Err(CapabilityPublicationError::QueueCapacityOccupied)
+    );
+    assert_eq!(
+        store.read(&reference_for(&distinct)?),
+        Err(PrivateEnvelopeError::EnvelopeNotFound)
+    );
+    assert_eq!(queue.get_job_counts().await?.waiting, 1);
 
     let debug = format!("{created:?} {retained:?} {publisher:?}");
     assert!(!debug.contains(admitted.job_id()));
@@ -198,6 +216,10 @@ fn assert_job_policy(job: &bullmq::Job) {
     assert_eq!(options.attempts, Some(JOB_ATTEMPTS));
     let expected = bullmq::JobOptions::new()
         .attempts(JOB_ATTEMPTS)
+        .deduplication(DeduplicationOptions {
+            id: PROOF_CAPACITY_DEDUPLICATION_ID.into(),
+            ..Default::default()
+        })
         .remove_on_complete(RemoveOnFinish::Options(KeepJobs {
             age: Some(TERMINAL_RETENTION_AGE_SECONDS),
             count: Some(TERMINAL_RETENTION_COUNT),

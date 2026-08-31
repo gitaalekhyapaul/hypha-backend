@@ -56,6 +56,12 @@ pub(super) enum QueueAddError {
     Uncertain,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum QueueAddOutcome {
+    Added,
+    CapacityOccupied,
+}
+
 pub(super) trait CapabilityQueue {
     async fn get_job(&self, job_id: &str) -> Result<Option<RetainedQueueJob>, QueueReadError>;
 
@@ -63,7 +69,7 @@ pub(super) trait CapabilityQueue {
         &self,
         job_id: &str,
         payload: &CapabilityJobPayload,
-    ) -> Result<(), QueueAddError>;
+    ) -> Result<QueueAddOutcome, QueueAddError>;
 }
 
 impl BullMqCapabilityQueue {
@@ -85,6 +91,13 @@ impl BullMqCapabilityQueue {
     pub(super) async fn close(&self) {
         self.queue.close().await;
     }
+
+    pub(super) async fn capacity_holder(&self) -> Result<Option<String>, QueueReadError> {
+        self.queue
+            .get_deduplication_job_id(crate::queue::PROOF_CAPACITY_DEDUPLICATION_ID)
+            .await
+            .map_err(map_read_error)
+    }
 }
 
 impl CapabilityQueue for BullMqCapabilityQueue {
@@ -101,7 +114,7 @@ impl CapabilityQueue for BullMqCapabilityQueue {
         &self,
         job_id: &str,
         payload: &CapabilityJobPayload,
-    ) -> Result<(), QueueAddError> {
+    ) -> Result<QueueAddOutcome, QueueAddError> {
         let data = payload
             .to_json_value()
             .map_err(|_| QueueAddError::Rejected)?;
@@ -110,7 +123,13 @@ impl CapabilityQueue for BullMqCapabilityQueue {
             .options(self.job_options.clone())
             .job_id(job_id)
             .await
-            .map(|_| ())
+            .map(|job| {
+                if job.id() == job_id {
+                    QueueAddOutcome::Added
+                } else {
+                    QueueAddOutcome::CapacityOccupied
+                }
+            })
             .map_err(map_add_error)
     }
 }

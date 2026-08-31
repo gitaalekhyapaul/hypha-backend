@@ -19,7 +19,9 @@ use raziel_proto::raziel::v1::{
     AuthorizationContextEntry, CreateCapabilityRequest, authorization_context_entry,
 };
 
-use super::bullmq::{CapabilityQueue, QueueAddError, QueueReadError, RetainedQueueJob};
+use super::bullmq::{
+    CapabilityQueue, QueueAddError, QueueAddOutcome, QueueReadError, RetainedQueueJob,
+};
 use super::coordinator::publish_transaction;
 use super::payload::{CapabilityJobPayload, PayloadError};
 use super::reconciliation::{StartupReconciliationError, reconcile_startup_with_queue};
@@ -254,6 +256,25 @@ async fn confirmed_publication_rejection_removes_a_new_envelope() {
 }
 
 #[tokio::test]
+async fn occupied_capacity_removes_the_losing_private_envelope() {
+    let root = TestRoot::new("capacity-occupied");
+    let store = PrivateEnvelopeStore::open(root.path()).unwrap();
+    let admitted = admitted_request(0xbd, DISPLAY_AGENT_ID);
+    let queue = FakeQueue::new(store.clone());
+    queue.set_add_outcome(QueueAddOutcome::CapacityOccupied);
+
+    assert_eq!(
+        publish_transaction(&store, &queue, &admitted).await,
+        Err(CapabilityPublicationError::QueueCapacityOccupied)
+    );
+    assert_eq!(queue.add_calls(), 1);
+    assert_eq!(
+        store.read(&reference_for(&admitted)),
+        Err(PrivateEnvelopeError::EnvelopeNotFound)
+    );
+}
+
+#[tokio::test]
 async fn failed_cleanup_is_reported_instead_of_the_queue_error() {
     let root = TestRoot::new("cleanup-failure");
     let store = PrivateEnvelopeStore::open(root.path()).unwrap();
@@ -409,7 +430,7 @@ impl CapabilityQueue for ReconciliationQueue {
         &self,
         _job_id: &str,
         _payload: &CapabilityJobPayload,
-    ) -> Result<(), QueueAddError> {
+    ) -> Result<QueueAddOutcome, QueueAddError> {
         panic!("startup reconciliation must not publish jobs")
     }
 }
@@ -423,6 +444,7 @@ struct FakeQueueState {
     record: Option<RetainedQueueJob>,
     reads: VecDeque<Result<Option<RetainedQueueJob>, QueueReadError>>,
     add_error: Option<QueueAddError>,
+    add_outcome: QueueAddOutcome,
     persist_on_success: bool,
     persist_on_uncertain: bool,
     add_saw_durable_envelope: bool,
@@ -438,6 +460,7 @@ impl FakeQueue {
                 record: None,
                 reads: VecDeque::new(),
                 add_error: None,
+                add_outcome: QueueAddOutcome::Added,
                 persist_on_success: true,
                 persist_on_uncertain: false,
                 add_saw_durable_envelope: false,
@@ -453,6 +476,10 @@ impl FakeQueue {
 
     fn set_add_error(&self, error: Option<QueueAddError>) {
         self.state.lock().unwrap().add_error = error;
+    }
+
+    fn set_add_outcome(&self, outcome: QueueAddOutcome) {
+        self.state.lock().unwrap().add_outcome = outcome;
     }
 
     fn set_persist_on_success(&self, persist: bool) {
@@ -493,7 +520,7 @@ impl CapabilityQueue for FakeQueue {
         &self,
         job_id: &str,
         payload: &CapabilityJobPayload,
-    ) -> Result<(), QueueAddError> {
+    ) -> Result<QueueAddOutcome, QueueAddError> {
         let durable = self.store.read(&payload.private_envelope_ref()).is_ok();
         let mut state = self.state.lock().unwrap();
         state.add_saw_durable_envelope = durable;
@@ -501,9 +528,11 @@ impl CapabilityQueue for FakeQueue {
 
         let mut record = retained_job(payload.private_envelope_ref(), JobState::Waiting);
         record.id = job_id.into();
-        match state.add_error {
-            None if state.persist_on_success => state.record = Some(record),
-            Some(QueueAddError::Uncertain) if state.persist_on_uncertain => {
+        match (state.add_error, state.add_outcome) {
+            (None, QueueAddOutcome::Added) if state.persist_on_success => {
+                state.record = Some(record);
+            }
+            (Some(QueueAddError::Uncertain), _) if state.persist_on_uncertain => {
                 state.record = Some(record);
             }
             _ => {}
@@ -512,7 +541,7 @@ impl CapabilityQueue for FakeQueue {
         if let Some(root) = state.break_root_on_add.take() {
             std::fs::set_permissions(root, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
-        state.add_error.map_or(Ok(()), Err)
+        state.add_error.map_or(Ok(state.add_outcome), Err)
     }
 }
 

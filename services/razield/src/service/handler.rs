@@ -238,6 +238,9 @@ fn map_publication_error(error: CapabilityPublicationError) -> Status {
         | CapabilityPublicationError::QueueUnavailable
         | CapabilityPublicationError::QueuePublicationUncertain
         | CapabilityPublicationError::EnvelopeCleanupFailed => unavailable_status(),
+        CapabilityPublicationError::QueueCapacityOccupied => {
+            Status::resource_exhausted("proof capacity is occupied")
+        }
         CapabilityPublicationError::QueuePublicationRejected
         | CapabilityPublicationError::QueueRecordMissing
         | CapabilityPublicationError::QueueRecordMismatch

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActivePolicySelection } from "../lib/access-graph/types.ts";
 import type {
@@ -9,7 +9,11 @@ import type {
   CapabilityJobState,
   PublishedAccessSelection,
 } from "../lib/agent-capability/types.ts";
-import { buildCapabilityRequestInput } from "../lib/agent-capability/request.ts";
+import {
+  type CapabilitySubmissionState,
+  buildCapabilityRequestInput,
+  prepareCapabilitySubmission,
+} from "../lib/agent-capability/request.ts";
 import { CAVEAT_CATALOG } from "../lib/policy-draft/index.ts";
 import {
   cancelCapabilityJob,
@@ -39,6 +43,7 @@ export function AgentCapabilityWorkspace({
   const [requestedAmount, setRequestedAmount] = useState("25000");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submission = useRef<CapabilitySubmissionState | null>(null);
   const requestParameters = useMemo(() => {
     if (activePolicy.builder.mode !== "caveat") {
       return [];
@@ -84,16 +89,21 @@ export function AgentCapabilityWorkspace({
     try {
       const validity = capabilityValidity(validForSeconds, access.snapshotExpiresAtUnixSeconds);
       const requestContext = capabilityContext(requestParameters, requestedAmount);
-      onJobChange(
-        await requestCapability(
-          buildCapabilityRequestInput(activePolicy.builder, access, validity, requestContext),
-          csrfToken,
-        ),
+      const prepared = prepareCapabilitySubmission(
+        buildCapabilityRequestInput(activePolicy.builder, access, validity, requestContext),
+        submission.current,
       );
+      submission.current = prepared.state;
+      const created = await requestCapability(prepared.input, csrfToken);
+      submission.current = null;
+      onJobChange(created);
     } catch (cause) {
       if (cause instanceof PortalRequestError && cause.status === 401) {
         onSessionExpired();
         return;
+      }
+      if (cause instanceof PortalRequestError && cause.code === "CAPABILITY_BUSY") {
+        submission.current = null;
       }
       setError(capabilityFailureMessage(cause));
     } finally {
@@ -397,6 +407,8 @@ function capabilityFailureMessage(cause: unknown): string {
       return "This proof job is no longer attached to the current agent session.";
     case "CAPABILITY_CONFLICT":
       return "This signed request conflicts with an existing proof job.";
+    case "CAPABILITY_BUSY":
+      return "A proof is already running. Wait for it to finish before requesting another.";
     default:
       return "The capability service is unavailable.";
   }

@@ -874,37 +874,30 @@ async fn live_worker_cancels_waiting_and_active_jobs_with_retained_commands()
         Queue::with_options(CANCELLATION_QUEUE_NAME, queue_config.queue_options()).await?;
     proof_queue.obliterate(true, 1_000).await?;
     cancellation_queue.obliterate(true, 1_000).await?;
+    proof_queue.pause().await?;
 
     let store = PrivateEnvelopeStore::open(root.path())?;
     let publisher = CapabilityJobPublisher::connect(store.clone(), &queue_config).await?;
-    let active = admitted_request(0xe1);
     let waiting = admitted_request(0xe2);
-    publisher.publish(&active).await?;
     publisher.publish(&waiting).await?;
-    let active_reference =
-        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", active.job_id()))?;
     let waiting_reference =
         PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", waiting.job_id()))?;
-
-    let executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
-    let supervisor = ProofSupervisor::start_with_clock(
-        config,
-        Arc::clone(&executor) as Arc<dyn CapabilityExecutor>,
-        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
-        Arc::new(FixedClock(TRUSTED_NOW)),
-        super::ProofSupervisorActivation::library_plumbing(),
-    )
-    .await?;
-    tokio::time::timeout(Duration::from_secs(10), executor.wait_until_started()).await?;
 
     let queued_response = publisher
         .cancel(waiting.job_id())
         .await
         .map_err(|error| format!("waiting cancellation publication failed: {error:?}"))?;
-    assert!(matches!(
-        queued_response.state(),
-        PublicCapabilityJobState::Queued | PublicCapabilityJobState::Canceled
-    ));
+    assert_eq!(queued_response.state(), PublicCapabilityJobState::Queued);
+
+    let waiting_executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
+    let waiting_supervisor = ProofSupervisor::start_with_clock(
+        config.clone(),
+        Arc::clone(&waiting_executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
+        Arc::new(FixedClock(TRUSTED_NOW)),
+        super::ProofSupervisorActivation::library_plumbing(),
+    )
+    .await?;
     let canceled_waiting = wait_for_public_state(
         &publisher,
         waiting.job_id(),
@@ -914,6 +907,28 @@ async fn live_worker_cancels_waiting_and_active_jobs_with_retained_commands()
     assert!(canceled_waiting.capability().is_none());
     assert!(proof_queue.get_job(waiting.job_id()).await?.is_none());
     assert!(!root.envelope_path(&waiting_reference).exists());
+    wait_for_completed_commands(&cancellation_queue, 1).await?;
+    waiting_supervisor.close().await?;
+    proof_queue.resume().await?;
+
+    let active = admitted_request(0xe1);
+    publisher.publish(&active).await?;
+    let active_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", active.job_id()))?;
+    let active_executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
+    let active_supervisor = ProofSupervisor::start_with_clock(
+        config,
+        Arc::clone(&active_executor) as Arc<dyn CapabilityExecutor>,
+        Arc::new(AcceptingTerminalValidator) as Arc<dyn CapabilityResultValidator>,
+        Arc::new(FixedClock(TRUSTED_NOW)),
+        super::ProofSupervisorActivation::library_plumbing(),
+    )
+    .await?;
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        active_executor.wait_until_started(),
+    )
+    .await?;
 
     let active_response = publisher
         .cancel(active.job_id())
@@ -965,7 +980,7 @@ async fn live_worker_cancels_waiting_and_active_jobs_with_retained_commands()
     assert!(!root.envelope_path(&waiting_reference).exists());
 
     publisher.close().await;
-    supervisor.close().await?;
+    active_supervisor.close().await?;
     proof_queue.remove_global_concurrency().await?;
     cancellation_queue.remove_global_concurrency().await?;
     proof_queue.obliterate(true, 1_000).await?;
@@ -1002,20 +1017,20 @@ async fn live_cancellation_worker_recovers_retained_commands_before_and_after_ta
 
     let store = PrivateEnvelopeStore::open(root.path())?;
     let publisher = CapabilityJobPublisher::connect(store, &queue_config).await?;
-    let before_removal = admitted_request(0xf1);
-    let after_removal = admitted_request(0xf2);
-    publisher.publish(&before_removal).await?;
-    publisher.publish(&after_removal).await?;
-    publisher.cancel(before_removal.job_id()).await?;
-    publisher.cancel(after_removal.job_id()).await?;
-    assert!(proof_queue.remove(after_removal.job_id()).await?);
+    let removed_target = admitted_request(0xf1);
+    let retained_target = admitted_request(0xf2);
+    publisher.publish(&removed_target).await?;
+    publisher.cancel(removed_target.job_id()).await?;
+    assert!(proof_queue.remove(removed_target.job_id()).await?);
+    publisher.publish(&retained_target).await?;
+    publisher.cancel(retained_target.job_id()).await?;
 
-    let before_reference =
-        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", before_removal.job_id()))?;
-    let after_reference =
-        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", after_removal.job_id()))?;
-    assert!(root.envelope_path(&before_reference).exists());
-    assert!(root.envelope_path(&after_reference).exists());
+    let removed_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", removed_target.job_id()))?;
+    let retained_reference =
+        PrivateEnvelopeRef::from_queue_token(&format!("pe1_{}", retained_target.job_id()))?;
+    assert!(root.envelope_path(&removed_reference).exists());
+    assert!(root.envelope_path(&retained_reference).exists());
 
     let executor = Arc::new(FakeExecutor::new(ExecutorBehavior::AwaitCancellation));
     let supervisor = ProofSupervisor::start_with_clock(
@@ -1029,21 +1044,21 @@ async fn live_cancellation_worker_recovers_retained_commands_before_and_after_ta
 
     wait_for_public_state(
         &publisher,
-        before_removal.job_id(),
+        retained_target.job_id(),
         PublicCapabilityJobState::Canceled,
     )
     .await
     .map_err(|error| format!("pre-removal command recovery failed: {error}"))?;
     wait_for_public_state(
         &publisher,
-        after_removal.job_id(),
+        removed_target.job_id(),
         PublicCapabilityJobState::Canceled,
     )
     .await
     .map_err(|error| format!("post-removal command recovery failed: {error}"))?;
     wait_for_completed_commands(&cancellation_queue, 2).await?;
-    assert!(!root.envelope_path(&before_reference).exists());
-    assert!(!root.envelope_path(&after_reference).exists());
+    assert!(!root.envelope_path(&removed_reference).exists());
+    assert!(!root.envelope_path(&retained_reference).exists());
 
     publisher.close().await;
     supervisor.close().await?;

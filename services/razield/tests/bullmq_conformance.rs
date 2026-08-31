@@ -6,7 +6,9 @@ use std::time::Duration;
 
 use bullmq::types::{JobCounts, JobState, KeepJobs, RemoveOnFinish};
 use bullmq::worker::CancellationToken;
-use bullmq::{Job, JobProgress, Queue, QueueEvent, QueueEvents, QueueEventsOptions, Worker};
+use bullmq::{
+    Job, JobOptions, JobProgress, Queue, QueueEvent, QueueEvents, QueueEventsOptions, Worker,
+};
 use razield::queue::{GLOBAL_CONCURRENCY, QueueConfig};
 use tokio::time::Instant;
 
@@ -70,10 +72,16 @@ async fn add_public_test_job(
 ) -> TestResult<()> {
     queue
         .add(name, "synthetic-public-test-payload")
-        .options(config.job_options())
+        .options(generic_test_job_options(config))
         .job_id(job_id)
         .await?;
     Ok(())
+}
+
+fn generic_test_job_options(config: &QueueConfig) -> JobOptions {
+    let mut options = config.job_options();
+    options.deduplication = None;
+    options
 }
 
 async fn verify_custom_id_and_queued_removal() -> TestResult {
@@ -215,17 +223,13 @@ async fn verify_lock_cancellation_progress_and_retention() -> TestResult {
     for id in 1..=3 {
         queue
             .add("lock-renewal", "synthetic-public-test-payload")
-            .options(
-                config
-                    .job_options()
-                    .remove_on_complete(test_retention.clone()),
-            )
+            .options(generic_test_job_options(&config).remove_on_complete(test_retention.clone()))
             .job_id(format!("retained-{id}"))
             .await?;
     }
     queue
         .add("cancel-me", "synthetic-public-test-payload")
-        .options(config.job_options().remove_on_complete(test_retention))
+        .options(generic_test_job_options(&config).remove_on_complete(test_retention))
         .job_id("cancel-active-1")
         .await?;
 

@@ -5,7 +5,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 use super::bullmq::{
-    BullMqCapabilityQueue, CapabilityQueue, QueueAddError, QueueReadError, RetainedQueueJob,
+    BullMqCapabilityQueue, CapabilityQueue, QueueAddError, QueueAddOutcome, QueueReadError,
+    RetainedQueueJob,
 };
 use super::cancellation::{
     BullMqCancellationQueue, CancellationCommandOutcome, CancellationCommandPayload,
@@ -105,6 +106,7 @@ pub enum CapabilityPublicationError {
     QueueUnavailable,
     QueuePublicationRejected,
     QueuePublicationUncertain,
+    QueueCapacityOccupied,
     QueueRecordMissing,
     QueueRecordMismatch,
     QueueTerminalResultUnavailable,
@@ -118,6 +120,7 @@ impl fmt::Display for CapabilityPublicationError {
             Self::QueueUnavailable => "capability queue is unavailable",
             Self::QueuePublicationRejected => "capability job publication was rejected",
             Self::QueuePublicationUncertain => "capability job publication is uncertain",
+            Self::QueueCapacityOccupied => "proof capacity is occupied",
             Self::QueueRecordMissing => "published capability job is missing",
             Self::QueueRecordMismatch => "retained capability job does not match",
             Self::QueueTerminalResultUnavailable => {
@@ -181,6 +184,28 @@ impl CapabilityJobPublisher {
         admitted: &AdmittedCapabilityRequest,
     ) -> Result<PublishedCapabilityJob, CapabilityPublicationError> {
         let _guard = self.publication_lock.lock().await;
+        match self.queue.get_job(admitted.job_id()).await {
+            Ok(Some(_)) => {}
+            Ok(None) => match self.queue.capacity_holder().await {
+                Ok(Some(holder)) if holder == admitted.job_id() => {
+                    return Err(CapabilityPublicationError::QueueRecordMissing);
+                }
+                Ok(Some(_)) => return Err(CapabilityPublicationError::QueueCapacityOccupied),
+                Ok(None) => {}
+                Err(QueueReadError::CorruptRecord) => {
+                    return Err(CapabilityPublicationError::QueueRecordMismatch);
+                }
+                Err(QueueReadError::Unavailable) => {
+                    return Err(CapabilityPublicationError::QueueUnavailable);
+                }
+            },
+            Err(QueueReadError::CorruptRecord) => {
+                return Err(CapabilityPublicationError::QueueRecordMismatch);
+            }
+            Err(QueueReadError::Unavailable) => {
+                return Err(CapabilityPublicationError::QueueUnavailable);
+            }
+        }
         publish_transaction(&self.store, &self.queue, admitted).await
     }
 
@@ -329,7 +354,13 @@ pub(super) async fn publish_transaction<Q: CapabilityQueue>(
     }
 
     match queue.add_job(job_id, &payload).await {
-        Ok(()) => validate_after_add(store, queue, stage, job_id, &payload).await,
+        Ok(QueueAddOutcome::Added) => {
+            validate_after_add(store, queue, stage, job_id, &payload).await
+        }
+        Ok(QueueAddOutcome::CapacityOccupied) => {
+            rollback_created(store, stage)?;
+            Err(CapabilityPublicationError::QueueCapacityOccupied)
+        }
         Err(QueueAddError::Rejected) => {
             rollback_created(store, stage)?;
             Err(CapabilityPublicationError::QueuePublicationRejected)

@@ -1126,6 +1126,11 @@ format version and opaque private-envelope reference. Exact duplicates return th
 authoritative retained record. Confirmed failures remove a newly created envelope,
 and ambiguous queue outcomes preserve it for reconciliation. One-attempt, zero-stall,
 global-concurrency-one, and bounded terminal-retention checks pass against live Redis.
+The PoC admits only one distinct nonterminal proof job through one fixed atomic BullMQ
+deduplication slot. A different request receives a typed capacity result and retains
+no private envelope or queue job. M5 retries retain one operator-scoped submission
+ID, reuse the exact signed request, and reconcile its commitment-derived job ID
+through `GetCapability` before resending create.
 The runnable `razield` ingress now validates explicit owner configuration and
 reconciles private envelopes against exact BullMQ records before binding. Its Tonic
 wrapper caps decoded messages at 2 MiB. `CreateCapability` uses trusted whole-second

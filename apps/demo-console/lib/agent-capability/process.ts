@@ -90,6 +90,14 @@ function run(executable: string, endpoint: string, command: unknown): Promise<st
         return;
       }
       settled = true;
+      if (code === 3 && !failed) {
+        reject(new CapabilityFlowError("CAPABILITY_BUSY"));
+        return;
+      }
+      if (code === 4 && !failed) {
+        reject(new CapabilityFlowError("CAPABILITY_NOT_FOUND"));
+        return;
+      }
       if (code !== 0 || failed || stdout.byteLength === 0) {
         reject(new CapabilityFlowError("CAPABILITY_UNAVAILABLE"));
         return;

@@ -136,6 +136,17 @@ async fn clock_and_publication_failures_map_to_stable_generic_statuses() {
         .unwrap_err();
     assert_eq!(error.code(), Code::Internal);
     assert_eq!(error.message(), "capability service failed");
+
+    let busy = CapabilityServiceHandler::new(
+        RecordingPublisher::failing(CapabilityPublicationError::QueueCapacityOccupied),
+        FixedClock(Ok(TRUSTED_NOW)),
+    );
+    let error = busy
+        .create_capability(Request::new(signed_request("queue-busy")))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), Code::ResourceExhausted);
+    assert_eq!(error.message(), "proof capacity is occupied");
 }
 
 #[tokio::test]

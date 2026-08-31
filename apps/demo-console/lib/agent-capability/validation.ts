@@ -35,6 +35,7 @@ export function validateCreateCapabilityInput(
     "resource_type",
     "snapshot_expires_at_unix_seconds",
     "snapshot_id",
+    "submission_id",
     "task_id",
   ]);
   const requestedValidity = integer(object.requested_valid_for_seconds);
@@ -63,6 +64,7 @@ export function validateCreateCapabilityInput(
     requested_valid_for_seconds: requestedValidity,
     snapshot_id: snapshotIdentifier(object.snapshot_id),
     snapshot_expires_at_unix_seconds: snapshotExpiresAt.toString(),
+    submission_id: submissionIdentifier(object.submission_id),
     request_context: object.request_context.map(contextEntry),
   };
 }
@@ -193,6 +195,16 @@ function snapshotIdentifier(input: unknown): string {
     invalid();
   }
   return value;
+}
+
+function submissionIdentifier(input: unknown): string {
+  if (
+    typeof input !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(input)
+  ) {
+    invalid();
+  }
+  return input;
 }
 
 function digest(input: unknown): string {

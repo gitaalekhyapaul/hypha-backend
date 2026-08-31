@@ -12,6 +12,7 @@ use raziel_proto::raziel::v1::{
     authorization_context_entry,
 };
 use serde::{Deserialize, Serialize};
+use tonic::{Code, Status};
 
 const MAX_INPUT_BYTES: u64 = 128 * 1024;
 const DIGEST_BYTES: usize = 32;
@@ -22,6 +23,8 @@ const ED25519_SIGNATURE_BYTES: usize = 64;
 pub enum CapabilityClientError {
     Configuration,
     InvalidRequest,
+    Busy,
+    NotFound,
     Unavailable,
     Protocol,
 }
@@ -31,6 +34,8 @@ impl fmt::Display for CapabilityClientError {
         formatter.write_str(match self {
             Self::Configuration => "configuration is invalid",
             Self::InvalidRequest => "request is invalid",
+            Self::Busy => "proof capacity is occupied",
+            Self::NotFound => "capability job was not found",
             Self::Unavailable => "capability service is unavailable",
             Self::Protocol => "capability service returned an invalid response",
         })
@@ -148,7 +153,7 @@ pub async fn run_from_env() -> Result<(), CapabilityClientError> {
             client
                 .create_capability(create_request(*request)?)
                 .await
-                .map_err(|_| CapabilityClientError::Unavailable)?
+                .map_err(map_status)?
                 .into_inner()
                 .job
         }
@@ -158,7 +163,7 @@ pub async fn run_from_env() -> Result<(), CapabilityClientError> {
                     job_id: bounded_identifier(job_id)?,
                 })
                 .await
-                .map_err(|_| CapabilityClientError::Unavailable)?
+                .map_err(map_status)?
                 .into_inner()
                 .job
         }
@@ -168,7 +173,7 @@ pub async fn run_from_env() -> Result<(), CapabilityClientError> {
                     job_id: bounded_identifier(job_id)?,
                 })
                 .await
-                .map_err(|_| CapabilityClientError::Unavailable)?
+                .map_err(map_status)?
                 .into_inner()
                 .job
         }
@@ -178,6 +183,22 @@ pub async fn run_from_env() -> Result<(), CapabilityClientError> {
     let encoded = serde_json::to_vec(&output).map_err(|_| CapabilityClientError::Protocol)?;
     std::io::Write::write_all(&mut std::io::stdout().lock(), &encoded)
         .map_err(|_| CapabilityClientError::Unavailable)
+}
+
+pub const fn exit_code(error: CapabilityClientError) -> i32 {
+    match error {
+        CapabilityClientError::Busy => 3,
+        CapabilityClientError::NotFound => 4,
+        _ => 2,
+    }
+}
+
+fn map_status(status: Status) -> CapabilityClientError {
+    match status.code() {
+        Code::ResourceExhausted => CapabilityClientError::Busy,
+        Code::NotFound => CapabilityClientError::NotFound,
+        _ => CapabilityClientError::Unavailable,
+    }
 }
 
 fn read_command() -> Result<CapabilityCommand, CapabilityClientError> {
@@ -346,4 +367,24 @@ fn lowercase_hex(bytes: &[u8]) -> String {
         write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resource_capacity_has_a_distinct_process_result() {
+        let busy = map_status(Status::resource_exhausted("redacted"));
+        assert_eq!(busy, CapabilityClientError::Busy);
+        assert_eq!(exit_code(busy), 3);
+        let not_found = map_status(Status::not_found("redacted"));
+        assert_eq!(not_found, CapabilityClientError::NotFound);
+        assert_eq!(exit_code(not_found), 4);
+        assert_eq!(
+            map_status(Status::unavailable("redacted")),
+            CapabilityClientError::Unavailable
+        );
+        assert_eq!(exit_code(CapabilityClientError::Unavailable), 2);
+    }
 }

@@ -35,7 +35,7 @@ export interface CapabilityContextEntry {
   readonly value: CapabilityContextValue;
 }
 
-export interface CreateCapabilityInput {
+export interface CapabilityRequestInput {
   readonly agent_id: string;
   readonly task_id: string;
   readonly purpose: string;
@@ -46,6 +46,10 @@ export interface CreateCapabilityInput {
   readonly snapshot_id: string;
   readonly snapshot_expires_at_unix_seconds: string;
   readonly request_context: readonly CapabilityContextEntry[];
+}
+
+export interface CreateCapabilityInput extends CapabilityRequestInput {
+  readonly submission_id: string;
 }
 
 export interface CapabilityTimestamp {
@@ -99,6 +103,7 @@ export interface CapabilityProcessConfig {
 
 export class CapabilityFlowError extends Error {
   public readonly code:
+    | "CAPABILITY_BUSY"
     | "CAPABILITY_CONFLICT"
     | "CAPABILITY_NOT_FOUND"
     | "CAPABILITY_UNAVAILABLE"

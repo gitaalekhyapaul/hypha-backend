@@ -183,6 +183,33 @@ The maintainer accepted these M4 consistency limits for the PoC:
 - restart recovery provides eventual cancellation and private-envelope deletion
 - restart recovery does not promise that proof execution never started
 
+### 2026-08-31 submission and capacity amendment
+
+The maintainer accepted two further limits after the M5 live walkthrough exposed an
+uncertain create response followed by a second signed request:
+
+- one distinct nonterminal proof job can exist in the PoC proof queue
+- an exact duplicate request still resolves to its retained deterministic job
+- a different request is rejected without retaining a private envelope or BullMQ job
+  when a job is waiting, active, delayed, prioritized, or paused
+- the M5 console assigns one operator-scoped submission ID to one browser action
+- an uncertain retry reuses the exact signed transport request, including its nonce,
+  expiry, context, and signature
+- the console checks `GetCapability` for the expected commitment-derived job ID
+  before resending that exact create command
+
+The submission ID is API orchestration metadata. It is not a capability field, proof
+input, public claim, commitment input, or BullMQ job identifier. The server keeps its
+signed retry record in bounded process memory and never logs or returns the private
+request context.
+
+One fixed BullMQ deduplication ID owns the proof-capacity slot. BullMQ arbitrates
+concurrent publishers atomically and releases the slot at terminal completion or
+queued removal. The publisher checks the slot before normal staging. A concurrent
+loser can stage during the race, then deletes that envelope before returning busy.
+The busy result reveals only occupied proof capacity. It reveals no existing job ID,
+policy, dataset, agent, relationship, caveat value, or private-envelope reference.
+
 ## Public and Private Data Effect
 
 The new retained data is public lifecycle metadata: job identifier, submission time,
@@ -254,3 +281,7 @@ durable commands, custom identifiers, locks, retries, and retention.
 The maintainer approved this decision on 2026-08-24. The approval accepts the durable
 BullMQ cancellation-command queue, its public data boundary, its recovery rules, and
 the PoC operating assumptions in this record.
+
+The maintainer approved the submission and capacity amendment on 2026-08-31. This
+approval keeps the capability format, proof statement, witness, and 75-minute
+worker-start validity rule unchanged.

@@ -179,7 +179,9 @@ memory.
 
 `Request capability` returns one stable job ID. The screen polls queued, executing,
 proving, succeeded, failed, and canceled states. Recorded success stays visibly
-non-authorizing and returns no capability.
+non-authorizing and returns no capability. An uncertain transport retry reuses the
+same signed request and job ID. A distinct request receives a proof-capacity busy
+response while another proof job is nonterminal, so it does not wait behind that job.
 
 In live mode, a succeeded capability unlocks Reconciliation only for its exact
 finalized dataset. `Run protected query` signs a bounded time-window query with a
