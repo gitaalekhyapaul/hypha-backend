@@ -6,6 +6,8 @@ import {
   buildAccessGraphRelationships,
   defaultAccessGraphForm,
   graphValiditySeconds,
+  normalizeAccessGraphDatasetId,
+  policyBoundResourceScope,
 } from "../lib/access-graph/model.ts";
 import type {
   AccessGraphFormState,
@@ -42,7 +44,10 @@ export function AccessGraphWorkspace({
   onSessionExpired,
   onSnapshotPublished,
 }: AccessGraphWorkspaceProps) {
-  const [form, setForm] = useState<AccessGraphFormState>(defaultAccessGraphForm);
+  const boundResourceScope = policyBoundResourceScope(activePolicy.builder);
+  const [form, setForm] = useState<AccessGraphFormState>(() =>
+    defaultAccessGraphForm(boundResourceScope ?? undefined),
+  );
   const [publication, setPublication] = useState<AccessGraphPublicationProjection | null>(null);
   const [busy, setBusy] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -125,7 +130,7 @@ export function AccessGraphWorkspace({
       onSnapshotPublished({
         agent: agentSession,
         agentId: form.agentId,
-        datasetId: form.datasetId,
+        datasetId: normalizeAccessGraphDatasetId(form.datasetId),
         snapshotId: result.snapshot_id,
         policyHash: result.policy_hash,
         relationshipRoot: result.relationship_root,
@@ -210,12 +215,12 @@ export function AccessGraphWorkspace({
               <AccessField
                 label="Dataset ID"
                 value={form.datasetId}
-                disabled={publication !== null}
+                disabled={publication !== null || boundResourceScope !== null}
                 onChange={(value) => update("datasetId", value)}
               />
               <ReadOnlyField label="Task ID" value={activePolicy.builder.taskId} />
               <ReadOnlyField label="Purpose" value={activePolicy.builder.purpose} />
-              <ReadOnlyField label="Resource scope" value={activePolicy.builder.resourceScope} />
+              <ReadOnlyField label="Capability scope" value={form.datasetId} />
               {requiresTeam ? (
                 <AccessField
                   label="Team ID"

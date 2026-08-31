@@ -9,6 +9,7 @@ import type {
   CapabilityJobState,
   PublishedAccessSelection,
 } from "../lib/agent-capability/types.ts";
+import { buildCapabilityRequestInput } from "../lib/agent-capability/request.ts";
 import { CAVEAT_CATALOG } from "../lib/policy-draft/index.ts";
 import {
   cancelCapabilityJob,
@@ -85,18 +86,7 @@ export function AgentCapabilityWorkspace({
       const requestContext = capabilityContext(requestParameters, requestedAmount);
       onJobChange(
         await requestCapability(
-          {
-            agent_id: access.agentId,
-            task_id: activePolicy.builder.taskId,
-            purpose: activePolicy.builder.purpose,
-            action: "query",
-            resource_type: "dataset",
-            resource_scope: activePolicy.builder.resourceScope,
-            requested_valid_for_seconds: validity,
-            snapshot_id: access.snapshotId,
-            snapshot_expires_at_unix_seconds: access.snapshotExpiresAtUnixSeconds,
-            request_context: requestContext,
-          },
+          buildCapabilityRequestInput(activePolicy.builder, access, validity, requestContext),
           csrfToken,
         ),
       );
@@ -175,7 +165,7 @@ export function AgentCapabilityWorkspace({
               <ReadOnlyValue label="Task" value={activePolicy.builder.taskId} />
               <ReadOnlyValue label="Purpose" value={activePolicy.builder.purpose} />
               <ReadOnlyValue label="Resource type" value="dataset" />
-              <ReadOnlyValue label="Resource scope" value={activePolicy.builder.resourceScope} />
+              <ReadOnlyValue label="Resource scope" value={access.datasetId} />
               <ReadOnlyValue label="Dataset" value={access.datasetId} />
               <label className="access-field">
                 <span>Requested validity</span>

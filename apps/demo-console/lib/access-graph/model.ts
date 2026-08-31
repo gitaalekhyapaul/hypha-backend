@@ -7,10 +7,10 @@ import type {
   AccessGraphStoredContext,
 } from "./types.ts";
 
-export function defaultAccessGraphForm(): AccessGraphFormState {
+export function defaultAccessGraphForm(datasetId = "reconciliation-demo"): AccessGraphFormState {
   return {
     agentId: "agent-reconciliation-01",
-    datasetId: "reconciliation-demo",
+    datasetId,
     teamId: "finance-operations",
     organizationId: "nus-fintech-lab",
     validForSeconds: "7200",
@@ -27,19 +27,24 @@ export function buildAccessGraphRelationships(
   agentSubjectId: string,
 ): readonly AccessGraphRelationship[] {
   const resourceType = identifier(builder.resourceType, "Resource type");
-  const resourceId = identifier(form.datasetId, "Dataset ID");
+  const resourceId = normalizeAccessGraphDatasetId(form.datasetId);
   const agentId = digestIdentifier(agentSubjectId, "Agent key subject");
+  const rule = buildRule(builder);
+  const boundResourceScope = resourceScopeBinding(rule);
+  if (boundResourceScope !== null && resourceId !== boundResourceScope) {
+    throw new Error("Dataset ID must match the policy-bound resource scope");
+  }
   const relationships: AccessGraphRelationship[] = [];
-  visitRule(buildRule(builder), (rule) => {
-    switch (rule.kind) {
+  visitRule(rule, (leaf) => {
+    switch (leaf.kind) {
       case "direct":
         relationships.push({
           resource_type: resourceType,
           resource_id: resourceId,
-          relation: rule.relation,
+          relation: leaf.relation,
           subject_type: "agent",
           subject_id: agentId,
-          ...(rule.caveat ? { caveat: storedCaveat(rule.caveat, form) } : {}),
+          ...(leaf.caveat ? { caveat: storedCaveat(leaf.caveat, form) } : {}),
         });
         break;
       case "subject_set": {
@@ -48,7 +53,7 @@ export function buildAccessGraphRelationships(
           {
             resource_type: resourceType,
             resource_id: resourceId,
-            relation: rule.relation,
+            relation: leaf.relation,
             subject_type: "team",
             subject_id: teamId,
             subject_relation: "member",
@@ -69,7 +74,7 @@ export function buildAccessGraphRelationships(
           {
             resource_type: resourceType,
             resource_id: resourceId,
-            relation: rule.relation,
+            relation: leaf.relation,
             subject_type: "organization",
             subject_id: organizationId,
           },
@@ -91,6 +96,14 @@ export function buildAccessGraphRelationships(
   return [...deduplicated.values()].sort((left, right) =>
     identity(left).localeCompare(identity(right)),
   );
+}
+
+export function normalizeAccessGraphDatasetId(input: string): string {
+  return identifier(input, "Dataset ID");
+}
+
+export function policyBoundResourceScope(builder: PolicyBuilderState): string | null {
+  return resourceScopeBinding(buildRule(builder));
 }
 
 export function graphValiditySeconds(input: string): number {
@@ -146,6 +159,13 @@ function visitRule(
     return;
   }
   visitor(rule);
+}
+
+function resourceScopeBinding(rule: PolicyRule): string | null {
+  if (rule.kind !== "direct" || !rule.caveat || !("resourceScope" in rule.caveat)) {
+    return null;
+  }
+  return identifier(rule.caveat.resourceScope, "Policy resource scope");
 }
 
 function identifier(input: string, label: string): string {
