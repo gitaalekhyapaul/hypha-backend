@@ -7,6 +7,11 @@
 - Proof-system changes: None
 - Review gate: Approved by the maintainer on 2026-08-27 local time
 
+Roadmap note, 2026-09-25: this completed M5 plan preserves its original scope and
+milestone labels. ADR-0019 replaces the former M6 real-data priority with external
+agent access and the public SDK, followed by the M7 three-dashboard demo. See the
+[current plan](M6-M7-AGENT-DEMO-PLAN.md).
+
 ## Outcome
 
 M5 will produce one connected payment-reconciliation portal. An operator will create

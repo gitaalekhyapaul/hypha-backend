@@ -1,21 +1,27 @@
 # Raziel Scenario Authoring Contract
 
-Status: active after reconciliation acceptance
+Status: active scenario contract with ADR-0019 synthetic demo scope amendment
 
 This contract defines the work needed to add a domain scenario to Raziel. Payment
 reconciliation is the first scenario and the reference implementation.
 
-A scenario maps real domain data and actions onto the shared Raziel authorization
+A scenario maps domain data and actions onto the shared Raziel authorization
 protocol. It does not change the proof protocol.
 
 ## Start gate
 
-Do not start a second scenario until the payment-reconciliation workflow passes M6 in
+Do not start a second scenario until the payment-reconciliation workflow passes M7 in
 `POC-TECHNICAL-SPEC.md`.
+
+The two-ledger SDK demo extends the existing reconciliation scenario. Under
+[ADR-0019](../decisions/0019-public-sdk-and-two-agent-reconciliation.md), seeded and
+portal-created synthetic data satisfy its demo gate. The real-source steps in this
+contract and the scenario skill apply to deferred real-data work. They do not block
+the revised M6-M7 scope. Preserve synthetic labels and actual runtime query behavior.
 
 The reconciliation reference must demonstrate:
 
-- real transaction data with provenance
+- labeled synthetic transaction data with origin, or real data with provenance
 - deterministic import
 - an approved SpiceDB schema within the supported subset
 - PolicyIR compilation and registry approval
@@ -170,7 +176,7 @@ only in isolated interpreter tests.
 The adapter must:
 
 - validate the source manifest before import
-- read from an ignored or external raw-data path
+- read approved source records or stored synthetic revisions
 - map source columns into canonical domain records
 - reject missing required fields
 - normalize time, currency, amounts, and identifiers deterministically
@@ -179,7 +185,8 @@ The adapter must:
 - avoid logging raw sensitive fields
 - support a dry-run validation mode
 
-The adapter must not invent missing transaction records for the acceptance run.
+The adapter must not invent records from a claimed real source. Demo seeding is an
+explicit synthetic operation. Queries must use stored rows, never fabricated results.
 
 ## Gateway work
 
@@ -221,7 +228,7 @@ Every scenario needs these tests:
 
 | Category | Required case |
 | --- | --- |
-| Import | Valid real source imports deterministically |
+| Import | Selected source or synthetic seed imports deterministically |
 | Import | Missing or malformed required field fails |
 | Import | Checksum mismatch fails |
 | Policy | Allowed relationship and caveat path matches SpiceDB |
@@ -307,5 +314,6 @@ A scenario is complete only after:
 - allowed, denied, tampered, expired, replayed, and out-of-scope cases behave correctly
 - the verifier works with the prover stopped
 - no proof guest or core commitment format changed
-- real-data evidence is complete
+- demo data classification and evidence are complete, with real-data claims only
+  after the separate real-data acceptance gate
 - the current baton names the next scenario or closes scenario work

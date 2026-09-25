@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: active baseline; M0 through M5 validated; M6 pending real-data approval
+Status: M0 through M5 validated; revised M6-M7 agent demo planned under ADR-0019
 
-Last updated: 2026-08-31
+Last updated: 2026-09-25
 
 ## Human-readable overview
 
@@ -26,11 +26,11 @@ The first working scenario is payment reconciliation:
 - A separate verifier checks the proof without calling the prover.
 - A gateway reuses the verified capability for rapid, bounded transaction queries.
 
-The end-to-end demo must process a real, provenance-recorded transaction dataset.
-Hand-written or generated transaction rows do not satisfy the demo acceptance gate.
-Small fixtures remain valid for unit, adversarial, and equivalence tests. M5 can use
-portal-created synthetic transaction records for its clearly labeled local
-development walkthrough. M6 remains the real-data acceptance run.
+The revised demo uses seeded and portal-created synthetic processor and bank ledgers.
+Each external agent requests access through the public SDK, receives its own real
+Plonk capability, and queries its permitted dataset. The operator reviews requests in
+a third dashboard. Real-data acceptance is deferred under
+[ADR-0019](docs/decisions/0019-public-sdk-and-two-agent-reconciliation.md), not completed.
 
 ### Current implementation status
 
@@ -42,8 +42,12 @@ development walkthrough. M6 remains the real-data acceptance run.
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
 | M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
-| M6 | Pending | No approved real transaction source or acceptance run |
-| M7 | Pending | Starts only after the M6 reconciliation gate |
+| M6 | Planned | External agent API, per-agent registration, operator review, serial dispatch, and public SDK |
+| M7 | Planned | Two-ledger reconciliation, three dashboards, LLM tools, messages, and live proof-backed demo |
+
+The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
+evidence keeps its original milestone labels. The
+[M6-M7 plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md) defines the new feature order.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
@@ -57,8 +61,8 @@ fingerprint, and row count, then sent protected queries through the gateway. One
 Plonk capability supported an independent-verifier query and a cache-backed query.
 Scope, replay, expiry, alteration, and missing-signature controls returned no rows.
 The [M5 portal runbook](docs/runbooks/M5-LOCAL-PORTAL.md) records the public evidence
-and screenshots. This development demonstration is not the M6 acceptance run. It does
-not create a second scenario.
+and screenshots. This development demonstration does not establish real-data
+acceptance or a second scenario. The new external-agent workflow is not yet built.
 
 ### The key distinction from a signed token
 
@@ -100,7 +104,7 @@ Fully private PolicyIR is a later experiment. It is not part of the baseline PoC
 5. Reuse one verified capability for bounded rapid I/O until expiry.
 6. Match SpiceDB for every operation in the supported PolicyIR subset.
 7. Run the complete stack in Linux containers on an Apple Silicon development machine.
-8. Complete the payment-reconciliation flow against a real transaction dataset.
+8. Complete the two-agent payment-reconciliation flow with labeled synthetic data.
 9. Make new scenarios repeatable without changing proof-system code.
 
 ### Non-goals for the first PoC
@@ -354,7 +358,7 @@ envelope was deleted, and the approved owner-only private snapshot remained.
 | `tools/raziel-admin` | Rust | Offline policy approval, key inspection, atomic registry publication, and one-way revocation | Generate keys or expose private material |
 | `tools/spicedb-ir-compiler` | Go | Run SpiceDB's compiler and translate its protos into PolicyIR | Make runtime decisions or perform cryptography |
 | `proto/raziel/v1` | Protobuf | Stable RPC and artifact contracts | Define canonical cryptographic bytes |
-| `examples/reconciliation` | Schema and adapters | Payment scenario policy, source manifest, field mapping, demo configuration | Contain generated acceptance data |
+| `examples/reconciliation` | Schema and adapters | Payment scenario policy, source manifest, field mapping, demo configuration | Mislabel generated data as real source evidence |
 
 ## Why this stack
 
@@ -887,9 +891,9 @@ nodes.
 User-facing denials remain generic. Internal logs use typed reason codes without graph
 paths or policy explanations.
 
-### Real-data acceptance boundary
+### Deferred real-data acceptance boundary
 
-The reconciliation acceptance run must have:
+The later real-data run must have:
 
 - a named external or user-provided source
 - source URL or custody record
@@ -927,5 +931,6 @@ Implementation work is complete only after:
 - altered policy hash, root, scope, proof, expiry, and signature each fail
 - `verifierd` completes with `razield` stopped
 - cached capability requests remain inside scope
-- the real-data reconciliation journey completes end to end
+- the revised two-agent reconciliation demo completes with labeled synthetic data
+- both external agents consume the packaged SDK and real scoped capabilities
 - benchmark output records execution, proving, verification, proof size, and cache latency

@@ -2,9 +2,9 @@
 
 Status: active implementation contract
 
-Version: 0.1.1
+Version: 0.2.0
 
-Date: 2026-08-11
+Date: 2026-09-25
 
 Owners: project maintainers
 
@@ -45,19 +45,21 @@ delta from vanilla SpiceDB and provides measurements for later comparison.
 
 ## Project goal
 
-Deliver one end-to-end payment-reconciliation workflow against a real,
-provenance-recorded transaction dataset. The workflow must create a valid proof,
-verify it independently, execute an allowed query, reject tampering, and reuse the
-capability for bounded rapid I/O.
+Deliver an end-to-end two-agent payment-reconciliation workflow through a public SDK
+and three dashboards. The agents use labeled synthetic processor and bank ledgers,
+request operator approval, receive separate real local Plonk capabilities, query
+protected data, exchange bounded evidence, and reuse capabilities for rapid I/O.
 
-No generated or hand-written transaction dataset can satisfy this goal. Deterministic
-fixtures remain required for tests.
+[ADR-0019](../decisions/0019-public-sdk-and-two-agent-reconciliation.md) records the
+maintainer's revised scope. The [M6-M7 plan](M6-M7-AGENT-DEMO-PLAN.md) defines the
+feature order and user flows. Real-data acceptance is deferred and unclaimed.
+Fixture-only tests cannot replace the live two-agent proof demonstration.
 
 ## Confirmed decisions
 
 | ID | Decision |
 | --- | --- |
-| D-001 | Use one polyglot monorepo |
+| D-001 | Keep the polyglot backend repo and use separate public SDK and demo-agent repos under ADR-0019 |
 | D-002 | Use TypeScript as the primary product language |
 | D-003 | Use Next.js with TypeScript for the console and gateway |
 | D-004 | Use Rust for PolicyIR, canonicalization, SP1 host and guest, prover, and verifier |
@@ -69,7 +71,7 @@ fixtures remain required for tests.
 | D-010 | Keep PolicyIR out of the capability and agent context |
 | D-011 | Keep relationships, satisfying paths, openings, and stored caveat values private |
 | D-012 | Prove only `ALLOW` in the first PoC |
-| D-013 | Use a manually published relationship snapshot, not SpiceDB Watch |
+| D-013 | Use explicit owner-controlled snapshots, triggered by approved access requests in M6-M7, not SpiceDB Watch |
 | D-014 | Bind reusable capabilities to an agent key, task, purpose, action, resource, and expiry |
 | D-015 | Use local proving and never send private witnesses to an external prover |
 | D-016 | A data-owner policy authority approves PolicyIR; `razield` cannot approve its own policy |
@@ -77,6 +79,7 @@ fixtures remain required for tests.
 | D-018 | Use strict Ed25519 with separate policy and snapshot keys, canonical signed claims, deployment trust-domain binding, and verifier-local registries as defined by ADR-0010 |
 | D-019 | Use local SP1 Plonk for final demo proof artifacts under the validated ADR-0012 profile |
 | D-020 | Use bounded typed policy drafts, a separate policy-authority process, validated registry publication, write-only relationship administration, and private pre-publication revision handoff as defined by ADR-0018 |
+| D-021 | Deliver a public signer-based SDK, per-agent tokens, request approval, independent policy publication, serial proof dispatch, and a synthetic three-dashboard demo under ADR-0019 |
 
 ## Open decisions
 
@@ -84,7 +87,7 @@ The following decisions must be closed before their milestone begins:
 
 | ID | Decision | Deadline |
 | --- | --- | --- |
-| O-001 | Select the real transaction dataset and record its usage basis | Before scenario adapter implementation |
+| O-001 | Deferred: select a real transaction dataset and record its usage basis | Before any later real-data acquisition, outside revised M6-M7 |
 | O-005 | Select the capability transport representation for HTTP | Before gateway integration |
 
 O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
@@ -104,6 +107,11 @@ O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
 | Snapshot | generated UUID | One committed SpiceDB relationship revision |
 
 ## Baseline user journey
+
+The sequence below describes the implemented M0-M5 service path. M6-M7 adds an
+agent access intent and operator review before snapshot preparation. Policy
+publication runs independently. The agent signs the final snapshot-bound request
+near proof dispatch. See the [new user flows](M6-M7-AGENT-DEMO-PLAN.md#user-flows).
 
 1. An administrator loads the reconciliation schema and relationships into SpiceDB.
 2. SpiceDB confirms that Maya can query `dataset:sg-payments` through `team:fraud-ops`.
@@ -228,14 +236,14 @@ O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
 - **FR-088**: A cache hit shall verify the agent-key thumbprint, request signature, timestamp, nonce, and scope without calling `razield` or rerunning the SP1 verifier.
 - **FR-089**: Gateway denials shall not reveal the failing relationship or policy branch.
 
-### Real transaction data
+### Transaction data
 
-- **FR-090**: The acceptance dataset shall be externally sourced or user-provided.
-- **FR-091**: The source shall have a documented usage basis and provenance record.
+- **FR-090**: M6-M7 shall use labeled synthetic seed or operator-created records. Externally sourced real-data acceptance is deferred.
+- **FR-091**: Synthetic sources shall record generator or operator origin. A later real source shall have a documented usage basis and provenance record.
 - **FR-092**: The repository shall not commit restricted raw data.
-- **FR-093**: A source manifest shall record URL or custody source, retrieval date, checksum, format, row count, and schema fingerprint.
+- **FR-093**: Demo revisions shall record source, checksum, format, row count, and schema fingerprint. A later real source manifest shall add URL or custody source and retrieval date.
 - **FR-094**: The adapter shall map source columns into the canonical reconciliation model.
-- **FR-095**: The demo shall execute queries against imported source rows, not hard-coded responses.
+- **FR-095**: The demo shall execute queries against stored seed, portal-created, or imported rows, not hard-coded responses.
 - **FR-096**: The adapter shall reject schema drift with a typed error.
 - **FR-097**: Logs and screenshots shall redact sensitive or identifying source fields.
 
@@ -261,6 +269,11 @@ O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
 - **NFR-010 Compatibility**: Every contract change includes Rust and TypeScript generation plus fixture updates.
 
 ## Planned repository structure
+
+This tree describes the backend repository. ADR-0019 moves SDK source ownership into
+the sibling `raziel-sdk-ts` repository and adds `raziel-demo-agents` for the two agent
+applications. The existing `packages/sdk-ts` remains implemented M5 code until its
+consumers migrate to a pinned public package. Do not maintain two SDK implementations.
 
 ```text
 apps/
@@ -784,13 +797,19 @@ fields, verification, cache behavior, denials, and receipts. The portal shall le
 operator create, edit, review, and finalize a bounded synthetic transaction dataset
 for the existing reconciliation scenario. Finalization records a local source label,
 checksum, schema fingerprint, and row count. Every related screen and receipt shall
-display `SYNTHETIC`. This data cannot produce M6 acceptance evidence.
+display `SYNTHETIC`. These records may support the revised M6-M7 demonstration but
+cannot establish real-data acceptance.
 
 Transaction rows belong to the reconciliation data adapter. They are not SpiceDB
 relationships and do not enter the authorization Merkle tree. Dataset finalization is
 an operator workflow and audit event. It is not a policy-authority or
 snapshot-authority signature. Policy approval, relationship changes, signed snapshot
 publication, and capability issuance remain separate explicit actions.
+
+M6-M7 coordinates relationship and snapshot steps from an approved agent request.
+The operator can publish policy versions independently. The three-dashboard flow,
+registration, agent request inbox, and external SDK are specified in the
+[implementation plan](M6-M7-AGENT-DEMO-PLAN.md) and remain pending.
 
 ### Gateway
 
@@ -994,6 +1013,8 @@ Every mutation must fail.
 5. Confirm no network request targets `razield`.
 
 ### Real-data acceptance test
+
+Deferred outside M6-M7 by ADR-0019. Preserve this test for later real-data validation.
 
 1. Verify source manifest and checksum.
 2. Import the documented dataset.
@@ -1245,7 +1266,8 @@ key-bound relationship snapshot, generated one local Plonk capability, ran one
 verifier-backed query and one cache-backed query, rejected all five Denial Lab
 requests without rows, filtered the public receipt ledger, and downloaded its JSONL
 projection. The [M5 portal runbook](../runbooks/M5-LOCAL-PORTAL.md) records the public
-evidence and screenshots. This synthetic gate does not satisfy M6.
+evidence and screenshots. This historical synthetic gate does not establish the new
+external-agent SDK flow or real-data acceptance.
 
 Deliver:
 
@@ -1263,43 +1285,52 @@ Exit gate:
 - first and cached requests execute
 - out-of-scope and replayed requests fail
 
-### M6: Real-data reconciliation
+### M6: External agent access and public SDK
 
-Status: pending. O-001 remains open.
-
-Deliver:
-
-- approved source manifest
-- reproducible ingestion adapter
-- canonical transaction mapping
-- bounded reconciliation queries
-- complete demo journey
-
-Exit gate:
-
-- no mocked acceptance data
-- end-to-end proof-backed query succeeds
-- evidence bundle records provenance and measurements
-
-### M7: Scenario-extension proof
-
-Status: pending until M6 passes.
+Status: planned under ADR-0019. The former real-data objective is deferred.
 
 Deliver:
 
-- second scenario design using the scenario-authoring contract
-- effort and changed-file report
-- confirmation that no SP1 guest fork is needed
+- agent registration and separate tokens bound to registered public keys
+- signed agent API and durable access-request lifecycle
+- operator review, approve/reject, and independent policy publication
+- request-triggered snapshots and sequential real proof dispatch
+- external signer, typed client, polling, cancellation, retry, and capability reuse
+- public `@gitaalekhyapaul/raziel-sdk-ts` package with standalone consumption example
 
 Exit gate:
 
-- second scenario can be planned through configuration, policy, adapter, and UI changes
+- externally keyed agents authenticate and access only their own requests
+- approved requests bind policy, snapshot, final agent signature, and proof job
+- two approved requests can wait and dispatch serially without duplicate proofs
+- an externally installed SDK completes a proof-backed query and cached reuse
+
+### M7: Three-dashboard reconciliation demonstration
+
+Status: planned. Depends on M6 contracts and services.
+
+Deliver:
+
+- seeded and operator-editable processor and bank ledgers with synthetic labels
+- separate Agent A and Agent B dashboards plus the operator dashboard
+- configurable OpenAI-compatible LLM tools and a bounded task message channel
+- reconciliation output with settlement references, amount differences, and receipts
+- Docker deployment, VM walkthrough, screenshots, and repeatable demo runbook
+
+Exit gate:
+
+- both agents consume the public SDK and receive their own real Plonk capabilities from Raziel
+- the operator reviews requests and publishes policies independently of proof execution
+- both agents query protected data and reuse their scoped capabilities
+- Agent A requests settlement evidence and Agent B returns a bounded result
+- incorrect key/scope and replay requests return no protected rows
+- all three dashboards support the recorded desktop demo with source and timing evidence
 
 ## Definition of done
 
 The PoC is done only after all of these statements are true:
 
-- A real transaction source is documented and ingested.
+- Synthetic processor and bank sources are labeled, stored, and editable through the portal.
 - SpiceDB and PolicyIR agree for the supported policy subset.
 - A relationship snapshot and approved policy record are signed.
 - `razield` generates a real SP1 proof of `ALLOW`.
@@ -1307,12 +1338,24 @@ The PoC is done only after all of these statements are true:
 - The agent uses a key-bound capability at the Next.js gateway.
 - The gateway enforces scope and blocks replay.
 - A cached request executes without a second proof verification.
+- Two separate agent applications use the public SDK with persistent private keys.
+- The operator registers public keys, issues tokens, and reviews access requests.
+- Two real proofs run sequentially and support the shared reconciliation task.
+- Three dashboards show the task, request, capability, query, and message flows.
 - Tampering tests fail as specified.
 - Private graph and witness data do not appear in public artifacts or logs.
 - The baton and architecture documents match the running system.
 - Benchmarks and an acceptance evidence bundle are checked in without private data.
 
 ## Deferred experiments
+
+### Real-data acceptance and scenario extension
+
+The former M6 real-data source selection and acceptance gate remain deferred. O-001
+must close before real-data acquisition. The source manifest and real-data acceptance
+test above remain the contract for that later work. Synthetic demo success does not
+satisfy them. A second domain scenario is deferred until the revised reconciliation
+demo passes M7 and the maintainer returns scenario extension to scope.
 
 ### Fully private PolicyIR
 

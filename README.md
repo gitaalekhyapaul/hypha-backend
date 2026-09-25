@@ -4,9 +4,10 @@ This repository contains the first Raziel proof of concept. Raziel turns an appr
 SpiceDB authorization result into an independently verifiable, proof-backed capability
 for an AI agent.
 
-The first scenario is payment reconciliation. The acceptance goal uses a real,
-provenance-recorded transaction source. Test fixtures do not count as the product
-acceptance run.
+The first scenario is payment reconciliation. The current goal is a public SDK and
+three-dashboard demo with two external agents, labeled synthetic transaction records,
+and real local Plonk proofs. Real-data acceptance is deferred under
+[ADR-0019](docs/decisions/0019-public-sdk-and-two-agent-reconciliation.md).
 
 ## Current status
 
@@ -133,8 +134,15 @@ capability. The first protected query used the independent verifier. The second 
 the verified-capability cache with a fresh nonce. Scope, replay, expired, altered,
 and unsigned requests returned no rows. Exact receipt filtering and JSONL export
 passed. The [M5 portal runbook](docs/runbooks/M5-LOCAL-PORTAL.md) contains the public
-evidence and screenshots. M6 remains blocked on an approved real transaction source
-and provenance record.
+evidence and screenshots.
+
+The revised M6 delivers per-agent registration, access-request review, sequential
+proof dispatch, and the public `@gitaalekhyapaul/raziel-sdk-ts` package. M7 delivers
+Agent A and Agent B dashboards, their message channel, and the complete two-ledger
+reconciliation demonstration. Both milestones are planned, not implemented. See the
+[feature and user-flow plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md). The former real-data
+and second-scenario gates are deferred. Existing runbooks describe the completed M5
+stack until new deployment commands are implemented and validated.
 
 ## Read first
 

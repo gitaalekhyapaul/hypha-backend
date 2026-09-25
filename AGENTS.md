@@ -7,7 +7,8 @@ Do not create tool-specific copies of these rules.
 ## Mission
 
 Build Raziel as a proof-carrying authorization layer for AI-agent data access.
-The first proof of concept covers payment reconciliation against real transaction data.
+The current proof of concept covers two-agent payment reconciliation against clearly
+labeled synthetic data, using real local Plonk authorization proofs.
 
 Raziel must prove this statement:
 
@@ -19,11 +20,13 @@ the prover.
 
 ## First project goal
 
-Run the payment-reconciliation workflow end to end against non-mocked transaction
-data. The acceptance run must record source provenance, usage basis, checksum, schema
-mapping, and row count. Small synthetic fixtures are allowed in automated tests and
-the clearly labeled local M5 development walkthrough. Synthetic data never satisfies
-the M6 acceptance gate.
+Deliver the public agent SDK and three-dashboard payment-reconciliation demo under
+ADR-0019 and `docs/spec/M6-M7-AGENT-DEMO-PLAN.md`. M6 covers external agent access and
+the SDK. M7 covers the two agents, operator console, and live demonstration.
+
+Seeded and portal-created synthetic records satisfy this demo gate. Record their
+source, checksum, schema mapping, and row count. Real-data acceptance is deferred and
+remains unclaimed. Its later run requires documented provenance and usage basis.
 
 Do not start another scenario until the reconciliation acceptance gate passes.
 
@@ -104,7 +107,8 @@ These rules cannot change inside a feature task:
 10. Every capability binds an agent key, task, purpose, action, resource scope,
    issuance nonce, and short validity window.
 11. Every protected request checks capability scope and agent request signature.
-12. Acceptance demos use real transaction data with recorded provenance.
+12. Current acceptance demos use labeled synthetic data with recorded provenance and
+    real proofs. Real-data validation remains a separate, deferred claim (ADR-0019).
 13. No hosted proving service receives private witness data.
 14. Scenario adapters cannot change guest semantics.
 15. The baseline guest proves `ALLOW` only.
@@ -220,6 +224,11 @@ docs/
 Do not create a new top-level package without updating `ARCHITECTURE.md` and the
 current baton.
 
+ADR-0019 adds sibling `raziel-sdk-ts` and `raziel-demo-agents` repositories. The
+backend keeps protocol and proof ownership. The SDK moves to its own release after
+consumer migration. Each agent application uses the packaged SDK and separate keys.
+Follow `docs/spec/M6-M7-AGENT-DEMO-PLAN.md` for that work.
+
 ## Dependency policy
 
 Do not install a package, CLI, runtime, or system dependency without user approval.
@@ -323,7 +332,8 @@ Scenario changes require:
 - one allowed and one denied journey
 - audit receipt checks
 
-Never claim the acceptance goal from fixture-only tests.
+Never claim live demo completion from fixture-only tests. The revised M7 gate needs
+two real Plonk capabilities and SDK-mediated queries over the labeled demo dataset.
 
 ## Git and file safety
 
@@ -346,8 +356,9 @@ A task is done only after:
 - no secret or private witness enters logs or client responses
 - the current baton records evidence and the next action
 
-The PoC is done only after every gate in `docs/spec/POC-TECHNICAL-SPEC.md` passes,
-including the real-data reconciliation run.
+The current PoC is done only after the revised M0-M7 gates in
+`docs/spec/POC-TECHNICAL-SPEC.md` pass. Real-data acceptance and second-scenario work
+remain deferred and must not be presented as completed.
 
 ## Adding another scenario
 
