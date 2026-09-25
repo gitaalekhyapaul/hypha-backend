@@ -6,6 +6,11 @@ Date: 2026-09-25
 
 Decision: [ADR-0019](../decisions/0019-public-sdk-and-two-agent-reconciliation.md)
 
+B-0063 has drafted [Agent API v1](AGENT-API-V1.md) and
+[ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md). The new request
+signature and policy-version provisioning decisions await approval. This does not
+change the accepted product scope in ADR-0019.
+
 ## Outcome
 
 Three desktop dashboards show an operator and two external agents completing payment
@@ -180,7 +185,8 @@ pending_review -> rejected
 nonterminal -> canceled, expired, or failed as applicable
 ```
 
-Names are planning labels. B-0063 specifies wire states, transitions, and error types.
+Names above are planning labels. The proposed [API contract](AGENT-API-V1.md) specifies
+wire states, transitions, and error types, including an explicit offline-agent state.
 One stable intent ID deduplicates client retries. One persisted signed issuance
 attempt maps to the existing deterministic proof job ID. A transport timeout triggers
 status reconciliation. It does not create a new intent, nonce, or proof automatically.
@@ -197,9 +203,11 @@ waiting, queue capacity, cancellation, and retention in B-0063. Do not widen pro
 to compensate for an unbounded waiting queue.
 
 A policy publish cannot swap an admitted job's policy, delete its snapshot, or imply
-revocation. Shared SpiceDB schema conflicts and M5 cleanup behavior need a concrete
-migration design. The new workflow must keep per-policy provisioning correct without
-a proof-long lock. This is a required backend feature, not only a UI change.
+revocation. The proposed migration uses durable per-version source packages and a
+cumulative namespaced SpiceDB schema. It retains the existing registry epoch semantics
+through version-specific signed policy names. The new workflow must keep per-policy
+provisioning correct without a proof-long lock. This is a backend feature, not only
+a UI change. ADR-0020 records its trust checks and approval gate.
 
 ## Feature Order
 
@@ -252,8 +260,9 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 - This task needs sibling filesystem write access before cross-repository edits.
 - Live inference needs a configured endpoint, model, and secret at deployment time.
 - Public npm release needs package ownership, authentication, and license metadata.
-- B-0063 must resolve compatible shared-schema provisioning and exact agent-request
-  signatures. Neither changes the existing SP1 authorization statement by default.
+- ADR-0020 proposes compatible shared-schema provisioning and exact agent-request
+  signatures. Approval and runtime validation remain pending. Neither proposal changes
+  the existing SP1 authorization statement.
 - LLM behavior is variable. Dashboard controls and bounded tools must make the demo
   resumable without claiming deterministic model reasoning.
 - Authorization proof does not establish transaction truth, reconciliation accuracy,
@@ -261,6 +270,6 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 
 ## Exact Next Action
 
-B-0063 writes the concrete API/signature contract and policy provisioning migration,
-then prepares scoped backend and SDK implementation. No repository or package is
-published by this planning task.
+Review ADR-0020's two security decisions, then implement B-0064 registration, signed
+authentication, and the standalone SDK foundation. No repository or package is
+published by the contract task.

@@ -48,6 +48,10 @@ a third dashboard. Real-data acceptance is deferred under
 The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
 evidence keeps its original milestone labels. The
 [M6-M7 plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md) defines the new feature order.
+The concrete [agent API contract](docs/spec/AGENT-API-V1.md) and
+[ADR-0020](docs/decisions/0020-agent-api-and-request-provisioning.md) are proposed,
+not implemented or approved. They define signed caller authentication, an operator
+approval lifecycle, and coexisting immutable policy versions.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
@@ -362,14 +366,21 @@ envelope was deleted, and the approved owner-only private snapshot remained.
 
 ## Why this stack
 
-### One polyglot monorepo
+### Backend And Public Packages
 
-The PolicyIR schema, SP1 guest, public values, verifier, Protobuf contracts,
-TypeScript SDK, and test vectors form one compatibility unit. One repository lets a
-single change update and test that unit atomically.
+The PolicyIR schema, SP1 guest, public values, verifier, Protobuf contracts, and
+canonical vectors remain one backend compatibility unit. ADR-0019 moves the SDK into
+its sibling release repository and puts both agent applications in another repository.
+The current workspace SDK remains until consumers migrate to the packaged release.
+Public releases pin their backend protocol revision and canonical vectors. They do
+not import backend source files or require private workspace packages.
 
-Repository separation comes later, after the proof format and API reach a stable,
-versioned boundary.
+The proposed M6 public facade exposes explicit agent routes in `demo-console`.
+Operator routes retain their separate authentication. The internal gateway, including
+its dataset administration routes, stays unreachable from agent containers. The
+agent-authenticated protected-query facade forwards only to the existing PEP route.
+Token and signature checks do not replace capability verification. See ADR-0020 for
+the new boundary and its pending approval.
 
 ### TypeScript and Next.js
 
@@ -684,9 +695,10 @@ operation.
 
 ## Capability token model
 
-The capability is a Protobuf artifact on internal RPC boundaries. O-005 still governs
-its HTTP representation, so the baseline does not yet select base64url or another
-browser-facing encoding. It is not a JWT.
+The capability is a Protobuf artifact on internal RPC boundaries. M5 transports it
+as `capability_proto_hex` in the protected-query JSON envelope. The proposed M6 API
+returns Protobuf `bytes` through ProtoJSON and lets the SDK build that existing gateway
+envelope. ADR-0020 governs the new API representation. The capability is not a JWT.
 
 ```text
 ProofCapability {

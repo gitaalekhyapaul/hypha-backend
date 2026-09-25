@@ -88,9 +88,15 @@ The following decisions must be closed before their milestone begins:
 | ID | Decision | Deadline |
 | --- | --- | --- |
 | O-001 | Deferred: select a real transaction dataset and record its usage basis | Before any later real-data acquisition, outside revised M6-M7 |
-| O-005 | Select the capability transport representation for HTTP | Before gateway integration |
+| O-005 | M5 uses `capability_proto_hex`; review the new public API ProtoJSON transport in ADR-0020 | Before external SDK integration |
 
 O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
+
+[ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md) proposes the new
+agent-authentication envelope and independent policy-version provisioning contract.
+Its [Agent API v1 specification](AGENT-API-V1.md) lists endpoints, fields, state
+transitions, resource bounds, retry behavior, and the SDK boundary. These decisions
+await maintainer approval. Existing proof contracts remain unchanged.
 
 ## Actors and entities
 
@@ -1288,6 +1294,8 @@ Exit gate:
 ### M6: External agent access and public SDK
 
 Status: planned under ADR-0019. The former real-data objective is deferred.
+The detailed B-0063 contract is drafted in [Agent API v1](AGENT-API-V1.md).
+ADR-0020 approval and feature implementation remain pending.
 
 Deliver:
 
