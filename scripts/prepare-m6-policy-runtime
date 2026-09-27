@@ -41,6 +41,9 @@ prepare() {
   # No builds, package installation or network access. Parent deployment prepares
   # current binaries and workspace packages with the pinned repository toolchain.
   binaries='spicedb-ir-compiler raziel-admin raziel-policy-authority raziel-registry-writer raziel-policy-activation raziel-policy-activate raziel-agent-auth raziel-access-client razield-access'
+  if [ "${RAZIEL_M6_LIVE:-0}" = 1 ]; then
+    binaries="$binaries razield-access-dispatch razield-capability razield-proof-worker verifierd raziel-verifier-client"
+  fi
   for binary in $binaries; do
     test -f "$source/$binary" && test -x "$source/$binary" && test ! -L "$source/$binary" ||
       fail "missing prebuilt tool: $binary"
@@ -61,6 +64,19 @@ prepare() {
   done
   key_file "$secrets/policy-authority.pk8"
   key_file "$secrets/snapshot-authority.pk8"
+  if [ "${RAZIEL_M6_LIVE:-0}" = 1 ]; then
+    snapshot_keys=/run/secrets/m6-snapshot
+    private_directory "$snapshot_keys"
+    # The dispatcher receives only the snapshot key, never the policy signing key.
+    snapshot_key="$snapshot_keys/snapshot-authority.pk8"
+    test ! -L "$snapshot_key" || fail "symlink snapshot key rejected"
+    if [ -e "$snapshot_key" ]; then
+      cmp -s "$secrets/snapshot-authority.pk8" "$snapshot_key" || fail "snapshot key mismatch"
+    else
+      install -m 0400 "$secrets/snapshot-authority.pk8" "$snapshot_key"
+    fi
+    test "$(stat --format=%a:%u:%h "$snapshot_key")" = 400:0:1 || fail "invalid snapshot key permissions"
+  fi
 
   # The publisher mounts only this token directory, not the base signing-key volume.
   token="$token_directory/token"
@@ -77,7 +93,15 @@ prepare() {
     mv "$temporary" "$token"
   fi
   temporary=
-  printf 'm6_policy_runtime=prepared scope=publication-and-inbox\n'
+  printf 'm6_policy_runtime=prepared live=%s\n' "${RAZIEL_M6_LIVE:-0}"
+}
+
+prepare_dispatch() {
+  for directory in /var/lib/raziel/private-snapshots /var/lib/raziel/request-revisions \
+    /var/lib/raziel/private-envelopes; do
+    private_directory "$directory"
+  done
+  printf 'm6_policy_runtime=dispatch-directories-ready\n'
 }
 
 prepare_ipc() {
@@ -96,5 +120,6 @@ test "$(id -u)" = 0 || fail "run through the M6 Compose initializer"
 case "${1:-}" in
   prepare) prepare ;;
   ipc) prepare_ipc ;;
-  *) fail "expected prepare or ipc" ;;
+  dispatch) prepare_dispatch ;;
+  *) fail "expected prepare, ipc, or dispatch" ;;
 esac

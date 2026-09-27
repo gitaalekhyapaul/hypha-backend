@@ -11,6 +11,10 @@ import type {
   ListAccessRequestsResponse,
   RejectAccessRequestRequest,
   RejectAccessRequestResponse,
+  ResumeAccessRequestRequest,
+  ResumeAccessRequestResponse,
+  SubmitAccessIssuanceRequest,
+  SubmitAccessIssuanceResponse,
 } from "@raziel/proto-ts";
 
 export type AccessErrorCode =
@@ -35,4 +39,6 @@ export interface AccessOwnerClient {
   list(input: ListAccessRequestsRequest): Promise<ListAccessRequestsResponse>;
   reject(input: RejectAccessRequestRequest): Promise<RejectAccessRequestResponse>;
   cancel(input: CancelAccessRequestRequest): Promise<CancelAccessRequestResponse>;
+  resume(input: ResumeAccessRequestRequest): Promise<ResumeAccessRequestResponse>;
+  submitIssuance(input: SubmitAccessIssuanceRequest): Promise<SubmitAccessIssuanceResponse>;
 }

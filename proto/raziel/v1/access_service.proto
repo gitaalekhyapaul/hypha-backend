@@ -12,6 +12,8 @@ service AccessRequestService {
   rpc ApproveAccessRequest(ApproveAccessRequestRequest) returns (ApproveAccessRequestResponse);
   rpc RejectAccessRequest(RejectAccessRequestRequest) returns (RejectAccessRequestResponse);
   rpc CancelAccessRequest(CancelAccessRequestRequest) returns (CancelAccessRequestResponse);
+  rpc ResumeAccessRequest(ResumeAccessRequestRequest) returns (ResumeAccessRequestResponse);
+  rpc SubmitAccessIssuance(SubmitAccessIssuanceRequest) returns (SubmitAccessIssuanceResponse);
 }
 
 message AccessRequestOwner {
@@ -93,5 +95,25 @@ message CancelAccessRequestRequest {
 }
 
 message CancelAccessRequestResponse {
+  AccessRequest request = 1;
+}
+
+message ResumeAccessRequestRequest {
+  string agent_id = 1;
+  string request_id = 2;
+  uint64 expected_generation = 3;
+}
+
+message ResumeAccessRequestResponse {
+  AccessRequest request = 1;
+}
+
+message SubmitAccessIssuanceRequest {
+  AccessRequestOwner owner = 1;
+  string request_id = 2;
+  AccessIssuanceSubmission submission = 3;
+}
+
+message SubmitAccessIssuanceResponse {
   AccessRequest request = 1;
 }

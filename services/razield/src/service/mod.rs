@@ -23,9 +23,9 @@ pub use snapshot_config::{SnapshotServiceConfig, SnapshotServiceConfigError};
 pub use snapshot_handler::{SnapshotOperations, SnapshotServiceHandler, bounded_snapshot_service};
 pub use snapshot_runtime::{SnapshotCoordinator, SnapshotOperationError};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "capability-service"))]
 mod handler_tests;
 #[cfg(test)]
 mod snapshot_handler_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "capability-service"))]
 mod tests;

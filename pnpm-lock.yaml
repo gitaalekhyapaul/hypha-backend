@@ -144,8 +144,8 @@ importers:
   packages/sdk-ts:
     dependencies:
       '@gitaalekhyapaul/raziel-sdk-ts':
-        specifier: file:vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz
-        version: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz
+        specifier: file:vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz
+        version: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz
     devDependencies:
       '@biomejs/biome':
         specifier: 'catalog:'
@@ -234,8 +234,8 @@ packages:
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
 
-  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz':
-    resolution: {integrity: sha512-qS6nK9pGd361b41qr7ctFGhFW5s05Xxs1bYYw0eic7uytwFsXjom/nIWiNG7fj4h5XjhZCIgEoaAFY1Oaf5l6A==, tarball: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz}
+  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz':
+    resolution: {integrity: sha512-iGI4/QM3Zq2YddHLycBPbK/TLZ/KioVnmdRy3Q6WoH0Mgci0hf27B7kUh3d7uiT9jEVt+zSDwTH3B/ID6LshVA==, tarball: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz}
     version: 0.1.0
     engines: {node: '>=24.18.0'}
 
@@ -1064,7 +1064,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz':
+  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz':
     dependencies:
       '@bufbuild/protobuf': 2.12.1
 

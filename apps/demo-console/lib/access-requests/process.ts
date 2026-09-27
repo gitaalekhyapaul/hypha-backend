@@ -13,6 +13,10 @@ import {
   ListAccessRequestsResponseSchema,
   RejectAccessRequestRequestSchema,
   RejectAccessRequestResponseSchema,
+  ResumeAccessRequestRequestSchema,
+  ResumeAccessRequestResponseSchema,
+  SubmitAccessIssuanceRequestSchema,
+  SubmitAccessIssuanceResponseSchema,
 } from "@raziel/proto-ts";
 import { type AccessErrorCode, type AccessOwnerClient, AccessRequestError } from "./types.ts";
 
@@ -59,6 +63,15 @@ export function rustAccessOwner(executable: string, endpoint: string): AccessOwn
       call("reject", RejectAccessRequestRequestSchema, RejectAccessRequestResponseSchema, input),
     cancel: (input) =>
       call("cancel", CancelAccessRequestRequestSchema, CancelAccessRequestResponseSchema, input),
+    resume: (input) =>
+      call("resume", ResumeAccessRequestRequestSchema, ResumeAccessRequestResponseSchema, input),
+    submitIssuance: (input) =>
+      call(
+        "submit_issuance",
+        SubmitAccessIssuanceRequestSchema,
+        SubmitAccessIssuanceResponseSchema,
+        input,
+      ),
   };
 }
 

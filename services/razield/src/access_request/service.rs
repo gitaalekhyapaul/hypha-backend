@@ -6,7 +6,8 @@ use raziel_proto::raziel::v1::{
     ApproveAccessRequestResponse, CancelAccessRequestRequest, CancelAccessRequestResponse,
     CreateAccessRequestRequest, CreateAccessRequestResponse, GetAccessRequestRequest,
     GetAccessRequestResponse, ListAccessRequestsRequest, ListAccessRequestsResponse,
-    RejectAccessRequestRequest, RejectAccessRequestResponse,
+    RejectAccessRequestRequest, RejectAccessRequestResponse, ResumeAccessRequestRequest,
+    ResumeAccessRequestResponse, SubmitAccessIssuanceRequest, SubmitAccessIssuanceResponse,
     access_request_service_server::{AccessRequestService, AccessRequestServiceServer},
 };
 use tonic::{Request, Response, Status};
@@ -87,7 +88,7 @@ impl AccessCoordinator {
                 record = self.expire(&mut connection, record, raw, now)?;
                 Ok(CreateAccessRequestResponse {
                     format_version: 1,
-                    request: Some(record.public()),
+                    request: Some(self.public_result(&mut connection, &record, true)?),
                     created: false,
                 })
             }
@@ -133,7 +134,8 @@ impl AccessCoordinator {
         let _lock = self.private.lock()?;
         let mut connection = self.redis.connect()?;
         let (record, raw) = self.visible(&mut connection, &id, now)?;
-        Ok(self.expire(&mut connection, record, raw, now)?.public())
+        let record = self.expire(&mut connection, record, raw, now)?;
+        self.public_result(&mut connection, &record, true)
     }
 
     pub fn list(
@@ -169,7 +171,8 @@ impl AccessCoordinator {
             last = Some(id.clone());
             match self.visible(&mut connection, &id, now) {
                 Ok((record, raw)) => {
-                    requests.push(self.expire(&mut connection, record, raw, now)?.public())
+                    let record = self.expire(&mut connection, record, raw, now)?;
+                    requests.push(self.public_result(&mut connection, &record, false)?)
                 }
                 Err(AccessError::NotFound | AccessError::Expired) => {}
                 Err(e) => return Err(e),
@@ -225,15 +228,36 @@ impl AccessCoordinator {
         let mut record = self.expire(&mut connection, record, raw, now)?;
         // The retained command result wins over its now-stale pre-transition generation.
         if record.state()? == target {
+            return self.public_result(&mut connection, &record, true);
+        }
+        if target == State::Canceled && record.state()? == State::Cancelling {
             return Ok(record.public());
         }
         if record.state()? == State::Expired {
             return Err(AccessError::Expired);
         }
+        if record.terminal()? && record.attempt.is_some() && target == State::Canceled {
+            return self.public_result(&mut connection, &record, true);
+        }
         if record.terminal()? || generation != record.generation {
             return Err(AccessError::Conflict);
         }
-        if !record.predispatch()? {
+        if target == State::Canceled
+            && (record.state()? == State::Preparing || record.attempt.is_some())
+        {
+            let raw = record.encode()?;
+            record.state = State::Cancelling as i32;
+            record.generation = record
+                .generation
+                .checked_add(1)
+                .ok_or(AccessError::ServiceUnavailable)?;
+            record.updated = now;
+            self.redis.cas(&mut connection, &id, &raw, Some(&record))?;
+            return Ok(record.public());
+        }
+        if !record.predispatch()?
+            && !(target == State::Canceled && record.state()? == State::AwaitingSignature)
+        {
             return Err(AccessError::ServiceUnavailable);
         }
         if target == State::Rejected && record.state()? != State::PendingReview {
@@ -268,9 +292,21 @@ impl AccessCoordinator {
         Ok((record, raw))
     }
 
-    fn validated_intent(&self, record: &Record) -> Result<NormalizedIntent, AccessError> {
+    pub(super) fn validated_intent(
+        &self,
+        record: &Record,
+    ) -> Result<NormalizedIntent, AccessError> {
         let private = self.private.read(&record.private_ref)?;
         if !record.matches_intent(&private) {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        if record.proposal.as_ref().is_some_and(|proposal| {
+            private
+                .0
+                .owner
+                .as_ref()
+                .is_none_or(|owner| owner.agent_public_key != proposal.agent_public_key)
+        }) {
             return Err(AccessError::ServiceUnavailable);
         }
         if record.policy_binding.is_some() {
@@ -289,18 +325,41 @@ impl AccessCoordinator {
         &self,
         connection: &mut redis::Connection,
         mut record: Record,
-        raw: String,
+        mut raw: String,
         now: i64,
     ) -> Result<Record, AccessError> {
         if now < record.updated {
             return Err(AccessError::ServiceUnavailable);
         }
-        if !record.terminal()? && now >= record.deadline {
-            if !record.predispatch()? {
+        self.recover_issuance(connection, &mut record, &mut raw, now)?;
+        if !record.terminal()? && record.attempt.is_none() && now >= record.deadline {
+            if !record.predispatch()?
+                && !matches!(record.state()?, State::Preparing | State::AwaitingSignature)
+            {
                 return Err(AccessError::ServiceUnavailable);
             }
             let deadline = record.deadline;
+            record.proposal = None;
             record.finish(State::Expired, deadline)?;
+            self.redis
+                .cas(connection, &record.identity(), &raw, Some(&record))?;
+        }
+        if record.state()? == State::AwaitingSignature
+            && record
+                .proposal
+                .as_ref()
+                .is_some_and(|proposal| now >= proposal.signature_deadline)
+        {
+            raw = record.encode()?;
+            record.state = State::WaitingForAgent as i32;
+            record.generation = record
+                .generation
+                .checked_add(1)
+                .ok_or(AccessError::ServiceUnavailable)?;
+            record.updated = now;
+            record.due = record.deadline;
+            record.proposal = None;
+            record.dispatch_generation = None;
             self.redis
                 .cas(connection, &record.identity(), &raw, Some(&record))?;
         }
@@ -332,7 +391,9 @@ impl AccessCoordinator {
             if record.phase == Phase::Published && !record.terminal()? {
                 self.validated_intent(&record)?;
                 // Later workflow states belong to B-0066, never infer proof termination.
-                if record.predispatch()? {
+                if record.predispatch()?
+                    || matches!(record.state()?, State::Preparing | State::AwaitingSignature)
+                {
                     match self.expire(connection, record, raw, now) {
                         Ok(_) | Err(AccessError::Expired) => {}
                         Err(error) => return Err(error),
@@ -436,6 +497,41 @@ pub fn bounded_access_service(
 
 #[tonic::async_trait]
 impl AccessRequestService for AccessRequestHandler {
+    async fn submit_access_issuance(
+        &self,
+        request: Request<SubmitAccessIssuanceRequest>,
+    ) -> Result<Response<SubmitAccessIssuanceResponse>, Status> {
+        let input = request.into_inner();
+        self.call(move |c, now| {
+            c.submit_issuance(input, now)
+                .map(|request| SubmitAccessIssuanceResponse {
+                    request: Some(request),
+                })
+        })
+        .await
+        .map(Response::new)
+    }
+
+    async fn resume_access_request(
+        &self,
+        request: Request<ResumeAccessRequestRequest>,
+    ) -> Result<Response<ResumeAccessRequestResponse>, Status> {
+        let input = request.into_inner();
+        self.call(move |c, now| {
+            c.resume(
+                &input.agent_id,
+                &input.request_id,
+                input.expected_generation,
+                now,
+            )
+            .map(|request| ResumeAccessRequestResponse {
+                request: Some(request),
+            })
+        })
+        .await
+        .map(Response::new)
+    }
+
     async fn create_access_request(
         &self,
         request: Request<CreateAccessRequestRequest>,

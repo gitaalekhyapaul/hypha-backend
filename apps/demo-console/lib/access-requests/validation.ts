@@ -2,6 +2,7 @@ import { fromJson, type JsonValue } from "@bufbuild/protobuf";
 import {
   AccessGrantInputsSchema,
   AccessIntentSchema,
+  AccessIssuanceSubmissionSchema,
   AccessRequestMutationSchema,
 } from "@raziel/proto-ts";
 import { AccessRequestError } from "./types.ts";
@@ -47,7 +48,15 @@ export function parseIntent(bytes: Uint8Array) {
     )
       throw invalid();
   }
-  const context = value.requestContext ?? [];
+  validateContext(value.requestContext ?? []);
+  try {
+    return fromJson(AccessIntentSchema, value as JsonValue);
+  } catch {
+    throw invalid();
+  }
+}
+
+function validateContext(context: unknown) {
   if (!Array.isArray(context) || context.length > 16) throw invalid();
   const names = new Set<string>();
   for (const entry of context) {
@@ -76,8 +85,70 @@ export function parseIntent(bytes: Uint8Array) {
     )
       throw invalid();
   }
+}
+
+export function parseIssuance(bytes: Uint8Array) {
+  const value = objectJson(bytes);
+  keys(value, ["formatVersion", "proposalId", "generation", "request"]);
+  if (
+    value.formatVersion !== 1 ||
+    typeof value.proposalId !== "string" ||
+    !/^[0-9a-f]{32}$/.test(value.proposalId)
+  )
+    throw invalid();
+  decimal(value.generation);
+  const request = object(value.request);
+  keys(
+    request,
+    [
+      "formatVersion",
+      "agentId",
+      "agentPublicKey",
+      "taskId",
+      "purpose",
+      "action",
+      "resourceType",
+      "resourceScope",
+      "requestedExpiresAt",
+      "issuanceNonce",
+      "snapshotId",
+      "requestSignature",
+    ],
+    ["requestContext"],
+  );
+  if (request.formatVersion !== 1 || typeof request.agentId !== "string") throw invalid();
+  agentId(request.agentId);
+  for (const field of [
+    "taskId",
+    "purpose",
+    "action",
+    "resourceType",
+    "resourceScope",
+    "snapshotId",
+  ]) {
+    if (typeof request[field] !== "string" || request[field].length === 0) throw invalid();
+  }
+  for (const [field, length] of [
+    ["agentPublicKey", 32],
+    ["issuanceNonce", 32],
+    ["requestSignature", 64],
+  ] as const) {
+    const encoded = request[field];
+    if (
+      typeof encoded !== "string" ||
+      Buffer.from(encoded, "base64").length !== length ||
+      Buffer.from(encoded, "base64").toString("base64") !== encoded
+    )
+      throw invalid();
+  }
+  if (
+    typeof request.requestedExpiresAt !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(request.requestedExpiresAt)
+  )
+    throw invalid();
+  validateContext(request.requestContext ?? []);
   try {
-    return fromJson(AccessIntentSchema, value as JsonValue);
+    return fromJson(AccessIssuanceSubmissionSchema, value as JsonValue);
   } catch {
     throw invalid();
   }

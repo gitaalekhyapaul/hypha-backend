@@ -1,4 +1,12 @@
 //! Lifecycle checks use an explicit test Redis URL and unique disposable prefixes.
+#[path = "dispatch_tests.rs"]
+mod dispatch_tests;
+#[cfg(feature = "access-dispatch")]
+#[path = "handoff_tests.rs"]
+mod handoff_tests;
+#[path = "issuance_tests.rs"]
+mod issuance_tests;
+
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
@@ -194,7 +202,10 @@ impl Live {
 impl Drop for Live {
     fn drop(&mut self) {
         let _: redis::RedisResult<i64> = redis::cmd("DEL")
-            .arg(&["records", "active", "index", "due"].map(|name| self.key(name)))
+            .arg(&["records", "active", "index", "due", "results"].map(|name| self.key(name)))
+            .query(&mut self.connection());
+        let _: redis::RedisResult<i64> = redis::cmd("DEL")
+            .arg(format!("{}:proof-jobs:meta", self.config.prefix()))
             .query(&mut self.connection());
     }
 }

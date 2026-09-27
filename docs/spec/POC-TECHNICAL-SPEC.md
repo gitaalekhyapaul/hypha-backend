@@ -105,8 +105,15 @@ dataset-binding storage and cold/cache gateway enforcement are implemented. Oper
 approval writes that mapping and pins exact private input. The browser and packaged
 SDK observed APPROVED_WAITING without a capability. Private snapshot preparation
 passed against real SpiceDB with an exact pinned revision and signed descriptor.
-Retry reused that descriptor and private tree. Automatic dispatch remains B-0066
-work. Existing proof contracts remain unchanged.
+Retry reused that descriptor and private tree. B-0066 now implements the serial
+preparation/signature-reservation worker, durable final signature acceptance,
+authenticated resume, proof-service handoff, terminal result retention, and the
+protected-query facade. The SDK signs and submits retained attempts, polls with
+bounded waits, and reuses capabilities with fresh protected-query signatures.
+The packaged consumer passes cold/cache and revoked-token checks with a controlled
+proof verifier. The separate live M6 Compose stack and VM runbook are implemented.
+ADR-0021 adds dedicated persistent SpiceDB storage. Connected VM proof validation
+and public npm publication remain pending. Existing proof contracts are unchanged.
 
 ## Actors and entities
 
@@ -1315,7 +1322,14 @@ coexisting versions and an exact retry. The visual builder and exclusive-writer 
 preview passed locally. Connected operator approval and agent reads pass locally.
 Request-triggered grant provisioning and signed snapshot preparation pass against
 real SpiceDB. Exact retries retain the same snapshot. B-0065 is locally complete.
-B-0066 is pending, and work is paused by the maintainer. No VM deployment is claimed.
+B-0066 is active. Serial preparation and proposal recovery pass local Redis/BullMQ
+checks. Final signature acceptance persists the exact attempt before `SUBMITTING`,
+with deadline recovery and changed-request rejection. Resume and protected-query
+facade routes are implemented. Proof-service RPC handoff and terminal delivery pass
+controlled local checks, including uncertain create, cancellation, exact resend,
+restart, and retention cleanup. The external SDK signs exact proposals and submits
+retained attempts. No connected real proof, complete SDK flow, or new VM deployment
+is claimed.
 
 Deliver:
 

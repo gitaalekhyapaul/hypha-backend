@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "access-dispatch")]
+pub mod access_dispatch;
 #[cfg(feature = "access-service")]
 pub mod access_request;
 pub mod admission;
@@ -14,7 +16,7 @@ pub mod private_envelope;
 pub mod private_snapshot;
 #[cfg(feature = "capability-service")]
 pub mod publication;
-#[cfg(feature = "capability-service")]
+#[cfg(any(feature = "capability-service", feature = "access-dispatch"))]
 pub mod queue;
 #[cfg(feature = "access-service")]
 pub mod request_preparation;

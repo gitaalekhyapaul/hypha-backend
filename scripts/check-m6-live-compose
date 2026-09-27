@@ -1,0 +1,70 @@
+#!/bin/sh
+set -eu
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec node --input-type=module - "$repo_root" <<'NODE'
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
+const root = process.argv[2];
+const config = JSON.parse(execFileSync(resolve(root, "scripts/compose-m6"),
+  ["--profile", "*", "config", "--format", "json"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, RAZIEL_M6_ENV_FILE: "/dev/null",
+      RAZIEL_M6_POSTGRES_PASSWORD: "render-check-only", RAZIEL_M6_CONSOLE_PORT: "3000" },
+  }));
+const s = config.services;
+assert.equal(config.name, "raziel-m6-live");
+for (const [name, role] of Object.entries(s)) {
+  assert.equal(role.build, undefined);
+  assert.equal(role.pull_policy, "never");
+  assert.equal(role.privileged ?? false, false);
+  if (name !== "demo-console") assert.equal((role.ports ?? []).length, 0, name);
+  for (const mount of role.volumes ?? []) {
+    assert.notEqual(mount.source, "/var/run/docker.sock");
+    if (mount.type === "bind" && mount.source.includes("/.raziel/")) {
+      assert.ok(mount.source.startsWith(resolve(root, ".raziel/m6-live")), name);
+    }
+  }
+}
+for (const volume of Object.values(config.volumes)) {
+  assert.equal(volume.external ?? false, false);
+  assert.ok(volume.name.startsWith("raziel-m6-live_"));
+}
+for (const name of ["demo-access-graph", "demo-snapshot", "razield", "demo-capability-api",
+  "demo-proof-worker", "verifierd"]) assert.equal(s[name], undefined);
+assert.equal(config.networks["database-internal"].internal, true);
+assert.deepEqual(Object.keys(s["m6-database"].networks), ["database-internal"]);
+assert.ok(s.spicedb.command.includes("--datastore-engine=postgres"));
+assert.equal(s.spicedb.depends_on["m6-spicedb-migrate"].condition, "service_completed_successfully");
+assert.equal(s["m6-database"].image,
+  "postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f");
+const dispatcher = s["m6-dispatcher"];
+assert.equal(dispatcher.environment.RAZIEL_ACCESS_PREFIX, s["demo-access-api"].environment.RAZIEL_ACCESS_PREFIX);
+for (const name of ["m6-proof-worker", "m6-capability-api"]) {
+  assert.equal(s[name].environment.RAZIEL_QUEUE_PREFIX, dispatcher.environment.RAZIEL_QUEUE_PREFIX);
+}
+for (const name of ["m6-proof-worker", "m6-proof-sandbox", "m6-verifierd", "demo-access-api",
+  "demo-policy-authority", "demo-policy-activation", "demo-policy-registry-writer"]) {
+  assert.equal(s[name].environment.RAZIEL_TRUST_DOMAIN_ID, dispatcher.environment.RAZIEL_TRUST_DOMAIN_ID, name);
+}
+assert.equal(dispatcher.environment.RAZIEL_ZED_TOKEN_CANDIDATE_ROOT, undefined);
+assert.equal(dispatcher.environment.RAZIEL_ZED_TOKEN_PATH, undefined);
+assert.equal(dispatcher.environment.RAZIEL_REGISTRY_WRITER_SOCKET_PATH,
+  s["demo-policy-registry-writer"].environment.RAZIEL_REGISTRY_WRITER_SOCKET_PATH);
+assert.equal(dispatcher.volumes.some(m => m.source === "m5-policy-secrets"), false);
+assert.equal(s["m6-verifierd"].volumes.some(m => /snapshot|intent|envelope/.test(m.source)), false);
+for (const [name, limit] of [["m6-proof-sandbox", 60129542144], ["m6-verifier-sandbox", 2147483648]]) {
+  assert.equal(s[name].network_mode, "none");
+  assert.equal(String(s[name].mem_limit), String(limit));
+  assert.equal(String(s[name].memswap_limit), String(limit));
+  assert.equal(s[name].read_only, true);
+  assert.deepEqual(s[name].cap_drop, ["ALL"]);
+}
+assert.equal(s["m6-proof-sandbox"].cpuset, "0-7");
+assert.equal(s["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, "http://m6-verifierd:50053");
+assert.equal(s["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");
+assert.equal(s["demo-console"].ports[0].published, "3000");
+assert.equal(s["demo-console"].ports[0].host_ip, "127.0.0.1");
+process.stdout.write("m6_live_compose=pass proof=56GiB,8CPU,no-swap verifier=2GiB,no-network runtime=not-started\n");
+NODE

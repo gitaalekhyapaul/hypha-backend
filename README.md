@@ -143,23 +143,27 @@ reconciliation demonstration. B-0064 implements agent registration, token manage
 signed identity lookup, and a standalone SDK candidate. B-0065 adds durable agent
 requests and an operator inbox with detail, approve, reject, and cancel actions.
 Private snapshot preparation passes locally against real SpiceDB with exact retry
-reuse. Serial dispatch, public release, and two agent dashboards remain pending.
+reuse. B-0066 adds serial preparation, final signature acceptance, proof-service
+handoff, and retained public results. Public release and two agent dashboards remain pending.
 Owner-allocated policy identities and namespaced candidate compilation
 pass local checks. The composed owner publication path passed a two-version test
 against pinned SpiceDB. The visual builder now publishes versions in the isolated,
 opt-in M6 runtime. Its two-version browser flow and installed-approval catalogue pass
 locally. Approval writes the immutable dataset mapping checked by the gateway.
-B-0066 still owns automatic dispatch, final signatures, and the connected agent
-protected-query flow. B-0065 is locally complete, and work is paused at the
-maintainer's request. See the
+B-0066 adds packaged SDK signing, bounded polling, and protected-query reuse.
+Cold/cache delivery passes with a controlled verifier. The new live M6 overlay
+connects the production roles and uses dedicated PostgreSQL-backed SpiceDB.
+Public npm publication and live VM proof validation remain pending.
+No new M6 proof-backed demonstration is claimed. See the
 [feature and user-flow plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md). The former real-data
 and second-scenario gates are deferred. Existing runbooks describe the completed M5
 stack. The [access inbox runbook](docs/runbooks/AGENT-ACCESS-INBOX.md#local-m6-preview)
-documents the partial local M6 preview, not a VM-ready M6 demonstration.
+documents the partial local M6 preview. The [M6 VM runbook](docs/runbooks/M6-LIVE-VM.md)
+documents the separate provisional live deployment and its remaining proof gate.
 The [agent registration runbook](docs/runbooks/AGENT-REGISTRATION.md) covers the new
 authentication slice and its current limits. The
 [access inbox runbook](docs/runbooks/AGENT-ACCESS-INBOX.md) covers the connected local
-request flow and the remaining dispatch boundary.
+request flow and ownership boundaries.
 
 ## Read first
 

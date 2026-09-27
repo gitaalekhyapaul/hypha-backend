@@ -42,7 +42,7 @@ a third dashboard. Real-data acceptance is deferred under
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
 | M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
-| M6 | In progress | Registration, signed requests, owner-isolated intents, policy publication, operator approval, and request-triggered snapshot preparation pass locally. Serial dispatch and npm release remain pending |
+| M6 | In progress | Registration, inbox, policy publication, snapshot preparation, serial dispatch, signature acceptance, and terminal retention pass local checks. Packaged SDK signing, polling, and cold/cache query delivery pass. Live VM proof validation and public npm publication remain pending |
 | M7 | Planned | Two-ledger reconciliation, three dashboards, LLM tools, messages, and live proof-backed demo |
 
 The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
@@ -55,8 +55,27 @@ supports request creation, exact retries, own-request reads, rejection, and canc
 Operator approval passes the connected browser and packaged-SDK HTTP check.
 Private request preparation passed against real SpiceDB and the snapshot authority.
 It pins the approved package and exact revision, and retries reuse the same signed
-snapshot. B-0066 will invoke it after reserving serial proof capacity. It does not
-automatically dispatch from the approval action.
+snapshot. B-0066 now provides a separate `razield-access-dispatch` executable with
+the existing BullMQ worker at concurrency one. It reserves a durable request before
+preparation and exposes a 120-second issuance-signature proposal. An offline signer
+releases capacity into `WAITING_FOR_AGENT` and must explicitly resume. This worker
+is not yet composed into the preview. The issuance endpoint accepts the registered
+agent's exact proposal signature through the existing Rust admission boundary.
+It persists the nonce/signature comparator and deterministic job ID in owner-only
+storage before publishing `SUBMITTING`. Recovery checks that write before applying
+the signature deadline. Private context is reused from the immutable intent, never
+copied into Redis or echoed. The dispatcher now records submission start before its
+CapabilityService RPC, reads the deterministic job before any exact resend, and
+blocks resends during cancellation. Unknown publication remains unresolved.
+Validated terminal public results commit with workflow capacity release in Redis.
+Detail reads retain the capability independently of proof-queue retention. Lists
+omit capability bytes. This path has controlled proof-service tests, not a new real
+proof run. The sibling SDK now resumes requests, signs exact proposals through a
+caller-owned signer, and submits retained attempts. Bounded polling returns actionable
+and terminal states. Protected queries retain the capability and refresh both request
+signatures. The packaged SDK passes a cold/cache gateway check with a controlled
+proof-verifier response. It does not claim a new real proof. The existing preview
+has not been restarted or upgraded.
 The owner API allocates durable family/version identities and compiles namespaced
 candidates. A separate composed publication role now approves, retains, and installs
 coexisting versions. Its local gate passed against the pinned SpiceDB image with two
@@ -67,10 +86,18 @@ Its operator catalogue now lists installed, currently approved versions through 
 owner socket. It contains no PolicyIR or schema. The M6 gateway checks exact immutable
 policy/type/scope dataset bindings on cold and cached requests, including revision and
 checksum in the data read. Approval persists its private command, exact public policy
-binding, and immutable dataset mapping. It does not start a proof. Dispatch is pending.
+binding, and immutable dataset mapping. It does not start a proof.
 M5 remains the default. Mode guards prevent legacy writes in the M6 runtime. Snapshot
 registry mutations now retry stale generations without rebuilding the private tree,
 then confirm the exact root and current policy in a validated newer generation.
+
+The separate `docker-compose.m6-live.yml` overlay connects the dispatcher to the
+existing capability API, proof supervisor, and isolated prover. The independent
+verifier supplies the gateway. [ADR-0021](docs/decisions/0021-durable-m6-spicedb-deployment.md)
+adds dedicated PostgreSQL-backed SpiceDB for restart persistence. Private snapshots
+remain owner-only files, not database rows. The live project imports no preview or
+M5 state. The [VM runbook](docs/runbooks/M6-LIVE-VM.md) gives preparation, startup,
+SDK flows, and the remaining real-proof gate.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
@@ -396,11 +423,15 @@ Public releases pin their backend protocol revision and canonical vectors. They 
 not import backend source files or require private workspace packages.
 
 The M6 public facade exposes signed identity lookup at `/api/agent/v1/me` and access
-request create/list/get/cancel routes in `demo-console`. Operator registration, token
+request create/list/get/cancel/resume routes in `demo-console`. Operator registration, token
 issuance, revocation, and request list/detail/reject/cancel are implemented.
 Operator routes retain their separate authentication. The internal gateway, including
 its dataset administration routes, stays unreachable from agent containers. The
-planned agent-authenticated protected-query facade will forward only to the existing PEP route.
+agent-authenticated protected-query facade forwards the original bounded envelope
+only to the existing PEP route. It checks the inner public key against the registered
+API signer and preserves the exact signed target. The gateway retains proof, scope,
+inner-signature, replay, dataset-binding, and cache enforcement. Response projection
+supports the exact namespaced resource type. Connected SDK/VM validation is pending.
 Token and signature checks do not replace capability verification. See ADR-0020 for
 the approved boundary and its staged implementation.
 

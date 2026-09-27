@@ -10,6 +10,8 @@ import {
   GetAccessRequestRequestSchema,
   ListAccessRequestsRequestSchema,
   RejectAccessRequestRequestSchema,
+  ResumeAccessRequestRequestSchema,
+  SubmitAccessIssuanceRequestSchema,
 } from "@raziel/proto-ts";
 import { RAW_TARGET_HEADER } from "../../server/agent-transport.ts";
 import { publicAgentAuthResponse } from "../agent-auth/http.ts";
@@ -22,6 +24,7 @@ import {
   listOptions,
   parseApproval,
   parseIntent,
+  parseIssuance,
   parseMutation,
   readAccessBody,
   requestId,
@@ -136,6 +139,49 @@ export function createAccessHandlers(deps: AccessHttpDependencies) {
         return jsonResponse(
           toJson(AccessRequestSchema, row),
           row.state === AccessRequestState.CANCELLING ? 202 : 200,
+        );
+      }),
+    agentResume: (request: Request, id: string) =>
+      guarded(async () => {
+        requestId(id);
+        target(request, `${ROOT}/${id}/resume`);
+        const bytes = await readAccessBody(request);
+        const agent = await deps.authenticate(request, bytes);
+        const mutation = parseMutation(bytes);
+        const result = await deps.owner().resume(
+          create(ResumeAccessRequestRequestSchema, {
+            agentId: agent.agentId,
+            requestId: id,
+            expectedGeneration: mutation.expectedGeneration,
+          }),
+        );
+        return recordResponse(result.request, agent.agentId, id);
+      }),
+    agentIssuance: (request: Request, id: string) =>
+      guarded(async () => {
+        requestId(id);
+        target(request, `${ROOT}/${id}/issuance`);
+        const bytes = await readAccessBody(request);
+        const agent = await deps.authenticate(request, bytes);
+        const submission = parseIssuance(bytes);
+        if (
+          submission.request?.agentId !== agent.agentId ||
+          Buffer.from(submission.request.agentPublicKey).toString("base64") !== agent.publicKey
+        )
+          throw new AgentAuthError("UNAUTHENTICATED");
+        const result = await deps.owner().submitIssuance(
+          create(SubmitAccessIssuanceRequestSchema, {
+            owner: {
+              agentId: agent.agentId,
+              agentPublicKey: Buffer.from(agent.publicKey, "base64"),
+            },
+            requestId: id,
+            submission,
+          }),
+        );
+        return jsonResponse(
+          toJson(AccessRequestSchema, checked(result.request, agent.agentId, id)),
+          202,
         );
       }),
     operatorList: (request: Request) =>

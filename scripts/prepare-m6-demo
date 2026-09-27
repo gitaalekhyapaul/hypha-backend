@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+# Explicit build step. Uses only repository-locked dependencies and the existing
+# pinned image. It does not start runtime services or replace any M5 state.
+docker image inspect raziel-toolchain:m0 >/dev/null
+./scripts/compose-m6 run --rm --no-deps m6-toolchain pnpm install --frozen-lockfile
+./scripts/compose-m6 run --rm --no-deps m6-toolchain pnpm generate
+./scripts/compose-m6 run --rm --no-deps m6-toolchain pnpm --filter @raziel/proto-ts build
+./scripts/compose-m6 run --rm --no-deps m6-toolchain pnpm --filter @raziel/sdk-ts build
+./scripts/compose-m6 run --rm --no-deps m6-toolchain cargo fetch --locked
+./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-m6-tools
+./scripts/compose-m6 run --rm --no-deps m6-proof-dependency-fetch
+./scripts/compose-m6 run --rm --no-deps m6-proof-build
+./scripts/compose-m6 run --rm --no-deps m6-verifier-build
+printf 'm6_demo_preparation=pass runtime=not-started\n'

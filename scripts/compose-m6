@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+# Never alias the memory-backed preview or M5 runtime directories.
+export RAZIEL_M6_RUNTIME_PATH=./.raziel/m6-live
+export RAZIEL_M6_TOOLS_PATH=./.raziel/m6-live-tools
+key_root=services/verifierd/tests/fixtures/retained-plonk-v1
+export RAZIEL_EXPECTED_VERIFICATION_KEY_ID=$(sed -n '1p' "$key_root/verification-key-id.txt")
+export RAZIEL_EXPECTED_SP1_VKEY_HASH=$(sed -n '1p' "$key_root/sp1-vkey-hash.txt")
+
+environment=${RAZIEL_M6_ENV_FILE:-.env.m6}
+if [ -f "$environment" ]; then
+  set -- --env-file "$environment" "$@"
+fi
+exec ./scripts/compose \
+  -f docker-compose.yml -f docker-compose.m6.yml -f docker-compose.m6-live.yml \
+  --project-name raziel-m6-live "$@"

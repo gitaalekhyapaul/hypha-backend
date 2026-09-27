@@ -7,7 +7,10 @@ use prost::Message;
 use raziel_proto::raziel::v1::CreateAccessRequestRequest;
 
 use super::approval::{MAX_APPROVAL_BYTES, StoredApproval};
-use super::model::{AccessError, MAX_INTENT_BYTES, NormalizedIntent, valid_hex, valid_identity};
+use super::issuance_model::{MAX_ATTEMPT_BYTES, StoredAttempt};
+use super::model::{
+    AccessError, MAX_INTENT_BYTES, NormalizedIntent, Record, valid_hex, valid_identity,
+};
 
 #[cfg(target_os = "linux")]
 const NOFOLLOW: i32 = 0x20000;
@@ -161,6 +164,68 @@ impl PrivateStore {
         Ok(Some(value))
     }
 
+    pub fn read_attempt(
+        &self,
+        reference: &str,
+        record: &Record,
+        original: &NormalizedIntent,
+    ) -> Result<Option<StoredAttempt>, AccessError> {
+        self.verify()?;
+        let path = self.path(reference, "attempt")?;
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(storage(error)),
+            Ok(_) => {}
+        }
+        let mut file = self.open_checked(&path, MAX_ATTEMPT_BYTES)?;
+        let expected = file.metadata().map_err(storage)?;
+        let mut bytes = Vec::with_capacity(expected.len() as usize);
+        Read::by_ref(&mut file)
+            .take((MAX_ATTEMPT_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map_err(storage)?;
+        self.same_file(&path, &expected)?;
+        let attempt =
+            StoredAttempt::decode(bytes.as_slice()).map_err(|_| AccessError::ServiceUnavailable)?;
+        if bytes.len() as u64 != expected.len()
+            || attempt.encode_to_vec() != bytes
+            || record.private_ref != reference
+            || record.identity() != original.identity()
+        {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        attempt.validate(record, original)?;
+        self.verify()?;
+        Ok(Some(attempt))
+    }
+
+    pub fn persist_attempt(
+        &self,
+        reference: &str,
+        record: &Record,
+        original: &NormalizedIntent,
+        attempt: &StoredAttempt,
+    ) -> Result<(), AccessError> {
+        attempt.validate(record, original)?;
+        if let Some(existing) = self.read_attempt(reference, record, original)? {
+            return if existing == *attempt {
+                Ok(())
+            } else {
+                Err(AccessError::Conflict)
+            };
+        }
+        self.persist_bytes(
+            reference,
+            "attempt",
+            "attempt-stage",
+            &attempt.encode_to_vec(),
+        )?;
+        if self.read_attempt(reference, record, original)?.as_ref() != Some(attempt) {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        Ok(())
+    }
+
     pub fn persist_approval(
         &self,
         reference: &str,
@@ -251,6 +316,8 @@ impl PrivateStore {
         self.verify()?;
         self.remove_checked(&self.path(reference, "stage")?)?;
         self.remove_checked(&self.path(reference, "approval-stage")?)?;
+        self.remove_checked(&self.path(reference, "attempt-stage")?)?;
+        self.remove_checked(&self.path(reference, "attempt")?)?;
         self.remove_checked(&self.path(reference, "approval")?)?;
         self.remove_checked(&self.path(reference, "intent")?)?;
         self.directory.sync_all().map_err(storage)?;

@@ -1,6 +1,6 @@
 # Agent Access Inbox
 
-Status: B-0065 complete locally. Work paused before B-0066. No VM deployment is claimed.
+Status: B-0065 and B-0066 implementation checkpoints complete. No new VM deployment is claimed.
 
 ## Available Flow
 
@@ -19,18 +19,40 @@ Status: B-0065 complete locally. Work paused before B-0066. No VM deployment is 
 
 Approval is connected. The private request-preparation API has passed a real
 SpiceDB and snapshot-authority check. The dashboard stops at **Approved, waiting**.
-B-0066 will reserve proof capacity, invoke preparation, and request the agent's
-final signature. No inbox status grants data access. Existing M5 proof flows remain
-separate. The agent dashboards are later B-0067 work.
+B-0066 has added the serial preparation and signature-proposal worker, plus the
+authenticated resume and protected-query routes. The worker is not composed into
+this preview yet. Final signature acceptance, proof-service handoff, and terminal
+result retention are implemented and tested with controlled proof-service responses.
+SDK resume, signing, submission, bounded polling, and query reuse are implemented.
+The connected VM proof run remains pending. No inbox status grants data access. Existing M5 proof flows
+remain separate. The agent dashboards are later B-0067 work.
 
 ## Request Contract
 
 The current agent endpoints are `POST` and `GET /api/agent/v1/access-requests`,
 `GET /api/agent/v1/access-requests/{requestId}`, and
-`POST /api/agent/v1/access-requests/{requestId}/cancel`.
+`POST /api/agent/v1/access-requests/{requestId}/cancel`, and
+`POST /api/agent/v1/access-requests/{requestId}/resume`. Resume accepts the existing
+versioned mutation body and expected generation. It only rejoins a request that
+reached `WAITING_FOR_AGENT` after a signing timeout.
+
+`POST /api/agent/v1/access-requests/{requestId}/issuance` accepts the versioned
+`AccessIssuanceSubmission` body. The agent signs the exact current proposal using
+the existing capability commitment, then retains that body for retries. The route
+authenticates every call and passes the registered identity to Rust. Accepted calls
+return `202` with `SUBMITTING` and the deterministic proof job ID. Changed signatures,
+scope, context, or nonces cannot replace the retained attempt. A timed-out HTTP call
+must retry the same body with a fresh transport nonce. The B-0066 external SDK
+candidate supports this endpoint. The unchanged partial preview has no dispatcher.
+
+The protected-query facade uses `POST /api/datasets/{datasetId}/protected-query`.
+It requires fresh agent API authentication over the complete M5 query envelope.
+The envelope's own request signature remains mandatory and must use the same key.
+There is no raw dataset route or issuer fallback. This route has focused local
+coverage, not a new proof-backed SDK/VM demonstration.
 Every call requires the registered token and Ed25519 transport signature.
 See [Agent API v1](../spec/AGENT-API-V1.md) for the exact headers and ProtoJSON types.
-The local SDK candidate exposes typed create/list/get/cancel methods. Its public
+The local SDK candidate exposes typed lifecycle, signing, polling, and query methods. Its public
 README includes examples with `AccessIntentSchema` and `AccessRequestMutationSchema`.
 
 Persist the intent's UUID before the first send. An exact retry uses that UUID and
@@ -44,6 +66,11 @@ request context stays in owner-only storage for exact retry comparison, not in
 Redis or the public response.
 
 ## Runtime
+
+For the connected provisional VM deployment, use [M6 Live VM](M6-LIVE-VM.md).
+It uses a separate project with PostgreSQL-backed SpiceDB, serial dispatch, and the
+existing real proof and independent verifier roles. The preview instructions below
+remain a partial local development mode. Do not use them as live VM instructions.
 
 ### Policy Version Preparation
 
@@ -229,7 +256,7 @@ remove the approval controls. No private grant fields appear in agent responses.
 ### Private Snapshot Preparation
 
 `razield::request_preparation::RequestPreparation` is the owner-side preparation API.
-It is callable without SP1 and is not a new public agent endpoint. B-0066 will call
+It is callable without SP1 and is not a new public agent endpoint. B-0066 calls
 it only after reserving the serial workflow slot.
 
 1. Read the exact approved request and generation, including its private grant recipe.

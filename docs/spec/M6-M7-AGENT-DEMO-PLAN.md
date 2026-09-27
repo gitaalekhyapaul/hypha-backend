@@ -1,6 +1,6 @@
 # M6-M7 Agent Reconciliation Demo Plan
 
-Status: B-0064 and B-0065 locally complete. Paused before B-0066 by the maintainer.
+Status: B-0064 through B-0066 implementation checkpoints complete. Pausing before B-0067.
 
 Date: 2026-09-27
 
@@ -25,15 +25,17 @@ domain scenario move to the deferred backlog. No claim of real-data validation i
 ## Current Gaps
 
 - The standalone SDK candidate supports externally supplied signers, signed `/me`,
-  and access-request create/list/get/cancel. Polling, final issuance, and the protected
-  query transport remain pending.
+  access-request create/list/get/cancel/resume, final issuance signatures, bounded
+  polling, and reusable protected queries. Public npm publication remains pending.
 - External agent registration and tokens are implemented. The legacy M5 demonstration
   still holds its capability sessions inside the operator workflow.
 - Agent access intents now reach a durable owner service and operator inbox. Review
   supports detail, approval, rejection, and cancellation. Approval pins the immutable
   policy package, dataset, and private recipe. Private snapshot preparation passes
   against real SpiceDB and reuses its signed snapshot on exact retry. Automatic
-  preparation and dispatch remain B-0066 work.
+  preparation, signature acceptance, proof-service handoff, and terminal result
+  retention are implemented in B-0066. Local checks use controlled proof-service
+  responses. The composed real-proof SDK/VM flow remains pending.
   The legacy capability API starts from an
   already-selected snapshot.
 - M5 admits one distinct nonterminal proof job and reports busy for another request.
@@ -286,6 +288,8 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 
 ## Exact Next Action
 
-Remain paused. On maintainer resume, claim B-0066 for serial dispatch, late agent
-signatures, protected queries, and SDK release. B-0064 and B-0065 do not constitute
-a public npm release or a VM deployment.
+Wait for explicit maintainer resume. The maintainer deferred npm publication.
+The packaged candidate is enough for provisional VM testing. Use the M6 live VM
+runbook after resume, then begin B-0067's two-agent dashboards.
+Local component checks do not constitute a public npm release or a new proof-backed
+VM demonstration.

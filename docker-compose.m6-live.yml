@@ -1,0 +1,306 @@
+# Apply after docker-compose.yml and docker-compose.m6.yml through compose-m6.
+# Separate from the memory-backed preview. No M5 state or volumes are imported.
+name: raziel-m6-live
+
+services:
+  m6-database:
+    image: postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+    pull_policy: never
+    environment:
+      POSTGRES_USER: spicedb
+      POSTGRES_DB: spicedb
+      POSTGRES_PASSWORD: ${RAZIEL_M6_POSTGRES_PASSWORD:?Set RAZIEL_M6_POSTGRES_PASSWORD in .env.m6}
+    volumes:
+      - m6-spicedb-data:/var/lib/postgresql/data
+    networks: [database-internal]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U spicedb -d spicedb"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    profiles: [apps]
+
+  m6-spicedb-migrate:
+    image: ${SPICEDB_IMAGE}
+    pull_policy: never
+    command: [migrate, head, --datastore-engine=postgres, --skip-release-check]
+    environment:
+      SPICEDB_DATASTORE_CONN_URI: postgres://spicedb:${RAZIEL_M6_POSTGRES_PASSWORD:?Set RAZIEL_M6_POSTGRES_PASSWORD in .env.m6}@m6-database:5432/spicedb?sslmode=disable
+    networks: [database-internal]
+    depends_on:
+      m6-database:
+        condition: service_healthy
+    profiles: [apps]
+
+  spicedb:
+    command:
+      - serve
+      - --datastore-engine=postgres
+      - --grpc-preshared-key=${RAZIEL_M6_SPICEDB_TOKEN:-raziel-m6-development-only}
+      - --datastore-gc-window=48h
+      - --skip-release-check
+      - --telemetry-endpoint=
+    environment:
+      SPICEDB_DATASTORE_CONN_URI: postgres://spicedb:${RAZIEL_M6_POSTGRES_PASSWORD:?Set RAZIEL_M6_POSTGRES_PASSWORD in .env.m6}@m6-database:5432/spicedb?sslmode=disable
+    networks: !override [policy-internal, database-internal]
+    depends_on:
+      m6-spicedb-migrate:
+        condition: service_completed_successfully
+
+  # Explicit preparation only. This role has public source/build caches, no keys.
+  m6-toolchain:
+    extends:
+      file: docker-compose.yml
+      service: toolchain
+    build: !reset null
+    pull_policy: never
+    profiles: !override [tools]
+
+  demo-console-policy-tools:
+    environment:
+      RAZIEL_M6_LIVE: "1"
+    volumes:
+      - m6-snapshot-key:/run/secrets/m6-snapshot
+
+  m6-dispatch-init:
+    image: raziel-toolchain:m0
+    pull_policy: never
+    user: "0:0"
+    command: [/workspace/scripts/prepare-m6-policy-runtime, dispatch]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - .:/workspace:ro
+      - m6-private-snapshots:/var/lib/raziel/private-snapshots
+      - m6-request-revisions:/var/lib/raziel/request-revisions
+      - m6-private-envelopes:/var/lib/raziel/private-envelopes
+    profiles: [apps]
+
+  m6-dispatcher:
+    image: raziel-toolchain:m0
+    pull_policy: never
+    user: "0:0"
+    init: true
+    command: [/opt/raziel/m6/policy-tools/razield-access-dispatch]
+    environment:
+      RAZIEL_ACCESS_BIND_ADDR: 0.0.0.0:50054
+      RAZIEL_ACCESS_PRIVATE_ROOT: /var/lib/raziel/access-intents
+      RAZIEL_ACCESS_PREFIX: ${RAZIEL_M6_ACCESS_PREFIX:-raziel-m6-access}
+      RAZIEL_ACCESS_APPROVAL_MODE: installed
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_M6_QUEUE_PREFIX:-raziel-m6-capabilities}
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_RAZIELD_ENDPOINT: http://m6-capability-api:50052
+      RAZIEL_POLICY_PUBLICATION_ROOT: /var/lib/raziel/policy-publication
+      RAZIEL_POLICY_PACKAGE_ROOT: /var/lib/raziel/policy-packages
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_DATASET_BINDING_ROOT: /var/lib/raziel/dataset-bindings
+      RAZIEL_POLICY_COMPILER_EXECUTABLE: /opt/raziel/m6/policy-tools/spicedb-ir-compiler
+      RAZIEL_SPICEDB_ENDPOINT_REF: m6-owner-spicedb
+      RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
+      RAZIEL_SPICEDB_AUTH_TOKEN_PATH: /run/secrets/spicedb/token
+      RAZIEL_ZED_TOKEN_REQUEST_ROOT: /var/lib/raziel/request-revisions
+      RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
+      RAZIEL_REGISTRY_WRITER_SOCKET_PATH: /run/raziel-registry-writer/writer.sock
+      RAZIEL_SNAPSHOT_KEY_PATH: /run/secrets/m6-snapshot/snapshot-authority.pk8
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    networks: [owner-internal, policy-internal]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:rw,exec,nosuid,nodev,mode=0700,size=268435456]
+    volumes:
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m6-access-intents:/var/lib/raziel/access-intents
+      - m6-policy-publication:/var/lib/raziel/policy-publication
+      - m6-policy-packages:/var/lib/raziel/policy-packages:ro
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m6-dataset-bindings:/var/lib/raziel/dataset-bindings:ro
+      - m6-publication-token:/run/secrets/spicedb:ro
+      - m6-snapshot-key:/run/secrets/m6-snapshot:ro
+      - m6-request-revisions:/var/lib/raziel/request-revisions
+      - m6-private-snapshots:/var/lib/raziel/private-snapshots
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+    depends_on:
+      m6-dispatch-init:
+        condition: service_completed_successfully
+      demo-access-api:
+        condition: service_healthy
+      demo-policy-activation:
+        condition: service_healthy
+      m6-capability-api:
+        condition: service_healthy
+      m6-proof-worker:
+        condition: service_started
+    restart: unless-stopped
+    profiles: [apps]
+
+  m6-proof-dependency-fetch:
+    extends:
+      file: docker-compose.yml
+      service: razield-proof-dependency-fetch
+    build: !reset null
+    pull_policy: never
+    profiles: !override [tools]
+
+  m6-proof-build:
+    extends:
+      file: docker-compose.yml
+      service: razield-proof-build
+    build: !reset null
+    pull_policy: never
+    depends_on: !override {}
+    profiles: !override [apps]
+
+  m6-proof-init:
+    extends:
+      file: docker-compose.yml
+      service: demo-proof-init
+    build: !reset null
+    pull_policy: never
+    profiles: !override [apps]
+
+  m6-proof-sandbox:
+    extends:
+      file: docker-compose.yml
+      service: demo-proof-sandbox
+    build: !reset null
+    pull_policy: never
+    environment:
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    volumes:
+      - m6-private-snapshots:/var/lib/raziel/private-snapshots:ro
+    depends_on: !override
+      m6-proof-build:
+        condition: service_completed_successfully
+      m6-proof-init:
+        condition: service_completed_successfully
+      m6-dispatch-init:
+        condition: service_completed_successfully
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+    profiles: !override [apps]
+
+  m6-proof-worker:
+    extends:
+      file: docker-compose.yml
+      service: demo-proof-worker
+    build: !reset null
+    pull_policy: never
+    command: [/opt/raziel/m6/policy-tools/razield-proof-worker]
+    environment:
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_M6_QUEUE_PREFIX:-raziel-m6-capabilities}
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    networks: !override [owner-internal]
+    volumes: !override
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m6-private-envelopes:/var/lib/raziel/private-envelopes
+      - m5-proof-ipc:/run/raziel-proof
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+    depends_on: !override
+      redis:
+        condition: service_healthy
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      m6-dispatch-init:
+        condition: service_completed_successfully
+      m6-proof-sandbox:
+        condition: service_healthy
+    profiles: !override [apps]
+
+  m6-capability-api:
+    extends:
+      file: docker-compose.yml
+      service: demo-capability-api
+    build: !reset null
+    pull_policy: never
+    command: [/opt/raziel/m6/policy-tools/razield-capability]
+    environment:
+      RAZIEL_QUEUE_PREFIX: ${RAZIEL_M6_QUEUE_PREFIX:-raziel-m6-capabilities}
+    networks: !override [owner-internal]
+    volumes: !override
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m6-private-envelopes:/var/lib/raziel/private-envelopes
+    depends_on: !override
+      redis:
+        condition: service_healthy
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      m6-dispatch-init:
+        condition: service_completed_successfully
+    profiles: !override [apps]
+
+  m6-verifier-build:
+    extends:
+      file: docker-compose.yml
+      service: verifierd-worker-build
+    build: !reset null
+    pull_policy: never
+    profiles: !override [apps]
+
+  m6-verifier-init:
+    extends:
+      file: docker-compose.yml
+      service: demo-verifier-init
+    build: !reset null
+    pull_policy: never
+    profiles: !override [apps]
+
+  m6-verifier-sandbox:
+    extends:
+      file: docker-compose.yml
+      service: demo-verifier-sandbox
+    build: !reset null
+    pull_policy: never
+    depends_on: !override
+      m6-verifier-build:
+        condition: service_completed_successfully
+      m6-verifier-init:
+        condition: service_completed_successfully
+    profiles: !override [apps]
+
+  m6-verifierd:
+    extends:
+      file: docker-compose.yml
+      service: demo-verifierd
+    build: !reset null
+    pull_policy: never
+    command: [/opt/raziel/m6/policy-tools/verifierd]
+    environment:
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    networks: !override [owner-internal]
+    volumes: !override
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-verifier-ipc:/run/raziel-verifier
+    depends_on: !override
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+      m6-verifier-sandbox:
+        condition: service_healthy
+    profiles: !override [apps]
+
+  demo-gateway:
+    environment:
+      RAZIEL_VERIFIER_CLIENT_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-verifier-client
+      RAZIEL_VERIFIERD_ENDPOINT: http://m6-verifierd:50053
+    volumes:
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+    depends_on:
+      m6-verifierd:
+        condition: service_healthy
+
+volumes:
+  m6-spicedb-data:
+  m6-snapshot-key:
+  m6-private-snapshots:
+  m6-private-envelopes:
+  m6-request-revisions:
+
+networks:
+  database-internal:
+    internal: true

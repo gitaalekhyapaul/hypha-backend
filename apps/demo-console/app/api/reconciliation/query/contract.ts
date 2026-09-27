@@ -47,6 +47,12 @@ export interface ProtectedGatewayEnvelope {
   readonly agent_request_signature: string;
 }
 
+interface ExpectedGatewayResult {
+  readonly capabilityId: string;
+  readonly datasetId: string;
+  readonly resourceType?: string;
+}
+
 export async function readReconciliationQuery(
   request: Request,
 ): Promise<ProtectedReconciliationQueryInput> {
@@ -152,7 +158,7 @@ export async function readGatewayAuthorizationRejection(response: Response): Pro
 
 export async function readGatewayResult(
   response: Response,
-  expected: { readonly capabilityId: string; readonly datasetId: string },
+  expected: ExpectedGatewayResult,
 ): Promise<ProtectedReconciliationQueryResult> {
   if (!response.ok) {
     if (response.status === 401 || response.status === 403 || response.status === 409) {
@@ -182,7 +188,7 @@ export async function readGatewayResult(
 
 export function projectGatewayResult(
   input: unknown,
-  expected: { readonly capabilityId: string; readonly datasetId: string },
+  expected: ExpectedGatewayResult,
 ): ProtectedReconciliationQueryResult {
   const object = objectValue(input);
   const rows = arrayValue(object.rows);
@@ -210,7 +216,7 @@ export function projectGatewayResult(
 
 function projectReceipt(
   input: unknown,
-  expected: { readonly capabilityId: string; readonly datasetId: string },
+  expected: ExpectedGatewayResult,
 ): PublicReconciliationReceipt {
   const object = objectValue(input);
   const receiptId = safeId(object.receipt_id);
@@ -230,7 +236,7 @@ function projectReceipt(
     object.capability_id !== expected.capabilityId ||
     proofJobId !== expected.capabilityId ||
     object.action !== "query" ||
-    object.resource_type !== "dataset" ||
+    object.resource_type !== (expected.resourceType ?? "dataset") ||
     object.resource_scope !== expected.datasetId ||
     object.outcome !== "AUDIT_OUTCOME_ACCEPTED" ||
     object.reason_code !== "PUBLIC_ERROR_CODE_UNSPECIFIED"
@@ -253,7 +259,7 @@ function projectReceipt(
     public_claims_digest: publicClaimsDigest,
     proof_digest: proofDigest,
     action: "query",
-    resource_type: "dataset",
+    resource_type: expected.resourceType ?? "dataset",
     resource_scope: expected.datasetId,
     outcome: "AUDIT_OUTCOME_ACCEPTED",
     reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED",

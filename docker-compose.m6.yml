@@ -71,9 +71,9 @@ services:
     security_opt: [no-new-privileges:true]
     volumes: !override
       - .:/workspace:ro
-      - ./.raziel/m6:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
       - type: bind
-        source: ./.raziel/m5/policy-tools
+        source: ${RAZIEL_M6_TOOLS_PATH:-./.raziel/m5/policy-tools}
         target: /opt/raziel/prebuilt-tools
         read_only: true
         bind:
@@ -91,7 +91,7 @@ services:
     network_mode: none
     volumes: !override
       - .:/workspace:ro
-      - ./.raziel/m6:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
     depends_on:
       demo-console-policy-tools:
         condition: service_completed_successfully
@@ -133,7 +133,7 @@ services:
     environment:
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
     volumes: !override
-      - ./.raziel/m6/policy-candidates:/var/lib/raziel/policy-candidates
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}/policy-candidates:/var/lib/raziel/policy-candidates
       - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
       - m5-policy-authority-ipc:/run/raziel-policy-authority
       - m5-policy-registry:/var/lib/raziel/registry:ro
@@ -168,8 +168,8 @@ services:
       RAZIEL_SPICEDB_TOKEN_PATH: /run/secrets/spicedb/token
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
     volumes: !override
-      - ./.raziel/m6/policy-candidates:/var/lib/raziel/policy-candidates
-      - ./.raziel/m6/policy-versions:/var/lib/raziel/policy-versions:ro
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}/policy-candidates:/var/lib/raziel/policy-candidates
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}/policy-versions:/var/lib/raziel/policy-versions:ro
       - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
       - m5-policy-activation-ipc:/run/raziel-policy-activation
       - m5-policy-activation-state:/var/lib/raziel/policy-activation
@@ -237,7 +237,7 @@ services:
       # Next dev rewrites next-env.d.ts beside .next. Keep the base development
       # bind writable, but isolate build caches and select only M6 runtime paths.
       - .:/workspace
-      - ./.raziel/m6:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
       - m6-gateway-next:/workspace/apps/demo-gateway/.next
       - m6-dataset-bindings:/var/lib/raziel/dataset-bindings:ro
     depends_on: !override
@@ -283,7 +283,7 @@ services:
     volumes: !override
       # Development-only source bind, not filesystem isolation from the M5 tree.
       - .:/workspace
-      - ./.raziel/m6:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
       - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
       - m5-policy-activation-ipc:/run/raziel-policy-activation
       - m6-console-next:/workspace/apps/demo-console/.next

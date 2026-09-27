@@ -9,6 +9,7 @@ publish = false
 [features]
 default = ["capability-service"]
 access-service = ["dep:redis", "dep:serde", "dep:serde_json"]
+access-dispatch = ["access-service", "dep:bullmq"]
 capability-service = [
   "dep:bullmq",
   "dep:raziel-prover",
@@ -73,6 +74,11 @@ name = "razield-access"
 path = "src/bin/razield-access.rs"
 required-features = ["access-service"]
 
+[[bin]]
+name = "razield-access-dispatch"
+path = "src/bin/razield-access-dispatch.rs"
+required-features = ["access-dispatch"]
+
 [[test]]
 name = "access_request"
 path = "src/access_request/tests.rs"
@@ -82,3 +88,18 @@ required-features = ["access-service"]
 name = "request_preparation"
 path = "tests/request_preparation.rs"
 required-features = ["access-service"]
+
+[[test]]
+name = "capability_publication"
+path = "tests/capability_publication.rs"
+required-features = ["capability-service"]
+
+[[test]]
+name = "capability_service"
+path = "tests/capability_service.rs"
+required-features = ["capability-service"]
+
+[[test]]
+name = "bullmq_conformance"
+path = "tests/bullmq_conformance.rs"
+required-features = ["capability-service"]

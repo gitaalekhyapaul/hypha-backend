@@ -107,3 +107,11 @@ message AccessRequestMutation {
   uint32 format_version = 1;
   uint64 expected_generation = 2;
 }
+
+// The agent retains this exact submission before sending it. Context is private.
+message AccessIssuanceSubmission {
+  uint32 format_version = 1;
+  string proposal_id = 2;
+  uint64 generation = 3;
+  CreateCapabilityRequest request = 4;
+}

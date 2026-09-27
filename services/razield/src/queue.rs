@@ -171,6 +171,7 @@ pub(crate) fn retained_cancellation_job_options() -> JobOptions {
 }
 
 /// Accepts only the exact publisher-owned proof-job profile.
+#[cfg(any(feature = "capability-service", test))]
 pub(crate) fn valid_claimed_job_options(options: &JobOptions) -> bool {
     options.delay.is_none()
         && options.priority.is_none()
@@ -205,6 +206,7 @@ fn proof_capacity_deduplication() -> DeduplicationOptions {
     }
 }
 
+#[cfg(any(feature = "capability-service", test))]
 fn valid_proof_capacity_deduplication(options: Option<&DeduplicationOptions>) -> bool {
     matches!(
         options,
@@ -218,11 +220,13 @@ fn valid_proof_capacity_deduplication(options: Option<&DeduplicationOptions>) ->
     )
 }
 
+#[cfg(any(feature = "capability-service", test))]
 pub(crate) fn valid_cancellation_job_options(options: &JobOptions) -> bool {
     serde_json::to_value(options).ok()
         == serde_json::to_value(retained_cancellation_job_options()).ok()
 }
 
+#[cfg(any(feature = "capability-service", test))]
 fn valid_terminal_retention(policy: Option<&RemoveOnFinish>) -> bool {
     matches!(
         policy,

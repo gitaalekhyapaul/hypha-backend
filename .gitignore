@@ -63,6 +63,7 @@ web_modules/
 *.tgz
 !packages/sdk-ts/vendor/raziel-sdk-ts-0.1.0.tgz
 !packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz
+!packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz
 
 # Yarn Integrity file
 .yarn-integrity

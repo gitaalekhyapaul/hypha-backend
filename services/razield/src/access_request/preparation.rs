@@ -33,8 +33,10 @@ impl AccessCoordinator {
         if record.state()? == AccessRequestState::Expired {
             return Err(AccessError::Expired);
         }
-        if record.state()? != AccessRequestState::ApprovedWaiting
-            || record.generation != expected_generation
+        if !matches!(
+            record.state()?,
+            AccessRequestState::ApprovedWaiting | AccessRequestState::Preparing
+        ) || record.generation != expected_generation
         {
             return Err(AccessError::Conflict);
         }

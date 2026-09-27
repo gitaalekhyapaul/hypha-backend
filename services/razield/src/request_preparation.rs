@@ -14,6 +14,7 @@ const ISSUANCE_HORIZON_SECONDS: i64 = 4800;
 
 /// Safe scope and signed snapshot for the later issuance exchange. It contains no
 /// intent context, private grant, PolicyIR, relationship, salt, or Merkle opening.
+#[derive(Clone)]
 pub struct PreparedSnapshotProposal {
     pub request_generation: u64,
     pub proposal_generation: u64,

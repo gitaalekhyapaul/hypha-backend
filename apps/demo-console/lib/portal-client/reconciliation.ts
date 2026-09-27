@@ -31,7 +31,7 @@ export interface PublicReconciliationReceipt {
   readonly public_claims_digest: string;
   readonly proof_digest: string;
   readonly action: "query";
-  readonly resource_type: "dataset";
+  readonly resource_type: string;
   readonly resource_scope: string;
   readonly outcome: "AUDIT_OUTCOME_ACCEPTED";
   readonly reason_code: "PUBLIC_ERROR_CODE_UNSPECIFIED";

@@ -76,10 +76,10 @@ impl AccessServiceConfig {
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
-    pub(super) fn redis_url(&self) -> &str {
+    pub(crate) fn redis_url(&self) -> &str {
         &self.redis_url
     }
-    pub(super) fn approval(&self) -> Option<&ApprovalConfig> {
+    pub(crate) fn approval(&self) -> Option<&ApprovalConfig> {
         self.approval.as_ref()
     }
 

@@ -2,8 +2,10 @@
 
 Status: accepted under [ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md).
 Implemented locally: registration/token management, signed `/me`, access-request
-create/list/get/cancel, and operator list/detail/reject/cancel. Approval, resume,
-issuance, and the agent-authenticated protected-query facade remain planned.
+create/list/get/cancel, and operator review and approval. B-0066 now implements
+serial preparation, signing proposals, durable signature acceptance, proof-service
+handoff, public terminal retention, authenticated resume, and the protected-query facade. These pieces are
+not yet a composed proof-backed agent flow.
 
 Date: 2026-09-25
 
@@ -281,6 +283,14 @@ signed bytes and only without pending cancellation. Preserve ambiguity and repor
 `SERVICE_UNAVAILABLE` rather than mint a new nonce. Pin the accepted proposal generation
 through cancellation and recovery.
 
+The issuance body is `AccessIssuanceSubmission`: `formatVersion`, `proposalId`,
+`generation`, and `request`. Its nested request uses the existing capability-request
+contract. Context entries use the canonical name order, and timestamps use whole-second
+UTC ProtoJSON. The owner retains a compact immutable nonce/signature comparator beside
+the original intent and proposal. It reconstructs the identical typed request and
+rechecks its canonical signature and job ID. A recovered acceptance precedes signing
+timeout processing. Public request state contains the job ID, not the signed body.
+
 Persist a cancellation flag before attempting a proof cancel RPC. It blocks every
 later submission or recovery resend. An already outstanding create can still publish,
 so a missing job at one instant cannot confirm cancellation. Reconcile the outstanding
@@ -425,8 +435,8 @@ not a new commitment input or standalone authorization grant.
 `RAZIEL_DATASET_BINDING_MODE=required` selects exact mapping in the M6 gateway.
 `RAZIEL_DATASET_BINDING_ROOT` is a read-only owner volume. Missing configuration and
 invalid records fail closed. The separate default M5 runtime remains in `legacy`
-mode until explicit migration. The M6 approval writer is connected. Dispatch and
-the external agent protected-query integration remain B-0066 work.
+mode until explicit migration. The M6 approval writer, dispatcher, and external
+agent protected-query facade are implemented. Their live VM proof gate is pending.
 
 ## SDK And Implementation Order
 
@@ -511,3 +521,23 @@ It leaves public state at APPROVED_WAITING. B-0066 owns serial reservation, invo
 of preparation, AWAITING_SIGNATURE publication, dispatch, resume, issuance, and the
 agent protected-query facade. No automatic proof starts from approval in B-0065.
 No VM deployment or npm publication is claimed by these local results.
+
+B-0066 implementation checkpoint, 2026-09-27: the separate access-dispatch executable
+uses real BullMQ/Redis to reserve one request, invoke private preparation, and publish
+an exact signing proposal. It retains the prepared public descriptor through transient
+publication failures. Proposal timeout moves to WAITING_FOR_AGENT. The authenticated
+resume RPC and HTTP route rejoin dispatch with a new generation. Local tests control
+the preparation boundary and do not generate proofs. B-0065's live SpiceDB evidence
+remains separate. The protected-query facade preserves exact bytes and registered-key
+binding, with projected public responses for namespaced policy resources. Signed
+attempt persistence, proof handoff, and terminal copy pass local controlled-service
+checks. Submission start persists before an RPC. A recovery reads the deterministic
+job first, and cancellation blocks exact resends. Terminal public ProofJob bytes
+commit atomically with request termination and capacity release. Detail reads hydrate
+that result, lists omit capability bytes, and retention cleanup removes it.
+The sibling SDK supports explicit resume, proposal signing, retained submission,
+bounded polling, and protected queries with fresh inner and outer signatures.
+Its B-0066 candidate passes a packaged cold/cache query consumer check using a
+controlled proof verifier. The live Compose overlay connects production roles and
+uses the dedicated PostgreSQL datastore approved in ADR-0021. Live VM proof
+validation and npm publication remain pending. The memory-backed preview is unchanged.

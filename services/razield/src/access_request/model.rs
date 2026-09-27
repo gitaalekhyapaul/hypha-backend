@@ -10,6 +10,8 @@ use raziel_proto::raziel::v1::{
 use serde::{Deserialize, Serialize};
 
 use super::approval::PublicBinding;
+use super::dispatch_model::PublicProposal;
+use super::issuance_model::PublicAttempt;
 
 pub const MAX_INTENT_BYTES: usize = 16 * 1024;
 pub const REVIEW_SECONDS: i64 = 24 * 60 * 60;
@@ -227,6 +229,14 @@ pub(super) struct Record {
     pub private_ref: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy_binding: Option<PublicBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatch_generation: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposal: Option<PublicProposal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumed_from_generation: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<PublicAttempt>,
 }
 
 impl Record {
@@ -257,6 +267,10 @@ impl Record {
             phase: Phase::Reserved,
             private_ref: format!("{}.{suffix}", input.identity()),
             policy_binding: None,
+            dispatch_generation: None,
+            proposal: None,
+            resumed_from_generation: None,
+            attempt: None,
         })
     }
 
@@ -311,6 +325,12 @@ impl Record {
             updated_at_unix_seconds: self.updated,
             deadline_unix_seconds: self.deadline,
             policy_binding: self.policy_binding.as_ref().map(PublicBinding::public),
+            proposal: self.proposal.as_ref().map(|proposal| proposal.public(self)),
+            proof_job_id: self.attempt.as_ref().map(|attempt| attempt.job_id.clone()),
+            proof_job_state: self
+                .attempt
+                .as_ref()
+                .map_or(0, |attempt| attempt.proof_state),
             ..Default::default()
         }
     }
@@ -361,6 +381,12 @@ impl Record {
             return Err(AccessError::ServiceUnavailable);
         }
         record.state()?;
+        if record
+            .resumed_from_generation
+            .is_some_and(|value| value == 0 || value >= record.generation)
+        {
+            return Err(AccessError::ServiceUnavailable);
+        }
         if let Some(binding) = &record.policy_binding {
             binding.validate()?;
             if record.state()? == State::PendingReview || record.phase == Phase::Reserved {
@@ -369,9 +395,36 @@ impl Record {
         }
         if matches!(
             record.state()?,
-            State::ApprovedWaiting | State::WaitingForAgent
+            State::ApprovedWaiting
+                | State::WaitingForAgent
+                | State::Preparing
+                | State::AwaitingSignature
+                | State::Cancelling
         ) && record.policy_binding.is_none()
         {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        if record
+            .dispatch_generation
+            .is_some_and(|generation| generation == 0 || generation >= record.generation)
+            || (matches!(
+                record.state()?,
+                State::Preparing | State::AwaitingSignature | State::Cancelling
+            ) && record.dispatch_generation.is_none())
+        {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        if let Some(proposal) = &record.proposal {
+            proposal.validate(&record)?;
+        } else if record.state()? == State::AwaitingSignature {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        if let Some(attempt) = &record.attempt {
+            attempt.validate(&record)?;
+        } else if matches!(
+            record.state()?,
+            State::Submitting | State::Queued | State::Executing | State::Proving | State::Ready
+        ) {
             return Err(AccessError::ServiceUnavailable);
         }
         Ok(record)

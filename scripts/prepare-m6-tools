@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+umask 022
+
+# Public build inputs only. No authority keys, runtime grants, or snapshots.
+root=/workspace
+tools="$root/.raziel/m6-live-tools"
+build="$root/.raziel/m6-build"
+install -d -m 0755 "$tools" "$build"
+export CARGO_TARGET_DIR="$build/cargo-target"
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}
+export GOCACHE="$build/go-build"
+export GOMODCACHE="$build/go-mod"
+(
+  cd "$root/tools/spicedb-ir-compiler"
+  go build -buildvcs=false -mod=readonly -trimpath -o "$tools/spicedb-ir-compiler" ./cmd/spicedb-ir-compiler
+)
+
+cargo build --locked --release -p raziel-admin --bins
+cargo build --locked --release -p razield --features access-dispatch \
+  --bin razield-access --bin razield-access-dispatch \
+  --bin razield-capability --bin razield-proof-worker
+cargo build --locked --release -p verifierd --bin verifierd
+
+for binary in raziel-admin raziel-policy-authority raziel-registry-writer \
+  raziel-policy-activation raziel-policy-activate raziel-agent-auth \
+  raziel-access-client raziel-verifier-client razield-access \
+  razield-access-dispatch razield-capability razield-proof-worker verifierd; do
+  install -m 0555 "$CARGO_TARGET_DIR/release/$binary" "$tools/$binary"
+done
+chmod 0555 "$tools/spicedb-ir-compiler"
+printf 'm6_owner_tools=ready proof_execution=not-started\n'

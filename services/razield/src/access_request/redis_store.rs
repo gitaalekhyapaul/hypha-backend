@@ -20,24 +20,26 @@ if ARGV[3] == '' then
   redis.call('ZREM', KEYS[2], ARGV[1])
   redis.call('ZREM', KEYS[3], ARGV[1])
   redis.call('ZREM', KEYS[4], ARGV[1])
+  redis.call('HDEL', KEYS[5], ARGV[1])
 else
   redis.call('HSET', KEYS[1], ARGV[1], ARGV[3])
   if ARGV[4] == '0' then redis.call('ZREM', KEYS[2], ARGV[1]) end
   redis.call('ZADD', KEYS[4], ARGV[5], ARGV[1])
+  if ARGV[6] ~= '' then redis.call('HSET', KEYS[5], ARGV[1], ARGV[6]) end
 end
 return 1
 "#;
 
 pub(super) struct RedisStore {
     client: redis::Client,
-    keys: [String; 4],
+    keys: [String; 5],
 }
 
 impl RedisStore {
     pub fn new(url: &str, prefix: &str) -> Result<Self, AccessError> {
         Ok(Self {
             client: redis::Client::open(url).map_err(unavailable)?,
-            keys: ["records", "active", "index", "due"]
+            keys: ["records", "active", "index", "due", "results"]
                 .map(|part| format!("{prefix}:access:v1:{part}")),
         })
     }
@@ -78,7 +80,7 @@ impl RedisStore {
     ) -> Result<bool, AccessError> {
         let outcome: i32 = redis::cmd("EVAL")
             .arg(ADMIT)
-            .arg(4)
+            .arg(self.keys.len())
             .arg(&self.keys)
             .arg(record.identity())
             .arg(record.encode()?)
@@ -101,6 +103,52 @@ impl RedisStore {
         old: &str,
         next: Option<&Record>,
     ) -> Result<(), AccessError> {
+        self.cas_with_result(connection, id, old, next, &[])
+    }
+
+    #[cfg(feature = "access-dispatch")]
+    pub fn cas_terminal(
+        &self,
+        connection: &mut redis::Connection,
+        old: &str,
+        record: &Record,
+        result: &[u8],
+    ) -> Result<(), AccessError> {
+        if !record.terminal()?
+            || result.is_empty()
+            || result.len() > super::proof_result::MAX_RESULT_BYTES
+        {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        self.cas_with_result(connection, &record.identity(), old, Some(record), result)
+    }
+
+    pub fn result(
+        &self,
+        connection: &mut redis::Connection,
+        id: &str,
+    ) -> Result<Option<Vec<u8>>, AccessError> {
+        let bytes: Option<Vec<u8>> = redis::cmd("HGET")
+            .arg(&self.keys[4])
+            .arg(id)
+            .query(connection)
+            .map_err(unavailable)?;
+        if bytes.as_ref().is_some_and(|bytes| {
+            bytes.is_empty() || bytes.len() > super::proof_result::MAX_RESULT_BYTES
+        }) {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        Ok(bytes)
+    }
+
+    fn cas_with_result(
+        &self,
+        connection: &mut redis::Connection,
+        id: &str,
+        old: &str,
+        next: Option<&Record>,
+        result_bytes: &[u8],
+    ) -> Result<(), AccessError> {
         let (encoded, active, due) = match next {
             Some(record) => (
                 record.encode()?,
@@ -111,13 +159,14 @@ impl RedisStore {
         };
         let result: i32 = redis::cmd("EVAL")
             .arg(CAS)
-            .arg(4)
+            .arg(self.keys.len())
             .arg(&self.keys)
             .arg(id)
             .arg(old)
             .arg(encoded)
             .arg(i32::from(active))
             .arg(due)
+            .arg(result_bytes)
             .query(connection)
             .map_err(unavailable)?;
         if result == 1 {
@@ -141,6 +190,19 @@ impl RedisStore {
             .arg(100)
             .query(connection)
             .map_err(unavailable)
+    }
+
+    pub fn active(&self, connection: &mut redis::Connection) -> Result<Vec<String>, AccessError> {
+        let ids: Vec<String> = redis::cmd("ZRANGE")
+            .arg(&self.keys[1])
+            .arg(0)
+            .arg(100)
+            .query(connection)
+            .map_err(unavailable)?;
+        if ids.len() > 100 || ids.iter().any(|id| !valid_identity(id)) {
+            return Err(AccessError::ServiceUnavailable);
+        }
+        Ok(ids)
     }
 
     pub fn list(

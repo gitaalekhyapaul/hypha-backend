@@ -11,6 +11,8 @@ import {
   GetAccessRequestResponseSchema,
   ListAccessRequestsResponseSchema,
   RejectAccessRequestResponseSchema,
+  ResumeAccessRequestResponseSchema,
+  SubmitAccessIssuanceResponseSchema,
 } from "@raziel/proto-ts";
 import { describe, expect, it, vi } from "vitest";
 import { createAccessHandlers } from "../lib/access-requests/http.ts";
@@ -114,9 +116,24 @@ function fixture() {
         request: { ...row, state: AccessRequestState.CANCELED, generation: 2n },
       }),
     ),
+    resume: vi.fn(async () =>
+      create(ResumeAccessRequestResponseSchema, {
+        request: { ...row, state: AccessRequestState.APPROVED_WAITING, generation: 6n },
+      }),
+    ),
+    submitIssuance: vi.fn(async (_input: import("@raziel/proto-ts").SubmitAccessIssuanceRequest) =>
+      create(SubmitAccessIssuanceResponseSchema, {
+        request: {
+          ...row,
+          state: AccessRequestState.SUBMITTING,
+          generation: 5n,
+          proofJobId: "e".repeat(64),
+        },
+      }),
+    ),
   };
   const deps = {
-    authenticate: vi.fn(async () => agent),
+    authenticate: vi.fn(async (_request: Request, _body: Uint8Array) => agent),
     authorizeOperator: vi.fn(async () => {}),
     dataset: vi.fn(async () => dataset),
     owner: () => owner,
@@ -151,6 +168,114 @@ const approval = {
     isOverride: false,
   },
 };
+
+describe("agent issuance handoff", () => {
+  const path = `${ROOT}/${ID}/issuance`;
+  const submission = {
+    formatVersion: 1,
+    proposalId: "f".repeat(32),
+    generation: "4",
+    request: {
+      formatVersion: 1,
+      agentId: OWNER,
+      agentPublicKey: agent.publicKey,
+      taskId: "reconcile",
+      purpose: "payment_reconciliation",
+      action: "query",
+      resourceType: `dataset_${"d".repeat(32)}`,
+      resourceScope: "processor",
+      requestedExpiresAt: "2027-01-15T09:20:00Z",
+      issuanceNonce: Buffer.alloc(32, 5).toString("base64"),
+      snapshotId: `snapshot-v1:${"a".repeat(64)}`,
+      requestSignature: Buffer.alloc(64, 6).toString("base64"),
+      requestContext: [{ name: "private_flag", boolValue: false }],
+    },
+  };
+
+  it("authenticates exact bytes and sends identity from registration to Rust", async () => {
+    const f = fixture();
+    const response = await f.handlers.agentIssuance(request(path, submission), ID);
+    expect(response.status).toBe(202);
+    expect(f.deps.authenticate.mock.calls[0]?.[1]).toEqual(Buffer.from(JSON.stringify(submission)));
+    expect(f.owner.submitIssuance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: expect.objectContaining({
+          agentId: OWNER,
+          agentPublicKey: Buffer.from(agent.publicKey, "base64"),
+        }),
+        requestId: ID,
+        submission: expect.objectContaining({
+          generation: 4n,
+          request: expect.objectContaining({
+            requestContext: [
+              expect.objectContaining({
+                name: "private_flag",
+                value: { case: "boolValue", value: false },
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
+    const payload = await response.json();
+    expect(payload.state).toBe("ACCESS_REQUEST_STATE_SUBMITTING");
+    expect(payload.proofJobId).toBe("e".repeat(64));
+    expect(JSON.stringify(payload)).not.toContain("private_flag");
+    expect(f.deps.dataset).not.toHaveBeenCalled();
+  });
+
+  it("rejects owner substitution and revoked transport before the issuance RPC", async () => {
+    const f = fixture();
+    for (const patch of [
+      { agentId: "b".repeat(32) },
+      { agentPublicKey: Buffer.alloc(32, 8).toString("base64") },
+    ]) {
+      const response = await f.handlers.agentIssuance(
+        request(path, { ...submission, request: { ...submission.request, ...patch } }),
+        ID,
+      );
+      expect(response.status).toBe(401);
+    }
+    f.deps.authenticate.mockRejectedValueOnce(new AgentAuthError("UNAUTHENTICATED"));
+    expect((await f.handlers.agentIssuance(request(path, submission), ID)).status).toBe(401);
+    expect(f.owner.submitIssuance).not.toHaveBeenCalled();
+  });
+
+  it("rejects noncanonical versions, bytes, timestamps, integer values and unknown fields", async () => {
+    const f = fixture();
+    for (const patch of [
+      { generation: 4 },
+      { generation: "04" },
+      { formatVersion: 2 },
+      { owner: OWNER },
+      ...[
+        { requestSignature: submission.request.requestSignature.replace(/=+$/, "") },
+        { requestedExpiresAt: "2027-01-15T09:20:00.001Z" },
+        { requestedExpiresAt: "2027-01-15T09:20:00+00:00" },
+        { unknown: true },
+        { taskId: null },
+        { requestContext: [{ name: "limit", intValue: 5 }] },
+      ].map((inner) => ({ request: { ...submission.request, ...inner } })),
+    ]) {
+      expect(
+        (await f.handlers.agentIssuance(request(path, { ...submission, ...patch }), ID)).status,
+      ).toBe(400);
+    }
+    expect(f.owner.submitIssuance).not.toHaveBeenCalled();
+  });
+
+  it("preserves ambiguous submission failures without falling back to another create", async () => {
+    const f = fixture();
+    f.owner.submitIssuance.mockRejectedValueOnce(new AccessRequestError("SERVICE_UNAVAILABLE"));
+    const response = await f.handlers.agentIssuance(request(path, submission), ID);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: { code: "SERVICE_UNAVAILABLE", retryable: true },
+    });
+    expect(f.owner.create).not.toHaveBeenCalled();
+    expect(f.owner.submitIssuance).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("operator access approval", () => {
   const path = `/api/operator/access-requests/${OWNER}/${ID}/approve`;
@@ -341,6 +466,30 @@ describe("external access-request facade", () => {
     expect(await response.json()).toEqual({
       error: { code: "CAPACITY_EXCEEDED", retryable: true },
     });
+  });
+
+  it("resumes only the signed caller's request with its exact generation", async () => {
+    const f = fixture();
+    const path = `${ROOT}/${ID}/resume`;
+    const mutation = { formatVersion: 1, expectedGeneration: "5" };
+    expect((await f.handlers.agentResume(request(path, mutation), ID)).status).toBe(200);
+    expect(f.deps.authenticate).toHaveBeenCalledWith(
+      expect.any(Request),
+      Buffer.from(JSON.stringify(mutation)),
+    );
+    expect(f.owner.resume).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: OWNER, requestId: ID, expectedGeneration: 5n }),
+    );
+    expect(f.deps.dataset).not.toHaveBeenCalled();
+
+    expect(
+      (await f.handlers.agentResume(request(path, { ...mutation, agentId: OWNER }), ID)).status,
+    ).toBe(400);
+    f.deps.authenticate.mockRejectedValueOnce(new AgentAuthError("UNAUTHENTICATED"));
+    expect((await f.handlers.agentResume(request(path, mutation), ID)).status).toBe(401);
+    expect(f.owner.resume).toHaveBeenCalledTimes(1);
+    f.owner.resume.mockRejectedValueOnce(new AccessRequestError("CONFLICT"));
+    expect((await f.handlers.agentResume(request(path, mutation), ID)).status).toBe(409);
   });
 
   it("rejects normalized route aliases and oversized streaming bodies", async () => {

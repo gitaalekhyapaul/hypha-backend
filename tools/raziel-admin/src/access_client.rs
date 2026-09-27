@@ -8,6 +8,7 @@ use raziel_proto::raziel::v1::access_request_service_client::AccessRequestServic
 use raziel_proto::raziel::v1::{
     ApproveAccessRequestRequest, CancelAccessRequestRequest, CreateAccessRequestRequest,
     GetAccessRequestRequest, ListAccessRequestsRequest, RejectAccessRequestRequest,
+    ResumeAccessRequestRequest, SubmitAccessIssuanceRequest,
 };
 use serde::Deserialize;
 use tonic::{Code, Status, transport::Endpoint};
@@ -42,6 +43,8 @@ enum Operation {
     Approve,
     Reject,
     Cancel,
+    Resume,
+    SubmitIssuance,
 }
 
 pub async fn run_from_env() -> Result<(), AccessClientError> {
@@ -92,6 +95,8 @@ pub async fn run_from_env() -> Result<(), AccessClientError> {
         Operation::Approve => invoke!(approve_access_request, ApproveAccessRequestRequest),
         Operation::Reject => invoke!(reject_access_request, RejectAccessRequestRequest),
         Operation::Cancel => invoke!(cancel_access_request, CancelAccessRequestRequest),
+        Operation::Resume => invoke!(resume_access_request, ResumeAccessRequestRequest),
+        Operation::SubmitIssuance => invoke!(submit_access_issuance, SubmitAccessIssuanceRequest),
     };
     if output.len() > MAX_RESPONSE {
         return Err(AccessClientError::Unavailable);
