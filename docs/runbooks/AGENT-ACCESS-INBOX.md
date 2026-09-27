@@ -254,9 +254,9 @@ settings remain required. The connected integration test is
 `services/razield/tests/request_preparation.rs`. It requires an explicit synthetic
 approved request and isolated owner-service configuration. It never submits a proof.
 
-This B-0065 checkpoint is source-ready for GitHub. The preview remains useful for registration,
+This B-0065 checkpoint is committed and pushed to GitHub. The preview remains useful for registration,
 datasets, version publication, and request review, but is not the complete agent demo.
-Do not pull or redeploy the VM for this partial runtime. The VM checkpoint follows
+Pulling this checkpoint does not provide the full M6 runtime. The VM demo checkpoint follows
 B-0066 dispatch and protected-query integration, focused checks, commits, and push
 approval. Preserve the preview's SpiceDB process until durable deployment is wired.
 

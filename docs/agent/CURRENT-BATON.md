@@ -5,9 +5,9 @@
 - Milestone: M6, serial agent capability dispatch and SDK delivery
 - Owner: unassigned
 - Started UTC: Not started
-- Last updated UTC: 2026-09-27T07:43:00Z
+- Last updated UTC: 2026-09-27T07:47:00Z
 - Branch: `main`
-- Worktree: B-0064/B-0065 backend and SDK checkpoint selected for commit and push.
+- Worktree: B-0064/B-0065 backend and SDK source checkpoints committed and pushed.
 - Execution: Paused by the maintainer after B-0065. Do not start without resume.
 
 ## Objective
@@ -100,7 +100,14 @@ The maintainer requested a GitHub checkpoint after the B-0065 pause. Preserve th
 archived implementation evidence. Check source, tests, generated public SDK files,
 and the exact vendored SDK candidate. Exclude credentials, runtime data, build
 outputs, and macOS metadata. No agent-demo source changes exist for this checkpoint.
-Record completed commit checks and remote synchronization here before handoff.
+GitHub checkpoint:
+
+- Backend source: `8f4fa681dbe3aa10e550a5bec0bd0380dc33aae0`, pushed to `origin/main`.
+- SDK source: `1d2d2720d7babd7b6b674609320f36b522dc9eb7`, pushed to `origin/main`.
+- Earlier backend planning commits and formatter-only `d7095fd` are included.
+- `raziel-demo-agents` has no source changes. SDK `.DS_Store` stays local and untracked.
+- This follow-up records synchronization only. B-0066 remains READY, unassigned,
+  and paused. The goal's paused status was verified after both pushes.
 
 Checkpoint validation on 2026-09-27:
 
@@ -111,7 +118,11 @@ Checkpoint validation on 2026-09-27:
 - PASS: Rust canonical, authority, and admin tests, including protocol vectors.
   Four admin integration gates were ignored here and retain separate archived evidence.
 - PASS: all Go compiler packages with the existing offline module/build cache.
-- PASS: SDK 220 tests, package build, declared lint and format scripts.
+- PASS: SDK 220 tests, package build, source/test typecheck, declared lint and format
+  scripts. Typechecking used existing backend dependencies through a temporary
+  container-only path mapping, with no dependency installation or SDK source change.
+- PASS: scoped Rust Clippy for canonical, authority, admin, and access-only razield,
+  with warnings denied.
 - PASS: staged private-file and credential-pattern checks. Only public SDK release
   candidates are included. The selected tarball matches its recorded SHA-256.
 - The full SDK whitespace check reports four generator-produced blank EOF lines.
@@ -122,6 +133,8 @@ Checkpoint validation on 2026-09-27:
   commit `d7095fd`. Three Rust formatting differences were corrected.
 - An initial Go invocation used an empty cache and failed offline. The configured
   existing cache passed without downloading dependencies.
+- Initial SDK validation mounts hid transitive Vitest types and failed. The temporary
+  path mapping resolved the existing complete dependency tree and typechecking passed.
 - Full proof, VM deployment, and the complete CI build matrix were not rerun.
 
 ## Risks And Private-Data Notes
