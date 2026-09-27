@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 
 import { AuthorizationRejectedError, ProtectedQueryInfrastructureError } from "./errors";
 import type {
+  InspectedCapability,
   ProtectedRequestEnvelope,
   ProtectedRequestVerifier,
-  InspectedCapability,
   VerifiedCapabilityClaims,
   VerifierResult,
 } from "./types";

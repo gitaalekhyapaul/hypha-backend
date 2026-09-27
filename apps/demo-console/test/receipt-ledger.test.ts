@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { POST as loginRoute } from "../app/api/operator/login/route.ts";
 import { GET as receiptsRoute } from "../app/api/receipts/route.ts";
-import type { PublicAuditReceipt } from "../lib/receipt-ledger/index.ts";
 import { derivePasswordVerifierForProvisioning } from "../lib/operator-auth/index.ts";
+import type { PublicAuditReceipt } from "../lib/receipt-ledger/index.ts";
 
 const ORIGIN = "http://127.0.0.1:3000";
 const PASSWORD = "receipt ledger password";

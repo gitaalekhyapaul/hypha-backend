@@ -18,15 +18,15 @@ import type {
   PolicyCandidateProjection,
   PreparePolicyCandidateRequest,
 } from "../policy-candidate/types.ts";
-import type {
-  ProtectedReconciliationQueryInput,
-  ProtectedReconciliationQueryResult,
-} from "./reconciliation.ts";
 import {
   type PublicReceiptLedger,
   type ReceiptFilterSelection,
   receiptQueryPath,
 } from "./receipts.ts";
+import type {
+  ProtectedReconciliationQueryInput,
+  ProtectedReconciliationQueryResult,
+} from "./reconciliation.ts";
 
 export interface BrowserOperatorSession {
   readonly operatorId: string;

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-
+import { reconcileLiveSubmission } from "../lib/agent-capability/lifecycle.ts";
 import {
   type LiveSubmissionAttempt,
   liveSubmissionAttempt,
 } from "../lib/agent-capability/live-registry.ts";
-import { reconcileLiveSubmission } from "../lib/agent-capability/lifecycle.ts";
 import type {
   CapabilityJobProjection,
   CapabilityProcessConfig,

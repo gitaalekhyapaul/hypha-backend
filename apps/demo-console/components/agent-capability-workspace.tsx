@@ -3,17 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActivePolicySelection } from "../lib/access-graph/types.ts";
+import {
+  buildCapabilityRequestInput,
+  type CapabilitySubmissionState,
+  prepareCapabilitySubmission,
+} from "../lib/agent-capability/request.ts";
 import type {
   CapabilityContextEntry,
   CapabilityJobProjection,
   CapabilityJobState,
   PublishedAccessSelection,
 } from "../lib/agent-capability/types.ts";
-import {
-  type CapabilitySubmissionState,
-  buildCapabilityRequestInput,
-  prepareCapabilitySubmission,
-} from "../lib/agent-capability/request.ts";
 import { CAVEAT_CATALOG } from "../lib/policy-draft/index.ts";
 import {
   cancelCapabilityJob,

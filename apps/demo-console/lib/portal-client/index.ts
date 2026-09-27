@@ -7,9 +7,9 @@ export {
   createAgentSession,
   finalizeDataset,
   listDatasets,
-  loadReceipts,
   loadCapabilityJob,
   loadPolicyCandidate,
+  loadReceipts,
   loginOperator,
   logoutOperator,
   operatorSession,
@@ -19,11 +19,6 @@ export {
   requestCapability,
   saveDataset,
 } from "./browser.ts";
-export type {
-  ProtectedReconciliationQueryInput,
-  ProtectedReconciliationQueryResult,
-  PublicReconciliationReceipt,
-} from "./reconciliation.ts";
 export {
   type PublicAuditReceipt,
   type PublicReceiptLedger,
@@ -31,3 +26,8 @@ export {
   type ReceiptFilterSelection,
   receiptQueryPath,
 } from "./receipts.ts";
+export type {
+  ProtectedReconciliationQueryInput,
+  ProtectedReconciliationQueryResult,
+  PublicReconciliationReceipt,
+} from "./reconciliation.ts";

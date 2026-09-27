@@ -6,18 +6,18 @@ import { encodeHex, signProtectedRequest } from "../../../../lib/agent-capabilit
 import { operatorAgentIdentity } from "../../../../lib/agent-capability/session-store.ts";
 import { CapabilityFlowError } from "../../../../lib/agent-capability/types.ts";
 import { loadDatasetGatewayConfig } from "../../../../lib/dataset-client/index.ts";
-import type { ProtectedReconciliationQueryInput } from "../../../../lib/portal-client/reconciliation.ts";
 import {
   jsonResponse,
   operatorAuthResponse,
   operatorAuthService,
 } from "../../../../lib/operator-auth/index.ts";
+import type { ProtectedReconciliationQueryInput } from "../../../../lib/portal-client/reconciliation.ts";
 import {
   exactGatewayQueryBody,
   type ProtectedGatewayEnvelope,
   protectedGatewayTarget,
-  type ReconciliationConsoleFailureCode,
   ReconciliationConsoleError,
+  type ReconciliationConsoleFailureCode,
   readGatewayAuthorizationRejection,
   readGatewayResult,
   readReconciliationQuery,

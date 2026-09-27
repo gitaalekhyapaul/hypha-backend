@@ -1,8 +1,8 @@
-import type { PolicyBuilderState } from "../policy-builder/index.ts";
 import { policyBoundResourceScope } from "../access-graph/model.ts";
+import type { PolicyBuilderState } from "../policy-builder/index.ts";
 import type {
-  CapabilityRequestInput,
   CapabilityContextEntry,
+  CapabilityRequestInput,
   CreateCapabilityInput,
   PublishedAccessSelection,
 } from "./types.ts";
