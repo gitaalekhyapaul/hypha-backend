@@ -7,9 +7,42 @@ use std::path::{Path, PathBuf};
 use super::codec::{read_request, write_response};
 use super::store::{PolicyActivationStore, StoreActivationError};
 use super::wire::{
-    PolicyActivationFailureWire, PolicyActivationProjectionWire, PolicyActivationResponseWire,
+    PolicyActivationFailureWire, PolicyActivationProjectionWire, PolicyActivationRequestWire,
+    PolicyActivationResponseWire, PolicyOperationWire,
 };
 use super::{PROTOCOL_VERSION, valid_absolute_path};
+use crate::policy_publication::{PolicyPublisher, PublicationConfig};
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod tests;
+
+enum ActivationRole {
+    Legacy(Box<PolicyActivationStore>),
+    Composed(Box<PolicyPublisher>),
+}
+
+impl ActivationRole {
+    fn catalogue(&self) -> Result<super::wire::PolicyCatalogueWire, StoreActivationError> {
+        let Self::Composed(publisher) = self else {
+            return Err(StoreActivationError::InvalidRequest);
+        };
+        let projection = publisher
+            .catalogue(super::store::trusted_now()?)
+            .map_err(|_| StoreActivationError::Unavailable)?;
+        super::codec::catalogue_wire(projection).map_err(|_| StoreActivationError::Unavailable)
+    }
+
+    fn activate(
+        &self,
+        request: super::wire::PolicyActivationRequestWire,
+    ) -> Result<super::store::StoredActivationProjection, StoreActivationError> {
+        match self {
+            Self::Legacy(store) => store.activate(request),
+            Self::Composed(publisher) => publisher.publish(request),
+        }
+    }
+}
 
 const SOCKET_DIRECTORY_MODE: u32 = 0o700;
 const SOCKET_MODE: u32 = 0o600;
@@ -24,14 +57,44 @@ pub fn run_from_env() -> Result<(), PolicyActivationServerError> {
     let trust_domain_id = std::env::var("RAZIEL_TRUST_DOMAIN_ID")
         .map_err(|_| PolicyActivationServerError::Configuration)?;
     let store = PolicyActivationStore::new(
-        candidate_root,
+        candidate_root.clone(),
         activation_root,
-        registry_root,
+        registry_root.clone(),
         authority_socket,
         writer_socket,
         &trust_domain_id,
     )
     .map_err(|_| PolicyActivationServerError::Configuration)?;
+    let store = match std::env::var("RAZIEL_POLICY_PUBLICATION_MODE").as_deref() {
+        Err(std::env::VarError::NotPresent) | Ok("legacy") => {
+            ActivationRole::Legacy(Box::new(store))
+        }
+        Ok("composed") => ActivationRole::Composed(Box::new(
+            PolicyPublisher::new(
+                PublicationConfig {
+                    root: required_path("RAZIEL_POLICY_PUBLICATION_ROOT")?,
+                    package_root: required_path("RAZIEL_POLICY_PACKAGE_ROOT")?,
+                    version_root: required_path("RAZIEL_POLICY_VERSION_ROOT")?,
+                    compiler: required_path("RAZIEL_POLICY_COMPILER_EXECUTABLE")?,
+                    legacy_root: match std::env::var("RAZIEL_POLICY_LEGACY_PACKAGE_ROOT") {
+                        Err(std::env::VarError::NotPresent) => None,
+                        Ok(value) if value.is_empty() => None,
+                        Ok(_) => Some(required_path("RAZIEL_POLICY_LEGACY_PACKAGE_ROOT")?),
+                        Err(_) => return Err(PolicyActivationServerError::Configuration),
+                    },
+                    token_path: required_path("RAZIEL_SPICEDB_TOKEN_PATH")?,
+                    endpoint: std::env::var("RAZIEL_SPICEDB_ENDPOINT")
+                        .map_err(|_| PolicyActivationServerError::Configuration)?,
+                    candidate_root,
+                    registry_root,
+                    trust_domain_id,
+                },
+                store,
+            )
+            .map_err(|_| PolicyActivationServerError::Configuration)?,
+        )),
+        _ => return Err(PolicyActivationServerError::Configuration),
+    };
     let listener = bind_private_socket(&socket_path)?;
     for connection in listener.incoming() {
         let Ok(mut stream) = connection else {
@@ -44,7 +107,7 @@ pub fn run_from_env() -> Result<(), PolicyActivationServerError> {
 }
 
 fn handle_connection(
-    store: &PolicyActivationStore,
+    store: &ActivationRole,
     stream: &mut UnixStream,
 ) -> PolicyActivationResponseWire {
     if stream
@@ -60,7 +123,42 @@ fn handle_connection(
         Ok(request) => request,
         Err(_) => return failure(PolicyActivationFailureWire::InvalidRequest),
     };
-    match store.activate(request) {
+    dispatch_request(
+        request,
+        |request| store.activate(request),
+        || store.catalogue(),
+    )
+}
+
+fn dispatch_request(
+    request: PolicyActivationRequestWire,
+    activate: impl FnOnce(
+        PolicyActivationRequestWire,
+    ) -> Result<super::store::StoredActivationProjection, StoreActivationError>,
+    catalogue: impl FnOnce() -> Result<super::wire::PolicyCatalogueWire, StoreActivationError>,
+) -> PolicyActivationResponseWire {
+    if request.format_version != PROTOCOL_VERSION {
+        return failure(PolicyActivationFailureWire::InvalidRequest);
+    }
+    match PolicyOperationWire::try_from(request.operation) {
+        Ok(PolicyOperationWire::ListCatalogue) => {
+            if !request.candidate_id.is_empty() || !request.approved_by.is_empty() {
+                return failure(PolicyActivationFailureWire::InvalidRequest);
+            }
+            return match catalogue() {
+                Ok(catalogue) => PolicyActivationResponseWire {
+                    format_version: PROTOCOL_VERSION,
+                    failure: PolicyActivationFailureWire::Unspecified as i32,
+                    projection: None,
+                    catalogue: Some(catalogue),
+                },
+                Err(error) => store_failure(error),
+            };
+        }
+        Ok(PolicyOperationWire::Activate) => {}
+        Err(_) => return failure(PolicyActivationFailureWire::InvalidRequest),
+    }
+    match activate(request) {
         Ok(projection) => PolicyActivationResponseWire {
             format_version: PROTOCOL_VERSION,
             failure: PolicyActivationFailureWire::Unspecified as i32,
@@ -75,16 +173,19 @@ fn handle_connection(
                 valid_until_unix_seconds: projection.valid_until_unix_seconds,
                 registry_generation: projection.registry_generation,
             }),
+            catalogue: None,
         },
-        Err(error) => failure(match error {
-            StoreActivationError::InvalidRequest => PolicyActivationFailureWire::InvalidRequest,
-            StoreActivationError::Conflict => PolicyActivationFailureWire::Conflict,
-            StoreActivationError::CandidateRejected => {
-                PolicyActivationFailureWire::CandidateRejected
-            }
-            StoreActivationError::Unavailable => PolicyActivationFailureWire::Unavailable,
-        }),
+        Err(error) => store_failure(error),
     }
+}
+
+fn store_failure(error: StoreActivationError) -> PolicyActivationResponseWire {
+    failure(match error {
+        StoreActivationError::InvalidRequest => PolicyActivationFailureWire::InvalidRequest,
+        StoreActivationError::Conflict => PolicyActivationFailureWire::Conflict,
+        StoreActivationError::CandidateRejected => PolicyActivationFailureWire::CandidateRejected,
+        StoreActivationError::Unavailable => PolicyActivationFailureWire::Unavailable,
+    })
 }
 
 fn failure(code: PolicyActivationFailureWire) -> PolicyActivationResponseWire {
@@ -92,6 +193,7 @@ fn failure(code: PolicyActivationFailureWire) -> PolicyActivationResponseWire {
         format_version: PROTOCOL_VERSION,
         failure: code as i32,
         projection: None,
+        catalogue: None,
     }
 }
 

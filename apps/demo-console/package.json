@@ -7,19 +7,22 @@
     "node": "24.18.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "start": "next start",
-    "format": "biome format --write app components lib test next.config.ts package.json tsconfig.json",
-    "format:check": "biome format app components lib test next.config.ts package.json tsconfig.json",
-    "lint": "biome lint app components lib test next.config.ts",
+    "dev": "node server.mjs --dev",
+    "start": "node server.mjs",
+    "format": "biome format --write app components lib server server.mjs test next.config.ts package.json tsconfig.json",
+    "format:check": "biome format app components lib server server.mjs test next.config.ts package.json tsconfig.json",
+    "lint": "biome lint app components lib server server.mjs test next.config.ts",
     "typecheck": "tsc --noEmit",
     "build": "next build",
     "test": "vitest run"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "catalog:",
+    "@raziel/proto-ts": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "redis": "catalog:"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

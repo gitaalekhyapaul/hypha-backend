@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package raziel.v1;
+
+import "raziel/v1/agent_api.proto";
+
+// Owner-only RPC. Caller identity comes from the authenticated facade, never JSON.
+service AccessRequestService {
+  rpc CreateAccessRequest(CreateAccessRequestRequest) returns (CreateAccessRequestResponse);
+  rpc GetAccessRequest(GetAccessRequestRequest) returns (GetAccessRequestResponse);
+  rpc ListAccessRequests(ListAccessRequestsRequest) returns (ListAccessRequestsResponse);
+  rpc ApproveAccessRequest(ApproveAccessRequestRequest) returns (ApproveAccessRequestResponse);
+  rpc RejectAccessRequest(RejectAccessRequestRequest) returns (RejectAccessRequestResponse);
+  rpc CancelAccessRequest(CancelAccessRequestRequest) returns (CancelAccessRequestResponse);
+}
+
+message AccessRequestOwner {
+  string agent_id = 1;
+  bytes agent_public_key = 2;
+}
+
+message AccessDatasetRevision {
+  string dataset_id = 1;
+  uint64 revision = 2;
+  bytes checksum = 3;
+}
+
+message CreateAccessRequestRequest {
+  AccessRequestOwner owner = 1;
+  AccessIntent intent = 2;
+  // Omitted for an exact-retry lookup. A new request requires this trusted binding.
+  AccessDatasetRevision dataset = 3;
+}
+
+message GetAccessRequestRequest {
+  string agent_id = 1;
+  string request_id = 2;
+}
+
+message GetAccessRequestResponse {
+  AccessRequest request = 1;
+}
+
+message ListAccessRequestsRequest {
+  // Empty is restricted to the authenticated operator facade.
+  optional string agent_id = 1;
+  uint32 limit = 2;
+  optional string cursor = 3;
+}
+
+message RejectAccessRequestRequest {
+  string agent_id = 1;
+  string request_id = 2;
+  uint64 expected_generation = 3;
+}
+
+// Owner-private parameters for the supported visual policy families. These are
+// retained for later provisioning, never returned by the agent API or put in Redis.
+message AccessGrantInputs {
+  uint32 format_version = 1;
+  string team_id = 2;
+  string organization_id = 3;
+  int64 approved_amount = 4;
+  bool is_approved = 5;
+  bool is_suspended = 6;
+  bool is_override = 7;
+}
+
+message ApproveAccessRequestRequest {
+  string agent_id = 1;
+  string request_id = 2;
+  uint64 expected_generation = 3;
+  string policy_record_id = 4;
+  string policy_version_id = 5;
+  uint64 approval_epoch = 6;
+  // Current finalized metadata comes from the trusted dataset service, not JSON.
+  AccessDatasetRevision dataset = 7;
+  AccessGrantInputs grant = 8;
+}
+
+message ApproveAccessRequestResponse {
+  AccessRequest request = 1;
+}
+
+message RejectAccessRequestResponse {
+  AccessRequest request = 1;
+}
+
+message CancelAccessRequestRequest {
+  string agent_id = 1;
+  string request_id = 2;
+  uint64 expected_generation = 3;
+}
+
+message CancelAccessRequestResponse {
+  AccessRequest request = 1;
+}

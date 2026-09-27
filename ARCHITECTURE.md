@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: M0 through M5 validated; revised M6-M7 agent demo planned under ADR-0019
+Status: M0 through M5 validated; M6 authentication and request inbox implemented locally
 
-Last updated: 2026-09-25
+Last updated: 2026-09-27
 
 ## Human-readable overview
 
@@ -42,16 +42,35 @@ a third dashboard. Real-data acceptance is deferred under
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
 | M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
-| M6 | Planned | External agent API, per-agent registration, operator review, serial dispatch, and public SDK |
+| M6 | In progress | Registration, signed requests, owner-isolated intents, policy publication, operator approval, and request-triggered snapshot preparation pass locally. Serial dispatch and npm release remain pending |
 | M7 | Planned | Two-ledger reconciliation, three dashboards, LLM tools, messages, and live proof-backed demo |
 
 The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
 evidence keeps its original milestone labels. The
 [M6-M7 plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md) defines the new feature order.
 The concrete [agent API contract](docs/spec/AGENT-API-V1.md) and
-[ADR-0020](docs/decisions/0020-agent-api-and-request-provisioning.md) are proposed,
-not implemented or approved. They define signed caller authentication, an operator
-approval lifecycle, and coexisting immutable policy versions.
+[ADR-0020](docs/decisions/0020-agent-api-and-request-provisioning.md) are approved.
+B-0064 implements signed caller authentication and the SDK foundation. B-0065 now
+supports request creation, exact retries, own-request reads, rejection, and cancellation.
+Operator approval passes the connected browser and packaged-SDK HTTP check.
+Private request preparation passed against real SpiceDB and the snapshot authority.
+It pins the approved package and exact revision, and retries reuse the same signed
+snapshot. B-0066 will invoke it after reserving serial proof capacity. It does not
+automatically dispatch from the approval action.
+The owner API allocates durable family/version identities and compiles namespaced
+candidates. A separate composed publication role now approves, retains, and installs
+coexisting versions. Its local gate passed against the pinned SpiceDB image with two
+versions and an exact retry. The opt-in `docker-compose.m6.yml` runtime connects the
+visual builder to that exclusive writer. Browser publication of two versions passed
+locally. It uses a separate project and private state, not an implicit M5 migration.
+Its operator catalogue now lists installed, currently approved versions through the
+owner socket. It contains no PolicyIR or schema. The M6 gateway checks exact immutable
+policy/type/scope dataset bindings on cold and cached requests, including revision and
+checksum in the data read. Approval persists its private command, exact public policy
+binding, and immutable dataset mapping. It does not start a proof. Dispatch is pending.
+M5 remains the default. Mode guards prevent legacy writes in the M6 runtime. Snapshot
+registry mutations now retry stale generations without rebuilding the private tree,
+then confirm the exact root and current policy in a validated newer generation.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
@@ -66,7 +85,7 @@ Plonk capability supported an independent-verifier query and a cache-backed quer
 Scope, replay, expiry, alteration, and missing-signature controls returned no rows.
 The [M5 portal runbook](docs/runbooks/M5-LOCAL-PORTAL.md) records the public evidence
 and screenshots. This development demonstration does not establish real-data
-acceptance or a second scenario. The new external-agent workflow is not yet built.
+acceptance or a second scenario. The external-agent approval-to-data flow remains incomplete.
 
 ### The key distinction from a signed token
 
@@ -371,16 +390,31 @@ envelope was deleted, and the approved owner-only private snapshot remained.
 The PolicyIR schema, SP1 guest, public values, verifier, Protobuf contracts, and
 canonical vectors remain one backend compatibility unit. ADR-0019 moves the SDK into
 its sibling release repository and puts both agent applications in another repository.
-The current workspace SDK remains until consumers migrate to the packaged release.
+The workspace SDK now re-exports a pinned tarball from that sibling package. It no
+longer contains a second implementation. The candidate is not published on npm.
 Public releases pin their backend protocol revision and canonical vectors. They do
 not import backend source files or require private workspace packages.
 
-The proposed M6 public facade exposes explicit agent routes in `demo-console`.
+The M6 public facade exposes signed identity lookup at `/api/agent/v1/me` and access
+request create/list/get/cancel routes in `demo-console`. Operator registration, token
+issuance, revocation, and request list/detail/reject/cancel are implemented.
 Operator routes retain their separate authentication. The internal gateway, including
 its dataset administration routes, stays unreachable from agent containers. The
-agent-authenticated protected-query facade forwards only to the existing PEP route.
+planned agent-authenticated protected-query facade will forward only to the existing PEP route.
 Token and signature checks do not replace capability verification. See ADR-0020 for
-the new boundary and its pending approval.
+the approved boundary and its staged implementation.
+
+The console's Node HTTP entry point rejects duplicate authentication headers and
+preserves the original request target before Next.js normalization. Both `dev` and
+`start` use that entry point. Rust owns strict key and signature validation. Redis
+stores token hashes and atomically rechecks revocation before consuming a nonce.
+
+The owner-only `razield-access` role owns request state. Redis holds safe metadata
+and generation checks. A separate owner-only volume holds the normalized private
+intent for exact retry comparison. Its context never enters Redis, public responses,
+or logs. Requests have a 24-hour review deadline and seven-day terminal retention.
+The facade resolves a finalized dataset only for new admission. Exact retained
+retries do not require the dataset service. This role does not generate proofs.
 
 ### TypeScript and Next.js
 

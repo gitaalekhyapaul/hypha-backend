@@ -5,6 +5,7 @@ import {
   type PolicyDraftV1,
   PolicyDraftValidationError,
   type PolicyRule,
+  type PolicyVersionIdentity,
 } from "./types.ts";
 
 const SCHEMA_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
@@ -16,12 +17,22 @@ const MAX_POLICY_VERSION = 2_147_483_647;
 const MAX_RULE_DEPTH = 4;
 const MAX_RULE_NODES = 16;
 const MAX_COMBINATION_CHILDREN = 4;
+const IMMUTABLE_ID = /^[0-9a-f]{32}$/;
 
 interface RuleCounters {
   arrows: number;
   caveats: number;
   nodes: number;
   readonly leaves: Set<string>;
+}
+
+export function validatePolicyVersionIdentity(input: unknown): PolicyVersionIdentity {
+  const identity = objectAt(input, "$", ["familyId", "versionId", "version"]);
+  return {
+    familyId: immutableId(identity.familyId, "$.familyId"),
+    versionId: immutableId(identity.versionId, "$.versionId"),
+    version: boundedInteger(identity.version, 1, MAX_POLICY_VERSION, "$.version"),
+  };
 }
 
 export function validatePolicyDraft(input: unknown): PolicyDraftV1 {
@@ -189,6 +200,13 @@ function directRelation(input: unknown, path: string): DirectRelation {
 function schemaIdentifier(input: unknown, path: string): string {
   if (typeof input !== "string" || !SCHEMA_IDENTIFIER.test(input)) {
     fail(path, "must be a lowercase SpiceDB identifier of at most 63 characters");
+  }
+  return input;
+}
+
+function immutableId(input: unknown, path: string): string {
+  if (typeof input !== "string" || input.length !== 32 || !IMMUTABLE_ID.test(input)) {
+    fail(path, "must be exactly 32 lowercase hexadecimal characters");
   }
   return input;
 }

@@ -90,6 +90,24 @@ export interface RenderedPolicySource {
   readonly ruleSummary: string;
 }
 
+export interface PolicyVersionIdentity {
+  readonly familyId: string;
+  readonly versionId: string;
+  readonly version: number;
+}
+
+export interface PolicySourceInventory {
+  // Includes the shared empty agent definition. Names are sorted lexically.
+  readonly definitions: readonly string[];
+  readonly caveats: readonly string[];
+}
+
+export interface RenderedPolicyVersionSource extends RenderedPolicySource {
+  readonly identity: PolicyVersionIdentity;
+  readonly signedPolicyName: string;
+  readonly inventory: PolicySourceInventory;
+}
+
 export class PolicyDraftValidationError extends Error {
   public readonly path: string;
 

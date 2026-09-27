@@ -4,6 +4,7 @@ import {
   publishAccessGraph,
 } from "../../../lib/access-graph/index.ts";
 import { operatorAuthResponse, operatorAuthService } from "../../../lib/operator-auth/index.ts";
+import { policyWorkflowResponse } from "../../../lib/policy-workflow.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     return operatorAuthResponse(error);
   }
+  const unavailable = policyWorkflowResponse("legacy");
+  if (unavailable) return unavailable;
   try {
     const body = (await request.json()) as unknown;
     const projection = await publishAccessGraph(body, operatorId, loadAccessGraphConfig());

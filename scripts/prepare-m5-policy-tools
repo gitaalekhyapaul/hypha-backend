@@ -6,6 +6,7 @@ runtime_root=${RAZIEL_M5_POLICY_RUNTIME_ROOT:-"$repo_root/.raziel/m5"}
 tools_root="$runtime_root/policy-tools"
 build_root="$runtime_root/policy-build"
 candidate_root="$runtime_root/policy-candidates"
+version_root="$runtime_root/policy-versions"
 activation_root=${RAZIEL_M5_POLICY_ACTIVATION_ROOT:-/var/lib/raziel/m5-policy-activation}
 registry_root=${RAZIEL_M5_POLICY_REGISTRY_ROOT:-/var/lib/raziel/m5-registry}
 secret_root=${RAZIEL_M5_POLICY_SECRET_ROOT:-/var/lib/raziel/m5-secrets}
@@ -20,6 +21,9 @@ access_graph_tmp="$tools_root/.raziel-access-graph.$$"
 access_graph_publish_tmp="$tools_root/.raziel-access-graph-publish.$$"
 capability_client_tmp="$tools_root/.raziel-capability-client.$$"
 verifier_client_tmp="$tools_root/.raziel-verifier-client.$$"
+agent_auth_tmp="$tools_root/.raziel-agent-auth.$$"
+access_client_tmp="$tools_root/.raziel-access-client.$$"
+access_service_tmp="$tools_root/.razield-access.$$"
 snapshot_tmp="$tools_root/.razield-snapshot.$$"
 
 cleanup() {
@@ -34,6 +38,9 @@ cleanup() {
     "$access_graph_publish_tmp" \
     "$capability_client_tmp" \
     "$verifier_client_tmp" \
+    "$agent_auth_tmp" \
+    "$access_client_tmp" \
+    "$access_service_tmp" \
     "$snapshot_tmp"
 }
 trap cleanup EXIT HUP INT TERM
@@ -44,6 +51,7 @@ install -d -m 0700 \
   "$tools_root" \
   "$build_root" \
   "$candidate_root" \
+  "$version_root" \
   "$activation_root" \
   "$registry_root" \
   "$secret_root"
@@ -52,6 +60,7 @@ chmod 0700 \
   "$tools_root" \
   "$build_root" \
   "$candidate_root" \
+  "$version_root" \
   "$activation_root" \
   "$registry_root" \
   "$secret_root"
@@ -76,7 +85,13 @@ CARGO_TARGET_DIR="$build_root/cargo-target" \
     --bin raziel-access-graph \
     --bin raziel-access-graph-publish \
     --bin raziel-capability-client \
-    --bin raziel-verifier-client
+    --bin raziel-verifier-client \
+    --bin raziel-agent-auth \
+    --bin raziel-access-client
+
+CARGO_TARGET_DIR="$build_root/cargo-target" \
+  cargo build --locked --release --no-default-features \
+    --features access-service -p razield --bin razield-access
 
 CARGO_TARGET_DIR="$build_root/cargo-target" \
   cargo build \
@@ -114,6 +129,9 @@ install -m 0700 \
 install -m 0700 \
   "$build_root/cargo-target/release/razield-snapshot" \
   "$snapshot_tmp"
+install -m 0700 "$build_root/cargo-target/release/raziel-agent-auth" "$agent_auth_tmp"
+install -m 0700 "$build_root/cargo-target/release/raziel-access-client" "$access_client_tmp"
+install -m 0700 "$build_root/cargo-target/release/razield-access" "$access_service_tmp"
 chmod 0700 "$compiler_tmp"
 mv -f "$compiler_tmp" "$tools_root/spicedb-ir-compiler"
 mv -f "$admin_tmp" "$tools_root/raziel-admin"
@@ -126,6 +144,9 @@ mv -f "$access_graph_publish_tmp" "$tools_root/raziel-access-graph-publish"
 mv -f "$capability_client_tmp" "$tools_root/raziel-capability-client"
 mv -f "$verifier_client_tmp" "$tools_root/raziel-verifier-client"
 mv -f "$snapshot_tmp" "$tools_root/razield-snapshot"
+mv -f "$agent_auth_tmp" "$tools_root/raziel-agent-auth"
+mv -f "$access_client_tmp" "$tools_root/raziel-access-client"
+mv -f "$access_service_tmp" "$tools_root/razield-access"
 
 policy_key="$secret_root/policy-authority.pk8"
 snapshot_key="$secret_root/snapshot-authority.pk8"

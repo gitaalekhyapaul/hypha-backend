@@ -1,6 +1,6 @@
 # ADR-0020: Agent API And Request Provisioning
 
-- Status: proposed, awaiting maintainer approval
+- Status: accepted, implementation in progress
 - Date: 2026-09-25
 - Milestone: M6
 - Related baton: B-0063
@@ -152,7 +152,9 @@ These planned tests do not count as passing runtime evidence.
 The B-0063 read-only policy review identified six integration requirements: explicit
 reapproval semantics, a cumulative trusted composer, request-attempt handoffs,
 immutable dataset bindings, durable package retention, and aggregate resource bounds.
-The API specification records each requirement. Runtime validation remains pending.
+The API specification records each requirement. B-0064 validates authentication
+through a local production HTTP server, Rust helper, Redis, and the packaged SDK.
+Policy provisioning and request lifecycle validation remain pending.
 The API review added owner-qualified request IDs, durable cancellation of uncertain
 submissions, private comparison-record retention, and fresh inner and outer signatures
 for query retries. These are specification corrections, not claims of runtime fixes.
@@ -168,9 +170,9 @@ for query retries. These are specification corrections, not claims of runtime fi
 - One SpiceDB container per version adds deployment lifecycle work to a small demo.
 - Editing the SP1 guest or weakening registry epoch checks changes the proven protocol.
 
-## Approval Requested
+## Approval Record
 
-Approve these two security decisions as one M6 protocol amendment:
+The maintainer approved both decisions on 2026-09-25 with "Approved, please code now":
 
 1. The separately domain-bound agent API authentication contract, including its
    token/key binding, freshness, replay, and explicit public-route boundary.

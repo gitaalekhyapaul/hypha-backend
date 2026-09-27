@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+umask 077
+
+# Run only in the pinned, networkless Compose initializer. Never reuse M5 keys.
+fail() {
+  printf 'm6_policy_runtime: %s\n' "$1" >&2
+  exit 1
+}
+
+private_directory() {
+  directory=$1
+  test ! -L "$directory" || fail "symlink directory rejected"
+  install -d -m 0700 "$directory"
+  chmod 0700 "$directory"
+  test "$(stat --format=%u "$directory")" = 0 || fail "directory is not owned by the runtime user"
+}
+
+key_file() {
+  key=$1
+  test ! -L "$key" || fail "symlink key rejected"
+  if [ ! -e "$key" ]; then
+    # A failed generation leaves no final key. Existing keys are never replaced.
+    temporary=$(mktemp "${key}.XXXXXX")
+    openssl genpkey -algorithm ED25519 -outform DER -out "$temporary"
+    chmod 0400 "$temporary"
+    mv "$temporary" "$key"
+    temporary=
+  fi
+  test -f "$key" || fail "key is not a regular file"
+  test "$(stat --format=%a:%u:%h "$key")" = 400:0:1 || fail "invalid private key permissions"
+}
+
+prepare() {
+  source=/opt/raziel/prebuilt-tools
+  tools=/opt/raziel/m6/policy-tools
+  runtime=/workspace/.raziel/m6
+  secrets=/var/lib/raziel/m5-secrets
+  token_directory=/run/secrets/spicedb
+
+  # No builds, package installation or network access. Parent deployment prepares
+  # current binaries and workspace packages with the pinned repository toolchain.
+  binaries='spicedb-ir-compiler raziel-admin raziel-policy-authority raziel-registry-writer raziel-policy-activation raziel-policy-activate raziel-agent-auth raziel-access-client razield-access'
+  for binary in $binaries; do
+    test -f "$source/$binary" && test -x "$source/$binary" && test ! -L "$source/$binary" ||
+      fail "missing prebuilt tool: $binary"
+  done
+  for package in proto-ts sdk-ts; do
+    test -f "/workspace/packages/$package/dist/index.js" ||
+      fail "missing prebuilt workspace package: $package"
+  done
+  test -n "${RAZIEL_M6_SPICEDB_TOKEN:-}" || fail "missing SpiceDB token"
+  test "${#RAZIEL_M6_SPICEDB_TOKEN}" -le 4096 || fail "SpiceDB token is too long"
+
+  for directory in "$runtime" "$runtime/policy-candidates" "$runtime/policy-versions" \
+    "$tools" "$secrets" "$token_directory"; do
+    private_directory "$directory"
+  done
+  for binary in $binaries; do
+    install -m 0500 "$source/$binary" "$tools/$binary"
+  done
+  key_file "$secrets/policy-authority.pk8"
+  key_file "$secrets/snapshot-authority.pk8"
+
+  # The publisher mounts only this token directory, not the base signing-key volume.
+  token="$token_directory/token"
+  test ! -L "$token" || fail "symlink token rejected"
+  temporary=$(mktemp "$token_directory/.token.XXXXXX")
+  printf '%s' "$RAZIEL_M6_SPICEDB_TOKEN" >"$temporary"
+  chmod 0400 "$temporary"
+  if [ -e "$token" ]; then
+    test -f "$token" || fail "token is not a regular file"
+    test "$(stat --format=%a:%u:%h "$token")" = 400:0:1 || fail "invalid token permissions"
+    cmp -s "$temporary" "$token" || fail "configured token differs from the retained M6 token"
+    rm -f "$temporary"
+  else
+    mv "$temporary" "$token"
+  fi
+  temporary=
+  printf 'm6_policy_runtime=prepared scope=publication-and-inbox\n'
+}
+
+prepare_ipc() {
+  for directory in /run/raziel-policy-activation /run/raziel-policy-authority \
+    /run/raziel-registry-writer /var/lib/raziel/policy-activation \
+    /var/lib/raziel/policy-publication /var/lib/raziel/policy-packages \
+    /var/lib/raziel/dataset-bindings; do
+    private_directory "$directory"
+  done
+  printf 'm6_policy_runtime=private-directories-ready\n'
+}
+
+temporary=
+trap 'test -z "$temporary" || rm -f "$temporary"' EXIT HUP INT TERM
+test "$(id -u)" = 0 || fail "run through the M6 Compose initializer"
+case "${1:-}" in
+  prepare) prepare ;;
+  ipc) prepare_ipc ;;
+  *) fail "expected prepare or ipc" ;;
+esac

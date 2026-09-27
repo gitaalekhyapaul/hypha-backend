@@ -1,3 +1,5 @@
+export * from "./gen/raziel/v1/access_service_pb.js";
+export * from "./gen/raziel/v1/agent_api_pb.js";
 export * from "./gen/raziel/v1/audit_pb.js";
 export * from "./gen/raziel/v1/authority_pb.js";
 export * from "./gen/raziel/v1/capability_pb.js";

@@ -2,11 +2,13 @@
 
 #![forbid(unsafe_code)]
 
+mod agent_api;
 mod error;
 mod key;
 mod signer;
 mod snapshot_publisher;
 
+pub use agent_api::{AgentApiVerificationError, validate_agent_api_key, verify_agent_api_request};
 pub use error::AuthorityError;
 pub use key::{
     AUTHORITY_KEY_FORMAT_VERSION, AuthorityKeyRecordV1, AuthorityKeyStatus, AuthorityRole,

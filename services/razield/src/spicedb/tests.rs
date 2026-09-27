@@ -20,6 +20,12 @@ struct FakeApi {
 
 #[tonic::async_trait]
 impl SpiceDbReadApi for FakeApi {
+    async fn diff_schema(
+        &mut self,
+        _: authzed::DiffSchemaRequest,
+    ) -> Result<authzed::DiffSchemaResponse, SpiceDbSnapshotError> {
+        panic!("legacy M5 reader must not require composition comparison")
+    }
     async fn reflect_schema(
         &mut self,
         request: authzed::ReflectSchemaRequest,
@@ -283,7 +289,7 @@ fn scalar(kind: Kind) -> Value {
     Value { kind: Some(kind) }
 }
 
-fn policy() -> ValidatedPolicyProgram {
+pub(super) fn policy() -> ValidatedPolicyProgram {
     ValidatedPolicyProgram::new(
         PolicyProgram {
             ir_version: 1,

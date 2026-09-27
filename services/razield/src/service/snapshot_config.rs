@@ -10,6 +10,7 @@ const SPICEDB_AUTH_TOKEN_PATH_ENV: &str = "RAZIEL_SPICEDB_AUTH_TOKEN_PATH";
 const ZED_TOKEN_SECRET_REF_ENV: &str = "RAZIEL_ZED_TOKEN_SECRET_REF";
 const ZED_TOKEN_PATH_ENV: &str = "RAZIEL_ZED_TOKEN_PATH";
 const ZED_TOKEN_CANDIDATE_ROOT_ENV: &str = "RAZIEL_ZED_TOKEN_CANDIDATE_ROOT";
+const ZED_TOKEN_REQUEST_ROOT_ENV: &str = "RAZIEL_ZED_TOKEN_REQUEST_ROOT";
 const PRIVATE_SNAPSHOT_ROOT_ENV: &str = "RAZIEL_PRIVATE_SNAPSHOT_ROOT";
 const REGISTRY_WRITER_SOCKET_PATH_ENV: &str = "RAZIEL_REGISTRY_WRITER_SOCKET_PATH";
 const REGISTRY_PATH_ENV: &str = "RAZIEL_REGISTRY_PATH";
@@ -52,18 +53,25 @@ impl SnapshotServiceConfig {
             lookup(ZED_TOKEN_SECRET_REF_ENV),
             lookup(ZED_TOKEN_PATH_ENV),
             lookup(ZED_TOKEN_CANDIDATE_ROOT_ENV),
+            lookup(ZED_TOKEN_REQUEST_ROOT_ENV),
         ) {
-            (Some(secret_ref), Some(path), None) => ZedTokenSourceConfig::Fixed {
+            (Some(secret_ref), Some(path), None, None) => ZedTokenSourceConfig::Fixed {
                 secret_ref: required_identifier(
                     Some(secret_ref),
                     SnapshotServiceConfigError::InvalidZedTokenReference,
                 )?,
                 path: required_path(Some(path), SnapshotServiceConfigError::InvalidZedTokenPath)?,
             },
-            (None, None, Some(root)) => ZedTokenSourceConfig::CandidateRoot {
+            (None, None, Some(root), None) => ZedTokenSourceConfig::CandidateRoot {
                 root: required_path(
                     Some(root),
                     SnapshotServiceConfigError::InvalidZedTokenCandidateRoot,
+                )?,
+            },
+            (None, None, None, Some(root)) => ZedTokenSourceConfig::RequestRoot {
+                root: required_path(
+                    Some(root),
+                    SnapshotServiceConfigError::InvalidZedTokenSource,
                 )?,
             },
             _ => return Err(SnapshotServiceConfigError::InvalidZedTokenSource),
@@ -123,14 +131,23 @@ impl SnapshotServiceConfig {
     pub fn fixed_zed_token_secret_ref(&self) -> Option<&str> {
         match &self.zed_token_source {
             ZedTokenSourceConfig::Fixed { secret_ref, .. } => Some(secret_ref),
-            ZedTokenSourceConfig::CandidateRoot { .. } => None,
+            ZedTokenSourceConfig::CandidateRoot { .. }
+            | ZedTokenSourceConfig::RequestRoot { .. } => None,
         }
     }
 
     pub fn candidate_revision_root(&self) -> Option<&Path> {
         match &self.zed_token_source {
-            ZedTokenSourceConfig::Fixed { .. } => None,
+            ZedTokenSourceConfig::Fixed { .. } | ZedTokenSourceConfig::RequestRoot { .. } => None,
             ZedTokenSourceConfig::CandidateRoot { root } => Some(root),
+        }
+    }
+
+    /// Dedicated owner-only receipts for callable request provisioning, not a token file.
+    pub fn request_snapshot_root(&self) -> Option<&Path> {
+        match &self.zed_token_source {
+            ZedTokenSourceConfig::RequestRoot { root } => Some(root),
+            _ => None,
         }
     }
 
@@ -138,6 +155,7 @@ impl SnapshotServiceConfig {
         match &self.zed_token_source {
             ZedTokenSourceConfig::Fixed { secret_ref, .. } => value == secret_ref,
             ZedTokenSourceConfig::CandidateRoot { .. } => valid_candidate_reference(value),
+            ZedTokenSourceConfig::RequestRoot { .. } => false,
         }
     }
 
@@ -170,6 +188,7 @@ impl SnapshotServiceConfig {
 pub(super) enum ZedTokenSourceConfig {
     Fixed { secret_ref: String, path: PathBuf },
     CandidateRoot { root: PathBuf },
+    RequestRoot { root: PathBuf },
 }
 
 fn required_identifier(

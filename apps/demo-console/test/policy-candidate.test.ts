@@ -14,6 +14,8 @@ import {
   preparePolicyCandidate,
   runDirectProcess,
 } from "../lib/policy-candidate/index.ts";
+import { loadPolicyVersionCandidate, preparePolicyVersion } from "../lib/policy-version/store.ts";
+import { validateVersionRequest } from "../lib/policy-version/validation.ts";
 
 const NOW = 1_800_000_000;
 const POLICY_HASH = "ab".repeat(32);
@@ -209,12 +211,135 @@ describe("M5 policy candidate preparation", () => {
   });
 });
 
+describe("M6 owner-allocated policy candidates", () => {
+  it("compiles the allocated namespace and reuses it without caller-selected versions", async () => {
+    const fixture = await createFixture();
+    const versionRoot = join(fixture.config.candidateRoot, "..", "versions");
+    await mkdir(versionRoot, { mode: 0o700 });
+    const config = { ...fixture.config, versionRoot };
+    const invocations: ProcessInvocation[] = [];
+    const runner = successfulRunner(invocations);
+    const input = request();
+    const prepared = await preparePolicyVersion(input, config, {
+      nowUnixSeconds: () => NOW,
+      runProcess: runner,
+    });
+    expect(prepared.identity).toEqual({
+      familyId: "12".repeat(16),
+      versionId: "34".repeat(16),
+      version: 1,
+    });
+    expect(prepared.candidate).toMatchObject({
+      policy_name: `family:${"12".repeat(16)}:v1`,
+      policy_version: "1",
+      resource_type: `dataset_${"34".repeat(16)}`,
+      expected_approval_epoch: "1",
+    });
+    const schema = await readFile(
+      join(config.candidateRoot, "candidate-m5-001", "schema.zed"),
+      "utf8",
+    );
+    expect(schema).toContain(`definition dataset_${"34".repeat(16)}`);
+    expect(invocations.map((call) => call.args[0])).toEqual([
+      "allocate-policy-version",
+      "compile",
+      "inspect-policy",
+    ]);
+    expect(
+      await preparePolicyVersion(input, config, {
+        nowUnixSeconds: () => NOW + 1,
+        runProcess: async () => {
+          throw new Error("unexpected rerun");
+        },
+      }),
+    ).toEqual(prepared);
+    expect(
+      await loadPolicyVersionCandidate("candidate-m5-001", config, {
+        nowUnixSeconds: () => NOW + 1,
+      }),
+    ).toEqual(prepared);
+    await expect(
+      preparePolicyVersion({ ...input, validForSeconds: 90_000 }, config),
+    ).rejects.toMatchObject({ code: "CANDIDATE_CONFLICT" });
+    await expect(
+      preparePolicyVersion({ ...input, familyId: "12".repeat(16) }, config),
+    ).rejects.toMatchObject({ code: "CANDIDATE_CONFLICT" });
+  });
+
+  it("keeps a reserved version for a compiler retry and rejects a retargeted projection", async () => {
+    const fixture = await createFixture();
+    const versionRoot = join(fixture.config.candidateRoot, "..", "versions");
+    await mkdir(versionRoot, { mode: 0o700 });
+    const config = { ...fixture.config, versionRoot };
+    const runner = successfulRunner([]);
+    await expect(
+      preparePolicyVersion(request(), config, {
+        nowUnixSeconds: () => NOW,
+        runProcess: async (invocation) => {
+          if (invocation.args[0] === "compile") throw new Error("private diagnostic");
+          await runner(invocation);
+        },
+      }),
+    ).rejects.toMatchObject({ code: "COMPILER_FAILED" });
+    const calls: ProcessInvocation[] = [];
+    const retried = await preparePolicyVersion(request(), config, {
+      nowUnixSeconds: () => NOW + 1,
+      runProcess: successfulRunner(calls),
+    });
+    expect(calls.map((call) => call.args[0])).toEqual(["compile", "inspect-policy"]);
+    expect(retried.identity.version).toBe(1);
+    const path = join(versionRoot, "candidate-m5-001.json");
+    const allocation = JSON.parse(await readFile(path, "utf8"));
+    await writeFile(path, JSON.stringify({ ...allocation, version_id: "56".repeat(16) }));
+    await expect(
+      loadPolicyVersionCandidate("candidate-m5-001", config, { nowUnixSeconds: () => NOW + 2 }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_CONFLICT" });
+  });
+
+  it("rejects reapproval, client-selected identity, and private storage below candidate cleanup", async () => {
+    expect(() => validateVersionRequest({ ...request(), expectedApprovalEpoch: 2 })).toThrow(
+      PolicyCandidateError,
+    );
+    expect(() => validateVersionRequest({ ...request(), versionId: "12".repeat(16) })).toThrow(
+      PolicyCandidateError,
+    );
+    expect(() => validateVersionRequest({ ...request(), familyId: "../private" })).toThrow(
+      PolicyCandidateError,
+    );
+    const fixture = await createFixture();
+    await expect(
+      preparePolicyVersion(request(), {
+        ...fixture.config,
+        versionRoot: join(fixture.config.candidateRoot, "versions"),
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_OWNER_CONFIGURATION" });
+  });
+});
+
 function successfulRunner(
   invocations: ProcessInvocation[],
   extraProjection: Record<string, unknown> = {},
 ): ProcessRunner {
   return async (invocation) => {
     invocations.push(invocation);
+    if (invocation.args[0] === "allocate-policy-version") {
+      await writeFile(
+        join(argument(invocation, "--root"), `${argument(invocation, "--candidate-id")}.json`),
+        JSON.stringify({
+          format_version: 1,
+          candidate_id: argument(invocation, "--candidate-id"),
+          request_digest: argument(invocation, "--request-digest"),
+          requested_family_id: invocation.args.includes("--family-id")
+            ? argument(invocation, "--family-id")
+            : null,
+          family_id: "12".repeat(16),
+          version_id: "34".repeat(16),
+          version: invocation.args.includes("--family-id") ? 3 : 1,
+        }),
+        { mode: 0o600 },
+      );
+      return;
+    }
     if (invocation.executable.endsWith("compiler")) {
       await writeFile(argument(invocation, "--out"), Buffer.from([1]), { mode: 0o600 });
       await writeFile(argument(invocation, "--diagnostic-out"), "{}\n", { mode: 0o600 });

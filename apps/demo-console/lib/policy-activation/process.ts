@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-
+import { parseApprovedPolicyCatalogue } from "../policy-version/catalogue-types.ts";
 import {
   type PolicyActivationConfig,
   PolicyActivationError,
@@ -16,7 +16,12 @@ export async function activatePolicyCandidate(
   config: PolicyActivationConfig,
 ): Promise<PolicyActivationProjection> {
   const { candidateId, approvedBy } = validateActivationIdentity(candidateIdInput, approvedByInput);
-  const output = await runActivationClient(config, candidateId, approvedBy);
+  const output = await runActivationClient(config, [
+    "--candidate-id",
+    candidateId,
+    "--approved-by",
+    approvedBy,
+  ]);
   let parsed: unknown;
   try {
     parsed = JSON.parse(output) as unknown;
@@ -26,10 +31,21 @@ export async function activatePolicyCandidate(
   return validateActivationProjection(parsed);
 }
 
+export async function listApprovedPolicyVersions(config: PolicyActivationConfig) {
+  if (!config.publication) throw new PolicyActivationError("POLICY_ACTIVATION_UNAVAILABLE");
+  try {
+    return parseApprovedPolicyCatalogue(
+      JSON.parse(await runActivationClient(config, ["--list-approved"], PROCESS_TIMEOUT_MS)),
+    );
+  } catch {
+    throw new PolicyActivationError("POLICY_ACTIVATION_UNAVAILABLE");
+  }
+}
+
 async function runActivationClient(
   config: PolicyActivationConfig,
-  candidateId: string,
-  approvedBy: string,
+  args: readonly string[],
+  timeoutMs = config.publication ? 125_000 : PROCESS_TIMEOUT_MS,
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let stdout = Buffer.alloc(0);
@@ -37,19 +53,16 @@ async function runActivationClient(
     let outputBytes = 0;
     let failed = false;
     let settled = false;
-    const child = spawn(
-      config.executable,
-      ["--candidate-id", candidateId, "--approved-by", approvedBy],
-      {
-        env: {
-          NODE_ENV: process.env.NODE_ENV ?? "production",
-          PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
-          RAZIEL_POLICY_ACTIVATION_SOCKET_PATH: config.socketPath,
-        },
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"] as const,
+    const child = spawn(config.executable, args, {
+      env: {
+        NODE_ENV: process.env.NODE_ENV ?? "production",
+        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+        RAZIEL_POLICY_ACTIVATION_SOCKET_PATH: config.socketPath,
+        ...(config.publication ? { RAZIEL_POLICY_PUBLICATION_MODE: "composed" } : {}),
       },
-    );
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"] as const,
+    });
     const count = (chunk: Buffer): boolean => {
       outputBytes += chunk.byteLength;
       if (outputBytes > MAX_OUTPUT_BYTES && !failed) {
@@ -78,7 +91,7 @@ async function runActivationClient(
     const timer = setTimeout(() => {
       failed = true;
       child.kill("SIGKILL");
-    }, PROCESS_TIMEOUT_MS);
+    }, timeoutMs);
     timer.unref();
     child.on("close", (code) => {
       clearTimeout(timer);

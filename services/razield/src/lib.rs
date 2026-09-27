@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "access-service")]
+pub mod access_request;
 pub mod admission;
 #[cfg(feature = "capability-service")]
 pub mod input_assembly;
@@ -14,6 +16,8 @@ pub mod private_snapshot;
 pub mod publication;
 #[cfg(feature = "capability-service")]
 pub mod queue;
+#[cfg(feature = "access-service")]
+pub mod request_preparation;
 pub mod service;
 pub mod spicedb;
 #[cfg(feature = "capability-service")]

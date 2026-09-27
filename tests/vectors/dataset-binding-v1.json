@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "policy_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "resource_type": "dataset_22222222222222222222222222222222",
+  "resource_scope": "scope:processor-v1",
+  "dataset_id": "processor-ledger",
+  "dataset_revision": "1",
+  "dataset_checksum": "3333333333333333333333333333333333333333333333333333333333333333",
+  "action": "query"
+}

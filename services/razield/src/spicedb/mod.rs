@@ -1,10 +1,14 @@
 //! Bounded runtime reads from one exact SpiceDB revision.
 
 mod client;
+pub(crate) mod composition;
 mod conversion;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod composition_tests;
 
 use std::error::Error;
 use std::fmt;
@@ -14,6 +18,7 @@ use raziel_snapshot::RelationshipRecord;
 use spicedb_rs_proto::authzed::api::v1 as authzed;
 
 pub use client::SpiceDbSnapshotReader;
+pub use composition::RequestSnapshotSource;
 
 const AGGREGATE_READ_LIMIT: u32 = 257;
 const MAX_RELATIONSHIPS: usize = 256;
@@ -30,6 +35,11 @@ trait SpiceDbReadApi: Send {
         &mut self,
         request: authzed::ReadRelationshipsRequest,
     ) -> Result<Vec<authzed::ReadRelationshipsResponse>, SpiceDbSnapshotError>;
+
+    async fn diff_schema(
+        &mut self,
+        request: authzed::DiffSchemaRequest,
+    ) -> Result<authzed::DiffSchemaResponse, SpiceDbSnapshotError>;
 }
 
 async fn read_exact<A>(
@@ -40,12 +50,24 @@ async fn read_exact<A>(
 where
     A: SpiceDbReadApi,
 {
+    read_exact_composition(api, policy, zed_token, None).await
+}
+
+async fn read_exact_composition<A: SpiceDbReadApi>(
+    api: &mut A,
+    policy: &ValidatedPolicyProgram,
+    zed_token: &str,
+    composition: Option<&str>,
+) -> Result<Vec<RelationshipRecord>, SpiceDbSnapshotError> {
     let policy = ValidatedPolicyProgram::new(
         policy.program().clone(),
         &raziel_authorization_core::TRUSTED_POLICY_CEILINGS,
     )
     .map_err(|_| SpiceDbSnapshotError::PolicyOutsideGuestLimits)?;
     validate_zed_token(zed_token)?;
+    if let Some(schema) = composition {
+        composition::validate_schema(schema)?;
+    }
 
     let reflected = api
         .reflect_schema(authzed::ReflectSchemaRequest {
@@ -54,6 +76,17 @@ where
         })
         .await?;
     require_exact_token(reflected.read_at.as_ref(), zed_token)?;
+    if let Some(schema) = composition {
+        composition::validate_reflection(&reflected, &policy)?;
+        let compared = api
+            .diff_schema(authzed::DiffSchemaRequest {
+                consistency: Some(exact_consistency(zed_token)),
+                comparison_schema: schema.to_owned(),
+            })
+            .await?;
+        require_exact_token(compared.read_at.as_ref(), zed_token)?;
+        composition::validate_diff(&compared)?;
+    }
 
     let mut relationships = Vec::new();
     for definition in &policy.program().definitions {
@@ -140,6 +173,9 @@ pub enum SpiceDbSnapshotError {
     PolicyOutsideGuestLimits,
     InvalidRevision,
     ReflectionFailed,
+    SchemaComparisonFailed,
+    SchemaMismatch,
+    CompositionLimitExceeded,
     ReadFailed,
     RevisionMismatch,
     RelationshipLimitExceeded,
@@ -159,6 +195,9 @@ impl fmt::Display for SpiceDbSnapshotError {
             Self::PolicyOutsideGuestLimits => "policy exceeds proof guest limits",
             Self::InvalidRevision => "invalid SpiceDB revision",
             Self::ReflectionFailed => "SpiceDB schema reflection failed",
+            Self::SchemaComparisonFailed => "SpiceDB schema comparison failed",
+            Self::SchemaMismatch => "SpiceDB schema does not match the accepted composition",
+            Self::CompositionLimitExceeded => "SpiceDB composition limit exceeded",
             Self::ReadFailed => "SpiceDB relationship read failed",
             Self::RevisionMismatch => "SpiceDB revision evidence mismatch",
             Self::RelationshipLimitExceeded => "SpiceDB relationship limit exceeded",

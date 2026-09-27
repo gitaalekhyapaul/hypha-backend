@@ -8,6 +8,7 @@ import type {
   CapabilityJobProjection,
   PublishedAccessSelection,
 } from "../lib/agent-capability/types.ts";
+import type { PolicyWorkflow } from "../lib/policy-workflow.ts";
 import {
   type BrowserOperatorSession,
   loginOperator,
@@ -16,7 +17,9 @@ import {
   PortalRequestError,
 } from "../lib/portal-client/index.ts";
 import { AccessGraphWorkspace } from "./access-graph-workspace.tsx";
+import { AccessRequestWorkspace } from "./access-request-workspace.tsx";
 import { AgentCapabilityWorkspace } from "./agent-capability-workspace.tsx";
+import { AgentRegistrationWorkspace } from "./agent-registration-workspace.tsx";
 import { DatasetWorkspace } from "./dataset-workspace.tsx";
 import { DenialLabWorkspace } from "./denial-lab-workspace.tsx";
 import { LoginView } from "./login-view.tsx";
@@ -28,6 +31,8 @@ import { WorkspaceOverview } from "./workspace-overview.tsx";
 type PortalState = "checking" | "signed-out" | "signed-in";
 type ActiveView =
   | "access"
+  | "access-requests"
+  | "agents"
   | "capability"
   | "dataset"
   | "denials"
@@ -39,6 +44,8 @@ type ActiveView =
 const navigation = [
   { id: "workspace", label: "Workspace", available: true },
   { id: "dataset", label: "Dataset", available: true },
+  { id: "agents", label: "Agents", available: true },
+  { id: "access-requests", label: "Access requests", available: true },
   { id: "policy", label: "Policy", available: true },
   { id: "access", label: "Access graph", available: true },
   { id: "capability", label: "Capability", available: true },
@@ -47,7 +54,11 @@ const navigation = [
   { id: "receipts", label: "Receipts", available: true },
 ] as const;
 
-export function OperatorPortal() {
+export function OperatorPortal({
+  policyWorkflow = "legacy",
+}: {
+  readonly policyWorkflow?: PolicyWorkflow;
+}) {
   const [state, setState] = useState<PortalState>("checking");
   const [session, setSession] = useState<BrowserOperatorSession | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("dataset");
@@ -146,31 +157,33 @@ export function OperatorPortal() {
           </div>
         </header>
         <nav aria-label="Scenario navigation">
-          {navigation.map((item) => {
-            const available = navigationAvailable(
-              item.id,
-              activePolicy,
-              publishedAccess,
-              reconciliationReady,
-            );
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className="nav-item"
-                data-active={item.id === activeView}
-                disabled={!available}
-                onClick={() => {
-                  if (available && isActiveView(item.id)) {
-                    setActiveView(item.id);
-                  }
-                }}
-              >
-                <span>{item.label}</span>
-                {!available ? <small>Next</small> : null}
-              </button>
-            );
-          })}
+          {navigation
+            .filter((item) => policyWorkflow === "legacy" || !legacyViews.has(item.id))
+            .map((item) => {
+              const available = navigationAvailable(
+                item.id,
+                activePolicy,
+                publishedAccess,
+                reconciliationReady,
+              );
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="nav-item"
+                  data-active={item.id === activeView}
+                  disabled={!available}
+                  onClick={() => {
+                    if (available && isActiveView(item.id)) {
+                      setActiveView(item.id);
+                    }
+                  }}
+                >
+                  <span>{item.label}</span>
+                  {!available ? <small>Next</small> : null}
+                </button>
+              );
+            })}
         </nav>
         <footer className="sidebar-footer">
           <span className="environment-dot" aria-hidden="true" />
@@ -185,7 +198,7 @@ export function OperatorPortal() {
         <header className="portal-topbar">
           <div>
             <span className="scenario-name">Payment reconciliation</span>
-            <span className="scenario-version">M5</span>
+            <span className="scenario-version">{policyWorkflow === "versioned" ? "M6" : "M5"}</span>
           </div>
           <div className="operator-menu">
             <span>{session.operatorId}</span>
@@ -202,13 +215,20 @@ export function OperatorPortal() {
             </p>
           ) : null}
           <div hidden={activeView !== "workspace"}>
-            <WorkspaceOverview />
+            <WorkspaceOverview workflow={policyWorkflow} />
           </div>
           <div hidden={activeView !== "dataset"}>
             <DatasetWorkspace csrfToken={session.csrfToken} onSessionExpired={signOut} />
           </div>
+          {activeView === "agents" ? (
+            <AgentRegistrationWorkspace csrfToken={session.csrfToken} onSessionExpired={signOut} />
+          ) : null}
+          {activeView === "access-requests" ? (
+            <AccessRequestWorkspace csrfToken={session.csrfToken} onSessionExpired={signOut} />
+          ) : null}
           <div hidden={activeView !== "policy"}>
             <PolicyWorkspace
+              workflow={policyWorkflow}
               csrfToken={session.csrfToken}
               onSessionExpired={signOut}
               onPolicyActivated={(policy) => {
@@ -279,6 +299,13 @@ export function OperatorPortal() {
   );
 }
 
+const legacyViews: ReadonlySet<ActiveView> = new Set([
+  "access",
+  "capability",
+  "reconciliation",
+  "denials",
+]);
+
 function navigationAvailable(
   id: (typeof navigation)[number]["id"],
   activePolicy: ActivePolicySelection | null,
@@ -294,7 +321,14 @@ function navigationAvailable(
   if (id === "reconciliation" || id === "denials") {
     return reconciliationReady;
   }
-  return id === "workspace" || id === "dataset" || id === "policy" || id === "receipts";
+  return (
+    id === "workspace" ||
+    id === "dataset" ||
+    id === "agents" ||
+    id === "access-requests" ||
+    id === "policy" ||
+    id === "receipts"
+  );
 }
 
 function isActiveView(id: (typeof navigation)[number]["id"]): id is ActiveView {

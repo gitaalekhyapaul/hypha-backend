@@ -1,14 +1,14 @@
 # M6-M7 Agent Reconciliation Demo Plan
 
-Status: scope agreed, implementation pending
+Status: B-0064 and B-0065 locally complete. Paused before B-0066 by the maintainer.
 
-Date: 2026-09-25
+Date: 2026-09-27
 
 Decision: [ADR-0019](../decisions/0019-public-sdk-and-two-agent-reconciliation.md)
 
 B-0063 has drafted [Agent API v1](AGENT-API-V1.md) and
 [ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md). The new request
-signature and policy-version provisioning decisions await approval. This does not
+signature and policy-version provisioning decisions are approved. This does not
 change the accepted product scope in ADR-0019.
 
 ## Outcome
@@ -24,15 +24,30 @@ domain scenario move to the deferred backlog. No claim of real-data validation i
 
 ## Current Gaps
 
-- `packages/sdk-ts` is a private signing-helper package with a private workspace
-  dependency. It lacks an external transport client and persistent caller integration.
-- The current portal holds agent sessions inside the operator workflow.
-- The capability API starts from an already-selected snapshot. It has no access-intent
-  inbox or operator approval lifecycle.
+- The standalone SDK candidate supports externally supplied signers, signed `/me`,
+  and access-request create/list/get/cancel. Polling, final issuance, and the protected
+  query transport remain pending.
+- External agent registration and tokens are implemented. The legacy M5 demonstration
+  still holds its capability sessions inside the operator workflow.
+- Agent access intents now reach a durable owner service and operator inbox. Review
+  supports detail, approval, rejection, and cancellation. Approval pins the immutable
+  policy package, dataset, and private recipe. Private snapshot preparation passes
+  against real SpiceDB and reuses its signed snapshot on exact retry. Automatic
+  preparation and dispatch remain B-0066 work.
+  The legacy capability API starts from an
+  already-selected snapshot.
 - M5 admits one distinct nonterminal proof job and reports busy for another request.
-- Policy candidate cleanup and shared SpiceDB schema writes assume one selected
-  policy flow. Reusable policy packages need durable owner storage and version binding.
-- There is no external-agent token registry, agent dashboard, or message channel.
+- M5 policy candidate cleanup and schema writes assume one selected policy flow.
+  The new composed owner role approves, retains, and installs coexisting versions.
+  Two-version publication and exact retries passed against pinned SpiceDB locally.
+  The builder UI now publishes versions in the isolated opt-in M6 runtime. Its
+  connected two-version browser flow and installed-approval catalogue passed locally.
+  Immutable dataset-binding storage and gateway enforcement are implemented. Their
+  approval writer is connected. Exact-revision aggregate checks passed in the
+  request-triggered snapshot gate. M5 migration
+  is not implicit. The legacy
+  publisher rejects the reserved versioned namespace.
+- Agent dashboards and their message channel remain pending.
 
 ## Repository Ownership
 
@@ -257,11 +272,12 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 ## Remaining Inputs And Risks
 
 - No further product clarification is needed for this plan.
-- This task needs sibling filesystem write access before cross-repository edits.
+- SDK sibling writes were approved and applied locally. Agent-repository edits remain later work.
 - Live inference needs a configured endpoint, model, and secret at deployment time.
 - Public npm release needs package ownership, authentication, and license metadata.
-- ADR-0020 proposes compatible shared-schema provisioning and exact agent-request
-  signatures. Approval and runtime validation remain pending. Neither proposal changes
+- ADR-0020 approves compatible shared-schema provisioning and exact agent-request
+  signatures. Authentication and schema provisioning pass local live tests.
+  Neither decision changes
   the existing SP1 authorization statement.
 - LLM behavior is variable. Dashboard controls and bounded tools must make the demo
   resumable without claiming deterministic model reasoning.
@@ -270,6 +286,6 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 
 ## Exact Next Action
 
-Review ADR-0020's two security decisions, then implement B-0064 registration, signed
-authentication, and the standalone SDK foundation. No repository or package is
-published by the contract task.
+Remain paused. On maintainer resume, claim B-0066 for serial dispatch, late agent
+signatures, protected queries, and SDK release. B-0064 and B-0065 do not constitute
+a public npm release or a VM deployment.

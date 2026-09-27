@@ -50,6 +50,12 @@ importers:
 
   apps/demo-console:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 'catalog:'
+        version: 2.12.1
+      '@raziel/proto-ts':
+        specifier: workspace:*
+        version: link:../../packages/proto-ts
       next:
         specifier: 'catalog:'
         version: 16.2.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -59,6 +65,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.7(react@19.2.7)
+      redis:
+        specifier: 'catalog:'
+        version: 6.2.1
     devDependencies:
       '@biomejs/biome':
         specifier: 'catalog:'
@@ -134,9 +143,9 @@ importers:
 
   packages/sdk-ts:
     dependencies:
-      '@raziel/proto-ts':
-        specifier: workspace:*
-        version: link:../proto-ts
+      '@gitaalekhyapaul/raziel-sdk-ts':
+        specifier: file:vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz
+        version: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz
     devDependencies:
       '@biomejs/biome':
         specifier: 'catalog:'
@@ -224,6 +233,11 @@ packages:
 
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
+
+  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz':
+    resolution: {integrity: sha512-qS6nK9pGd361b41qr7ctFGhFW5s05Xxs1bYYw0eic7uytwFsXjom/nIWiNG7fj4h5XjhZCIgEoaAFY1Oaf5l6A==, tarball: file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz}
+    version: 0.1.0
+    engines: {node: '>=24.18.0'}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -1049,6 +1063,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@gitaalekhyapaul/raziel-sdk-ts@file:packages/sdk-ts/vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz':
+    dependencies:
+      '@bufbuild/protobuf': 2.12.1
 
   '@img/colour@1.1.0':
     optional: true

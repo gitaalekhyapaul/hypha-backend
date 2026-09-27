@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +25,44 @@ afterEach(async () => {
 });
 
 describe("synthetic reconciliation dataset store", () => {
+  it("checks the pinned revision and recomputes its checksum in the same read as the query", async () => {
+    const { store, filePath } = await temporaryStore();
+    await store.putDraft(
+      {
+        datasetId: "bound-ledger",
+        sourceId: "portal-local",
+        sourceLabel: "Binding test",
+        rows: [firstRow()],
+      },
+      NOW,
+    );
+    const dataset = await store.finalize("bound-ledger", NOW);
+    const bound = {
+      dataset_id: dataset.datasetId,
+      dataset_revision: String(dataset.revision),
+      dataset_checksum: dataset.finalization?.checksum ?? "",
+    };
+    const query = {
+      fromOccurredAt: "2026-08-01T00:00:00Z",
+      toOccurredAt: "2026-08-03T00:00:00Z",
+      limit: 10,
+    };
+    expect(await store.query(dataset.datasetId, query, bound)).toHaveLength(1);
+    for (const altered of [
+      { ...bound, dataset_id: "other" },
+      { ...bound, dataset_revision: "2" },
+      { ...bound, dataset_checksum: "00".repeat(32) },
+    ]) {
+      await expect(store.query(dataset.datasetId, query, altered)).rejects.toBeInstanceOf(
+        ReconciliationValidationError,
+      );
+    }
+    const altered = { ...dataset, rows: [{ ...dataset.rows[0], amountMinor: "99999" }] };
+    await writeFile(filePath, JSON.stringify({ formatVersion: 1, datasets: [altered] }));
+    await expect(store.query(dataset.datasetId, query, bound)).rejects.toBeInstanceOf(
+      ReconciliationValidationError,
+    );
+  });
   it("persists, finalizes, freezes, and clones one bounded dataset", async () => {
     const { directory, filePath, store } = await temporaryStore();
     const draft = await store.putDraft(

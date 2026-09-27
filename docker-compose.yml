@@ -169,7 +169,7 @@ services:
       - /run/redis:rw,nosuid,nodev,mode=0700
     volumes:
       - redis-data:/data
-    profiles: ["services", "queue-conformance", "proof", "m5-live"]
+    profiles: ["services", "queue-conformance", "proof", "m5-live", "apps"]
 
   razield-private-init:
     <<: *toolchain-service
@@ -1444,6 +1444,52 @@ services:
       - owner-internal
     profiles: ["apps"]
 
+  demo-access-private-init:
+    <<: *toolchain-service
+    user: "0:0"
+    command:
+      - sh
+      - -ec
+      - |
+        chown "$${HOST_UID}:$${HOST_GID}" /var/lib/raziel/access-intents
+        chmod 0700 /var/lib/raziel/access-intents
+    environment:
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
+    network_mode: none
+    read_only: true
+    volumes:
+      - m6-access-intents:/var/lib/raziel/access-intents
+    profiles: ["apps"]
+
+  demo-access-api:
+    <<: *secure-rust-service
+    command: ["/workspace/.raziel/m5/policy-tools/razield-access"]
+    environment:
+      RAZIEL_ACCESS_BIND_ADDR: 0.0.0.0:50054
+      RAZIEL_ACCESS_PRIVATE_ROOT: /var/lib/raziel/access-intents
+      RAZIEL_ACCESS_PREFIX: ${RAZIEL_M6_ACCESS_PREFIX:-raziel-m6-access}
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+    volumes:
+      - .:/workspace:ro
+      - m6-access-intents:/var/lib/raziel/access-intents
+    depends_on:
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-access-private-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/50054'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      - owner-internal
+    restart: unless-stopped
+    profiles: ["apps"]
+
   demo-console:
     <<: *toolchain-service
     command: ["pnpm", "--filter", "@raziel/demo-console", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
@@ -1458,7 +1504,16 @@ services:
         condition: service_healthy
       demo-gateway:
         condition: service_healthy
+      demo-access-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_TRUST_DOMAIN_ID:-raziel-local-dev}
+      RAZIEL_AGENT_AUTH_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-agent-auth
+      RAZIEL_ACCESS_CLIENT_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-access-client
+      RAZIEL_ACCESS_ENDPOINT: http://demo-access-api:50054
       RAZIEL_CAPABILITY_MODE: ${RAZIEL_CAPABILITY_MODE:-recorded}
       RAZIEL_CAPABILITY_CLIENT_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-capability-client
       RAZIEL_RAZIELD_ENDPOINT: ${RAZIEL_RAZIELD_ENDPOINT:-http://demo-capability-api:50052}
@@ -1471,6 +1526,7 @@ services:
       RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m5/operator-secret.json
       RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m5/receipts.jsonl
       RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m5/policy-candidates
+      RAZIEL_POLICY_VERSION_ROOT: /workspace/.raziel/m5/policy-versions
       RAZIEL_POLICY_COMPILER_EXECUTABLE: /workspace/.raziel/m5/policy-tools/spicedb-ir-compiler
       RAZIEL_ADMIN_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-admin
       RAZIEL_POLICY_ACTIVATION_EXECUTABLE: /workspace/.raziel/m5/policy-tools/raziel-policy-activate
@@ -1484,6 +1540,9 @@ services:
       - pnpm-store:/pnpm/store
       - m5-access-graph-ipc:/run/raziel-access-graph
       - m5-policy-activation-ipc:/run/raziel-policy-activation
+    networks:
+      - default
+      - owner-internal
     profiles: ["apps"]
 
 volumes:
@@ -1501,6 +1560,7 @@ volumes:
   m5-proof-ipc:
   m5-registry-writer-ipc:
   m5-verifier-ipc:
+  m6-access-intents:
   pnpm-store:
   queue-conformance-target:
   redis-data:

@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { handleProtectedQueryRequest } from "../app/api/datasets/[datasetId]/protected-query/route.ts";
+import type { DatasetBindingResolver } from "../src/protected-request/dataset-binding.ts";
 import {
   AuthorizationRejectedError,
   ProtectedQueryInfrastructureError,
@@ -14,6 +15,7 @@ import { JsonlReceiptStore } from "../src/protected-request/receipt-store.ts";
 import { createPublicReceipt, ProtectedQueryService } from "../src/protected-request/service.ts";
 import type {
   NonceStore,
+  ProtectedQueryDependencies,
   ProtectedRequestSignatureVerifier,
   ProtectedRequestVerifier,
   PublicReceipt,
@@ -23,13 +25,13 @@ import type {
   VerifiedCapabilityClaims,
 } from "../src/protected-request/types.ts";
 import {
-  parseCapabilityInspectionOutput,
-  parseVerifierOutput,
-} from "../src/protected-request/verifier.ts";
-import {
   encodeCachedVerification,
   parseCachedVerification,
 } from "../src/protected-request/verified-cache.ts";
+import {
+  parseCapabilityInspectionOutput,
+  parseVerifierOutput,
+} from "../src/protected-request/verifier.ts";
 
 const NOW = 1_800_000_000n;
 const DATASET_ID = "reconciliation-demo";
@@ -46,6 +48,55 @@ afterEach(async () => {
       .splice(0)
       .map((directory) => rm(directory, { recursive: true, force: true })),
   );
+});
+
+describe("versioned dataset enforcement", () => {
+  it.each([false, true])("resolves exact bindings on every request, cached=%s", async (cached) => {
+    const scoped = claims({
+      resourceType: `dataset_${"aa".repeat(16)}`,
+      resourceScope: "scope:revision-1",
+    });
+    const queryDataset = vi.fn<ProtectedQueryDependencies["queryDataset"]>(async () => [
+      transaction(),
+    ]);
+    const binding = {
+      format_version: 1 as const,
+      policy_hash: scoped.policyHashHex,
+      resource_type: scoped.resourceType,
+      resource_scope: scoped.resourceScope,
+      dataset_id: DATASET_ID,
+      dataset_revision: "1",
+      dataset_checksum: "cc".repeat(32),
+      action: "query" as const,
+    };
+    let present = true;
+    const resolveDatasetBinding = vi.fn(async () => {
+      if (!present) throw new AuthorizationRejectedError();
+      return binding;
+    });
+    const service = serviceFixture({
+      claims: scoped,
+      queryDataset,
+      resolveDatasetBinding,
+      ...(cached
+        ? {
+            verificationCache: {
+              get: async () => verifiedCapability(scoped),
+              put: async () => undefined,
+            },
+          }
+        : {}),
+    });
+    const result = await service.execute(DATASET_ID, envelope());
+    expect(result.verification_path).toBe(cached ? "CACHE" : "VERIFIER");
+    expect(resolveDatasetBinding).toHaveBeenCalledWith(scoped, DATASET_ID);
+    expect(queryDataset.mock.calls[0]?.[2]).toEqual(binding);
+    present = false;
+    await expect(
+      service.execute(DATASET_ID, envelope({ request_nonce: "ab".repeat(32) })),
+    ).rejects.toBeInstanceOf(AuthorizationRejectedError);
+    expect(queryDataset).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("protected reconciliation query", () => {
@@ -568,6 +619,7 @@ describe("protected reconciliation query", () => {
 });
 
 interface FixtureOverrides {
+  readonly resolveDatasetBinding?: DatasetBindingResolver;
   readonly operations?: string[];
   readonly claims?: VerifiedCapabilityClaims;
   readonly nonceClaimed?: boolean;
@@ -584,7 +636,7 @@ interface FixtureOverrides {
   readonly nonceStore?: NonceStore;
   readonly verificationCache?: VerificationCache;
   readonly signatureVerifier?: ProtectedRequestSignatureVerifier;
-  readonly queryDataset?: () => Promise<readonly ReturnType<typeof transaction>[]>;
+  readonly queryDataset?: ProtectedQueryDependencies["queryDataset"];
 }
 
 function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService {
@@ -663,6 +715,9 @@ function serviceFixture(overrides: FixtureOverrides = {}): ProtectedQueryService
       },
     } satisfies ReceiptStore);
   return new ProtectedQueryService({
+    ...(overrides.resolveDatasetBinding
+      ? { resolveDatasetBinding: overrides.resolveDatasetBinding }
+      : {}),
     verifier,
     verificationCache,
     signatureVerifier,

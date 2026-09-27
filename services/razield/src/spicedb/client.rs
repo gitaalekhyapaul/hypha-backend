@@ -8,7 +8,10 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Request, Status};
 
-use super::{MAX_SPICEDB_MESSAGE_BYTES, SpiceDbReadApi, SpiceDbSnapshotError, read_exact};
+use super::{
+    MAX_SPICEDB_MESSAGE_BYTES, RequestSnapshotSource, SpiceDbReadApi, SpiceDbSnapshotError,
+    read_exact, read_exact_composition,
+};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const RPC_TIMEOUT: Duration = Duration::from_secs(15);
@@ -59,6 +62,22 @@ impl SpiceDbSnapshotReader {
         read_exact(self, policy, zed_token).await
     }
 
+    /// Checks the complete accepted composition before reading selected-policy tuples.
+    pub async fn read_request_source(
+        &mut self,
+        policy: &raziel_policy_ir::ValidatedPolicyProgram,
+        source: &RequestSnapshotSource,
+    ) -> Result<Vec<raziel_snapshot::RelationshipRecord>, SpiceDbSnapshotError> {
+        source.validate(policy)?;
+        read_exact_composition(
+            self,
+            policy,
+            &source.zed_token,
+            Some(&source.accepted_composition_schema),
+        )
+        .await
+    }
+
     fn request<T>(&self, message: T) -> Request<T> {
         let mut request = Request::new(message);
         request
@@ -70,6 +89,23 @@ impl SpiceDbSnapshotReader {
 
 #[tonic::async_trait]
 impl SpiceDbReadApi for SpiceDbSnapshotReader {
+    async fn diff_schema(
+        &mut self,
+        request: authzed::DiffSchemaRequest,
+    ) -> Result<authzed::DiffSchemaResponse, SpiceDbSnapshotError> {
+        let request = self.request(request);
+        self.schema
+            .diff_schema(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(|status| {
+                if status.code() == tonic::Code::Unauthenticated {
+                    SpiceDbSnapshotError::AuthenticationFailed
+                } else {
+                    SpiceDbSnapshotError::SchemaComparisonFailed
+                }
+            })
+    }
     async fn reflect_schema(
         &mut self,
         request: authzed::ReflectSchemaRequest,

@@ -27,6 +27,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "compile" {
 		return runCompile(args[1:], stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "compose" {
+		return runCompose(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "compare-schema" {
+		return runCompareSchema(args[1:], stdout, stderr)
+	}
 
 	if len(args) == 0 {
 		fmt.Fprintf(stderr, "%s: command is required\n", name)
@@ -49,5 +55,7 @@ func writeRootUsage(writer io.Writer) {
 	fmt.Fprintf(writer, "usage: %s <command> [options]\n", name)
 	fmt.Fprintln(writer, "commands:")
 	fmt.Fprintln(writer, "  compile  compile a SpiceDB schema into Raziel PolicyIR")
+	fmt.Fprintln(writer, "  compose  validate and compose private owner policy packages offline")
+	fmt.Fprintln(writer, "  compare-schema  compare trusted and reflected compiled schema structures")
 	fmt.Fprintln(writer, "  version  print the compiler adapter version")
 }

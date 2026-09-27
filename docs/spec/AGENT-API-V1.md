@@ -1,7 +1,9 @@
 # Agent API v1
 
-Status: proposed under [ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md).
-No endpoint in this document is claimed as implemented.
+Status: accepted under [ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md).
+Implemented locally: registration/token management, signed `/me`, access-request
+create/list/get/cancel, and operator list/detail/reject/cancel. Approval, resume,
+issuance, and the agent-authenticated protected-query facade remain planned.
 
 Date: 2026-09-25
 
@@ -203,6 +205,29 @@ safe summaries and never embed proof bytes. Cursors are opaque and owner-scoped.
 
 ## Lifecycle And Dispatch
 
+### Operator Approval Input
+
+The operator-only `POST /api/operator/access-requests/{agentId}/{requestId}/approve`
+accepts `formatVersion: 1`, `expectedGeneration`, `policyRecordId`, `policyVersionId`,
+`approvalEpoch`, and `grant`. Generation and epoch use canonical positive decimal
+strings. `grant` contains `formatVersion: 1`, `teamId`, `organizationId`,
+`approvedAmount` (positive decimal string within JavaScript's safe integer range),
+and Boolean `isApproved`, `isSuspended`, and `isOverride` fields. These inputs cover
+the existing visual rule families. They stay in the owner's private approval file.
+
+The facade checks the operator session and CSRF token, then reads finalized dataset
+metadata itself. The owner compares that metadata to the private original intent,
+resolves the exact installed current policy approval, and retains an immutable
+dataset binding. Callers cannot supply a checksum, resource alias, PolicyIR, or
+agent key override. Successful approval enters `APPROVED_WAITING`, not a proof job.
+
+An exact retained approval retry can omit the dataset lookup inside the owner RPC.
+That lookup-only operation cannot create an approval. New approval requires current
+trusted dataset metadata. Changed selection or private grant inputs conflict with
+the retained approval. Cancellation or expiry never returns to an approved state.
+The original agent identity, task, purpose, action, and context remain bound through
+the existing private intent. Dispatch must recheck policy validity before preparation.
+
 | State | Entered by | Permitted next states |
 | --- | --- | --- |
 | `PENDING_REVIEW` | New authenticated intent | `APPROVED_WAITING`, `REJECTED`, `CANCELED`, `EXPIRED` |
@@ -306,6 +331,20 @@ this read-only retry behavior to a future side-effecting dataset operation.
 
 ## Policy Package Migration
 
+Implementation checkpoint: the owner-only `/api/policies/versions` preparation/read
+routes allocate immutable identities and compile private namespaced candidates.
+Preparation does not approve policies or provision snapshots. The separate
+`POST /api/policies/versions/{candidateId}/publish` route calls an explicitly
+configured composed owner role. It approves and retains the exact package, checks
+live schema drift, and installs the aggregate with durable uncertain-write recovery.
+Two coexisting versions and exact retries passed against pinned SpiceDB locally.
+The opt-in M6 runtime connects the visual builder to this role and removes legacy
+writers from its service set. Its two-version browser publication passed locally.
+M5 remains the default. The legacy activation adapter rejects the reserved namespace,
+and both writers must not run against the same schema.
+The [inbox runbook](../runbooks/AGENT-ACCESS-INBOX.md#policy-version-preparation)
+records the current operator contract.
+
 New families use opaque 32-lowercase-hex IDs. Versions have separate IDs of the same
 form and positive integer version numbers. Allocate numbers atomically. Signed names
 use `family:<familyId>:v<version>` within the existing 128-byte policy-name bound.
@@ -374,6 +413,21 @@ that resource type/scope. Dispatch and both cold and cached gateway paths check 
 binding and the dataset in the signed target. Unknown mappings, changed revisions,
 retargeted aliases, or type-prefix matches alone release no data. No guest change is needed.
 
+The owner stores version-1 binding JSON under
+`<root>/<policy_hash>/<resource_type>/<resource_scope>.json`. Its exact fields are
+`format_version`, `policy_hash`, `resource_type`, `resource_scope`, `dataset_id`,
+`dataset_revision`, `dataset_checksum`, and `action`. Revision is a canonical positive
+decimal string within JavaScript's safe integer range. Hashes are lowercase SHA-256
+hex. Directories are `0700`, files are `0600`, and records are bounded to 4 KiB.
+No overwrite or alias retargeting is allowed. This is trusted owner routing metadata,
+not a new commitment input or standalone authorization grant.
+
+`RAZIEL_DATASET_BINDING_MODE=required` selects exact mapping in the M6 gateway.
+`RAZIEL_DATASET_BINDING_ROOT` is a read-only owner volume. Missing configuration and
+invalid records fail closed. The separate default M5 runtime remains in `legacy`
+mode until explicit migration. The M6 approval writer is connected. Dispatch and
+the external agent protected-query integration remain B-0066 work.
+
 ## SDK And Implementation Order
 
 ```ts
@@ -436,6 +490,24 @@ validation, late signatures, restart reconciliation, cancellation races, and two
 requests. A final VM test must stop issuer/dispatcher processes and still query through
 the SDK using independent verification and then cached claims.
 
-ADR-0020's two security decisions require maintainer approval before implementing
-the new public signature or policy-provisioning boundary. No runtime test or deployed
-behavior is claimed by this specification.
+The maintainer approved ADR-0020's two security decisions on 2026-09-25.
+B-0064 implements registration, token lifecycle, signed `/me`, and the packaged SDK
+foundation. Local live HTTP tests cover two agents, wrong-key rejection, replay,
+rotation, revocation, duplicate headers, and exact targets. The console HTTP entry
+point overwrites caller-supplied internal target metadata before route handling.
+B-0065 adds durable owner-qualified intents, exact retries, own-request reads, and
+operator list/detail/reject/cancel. Focused integration uses real Rust authentication,
+Redis, the owner CLI and RPC service. Dataset lookup and operator-session admission
+are fixture dependencies in that test. The connected browser inbox shows real stored
+results. Composed owner publication and the connected two-version UI flow passed
+against pinned SpiceDB locally. The opt-in M6 runtime is separate from M5, not an
+automatic migration. Operator approval now passes a connected browser and real
+packaged-SDK HTTP gate against the trusted finalized dataset and installed policy.
+It enters APPROVED_WAITING and exposes no recipe, proposal, or capability.
+Private preparation now provisions the selected grant, validates the exact accepted
+schema composition at its SpiceDB revision, and creates a signed snapshot proposal.
+Its connected real-service gate passed, including retry reuse of the same snapshot.
+It leaves public state at APPROVED_WAITING. B-0066 owns serial reservation, invocation
+of preparation, AWAITING_SIGNATURE publication, dispatch, resume, issuance, and the
+agent protected-query facade. No automatic proof starts from approval in B-0065.
+No VM deployment or npm publication is claimed by these local results.

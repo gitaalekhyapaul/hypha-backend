@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+mod agent_api;
 mod authority;
 mod encoding;
 mod policy;
@@ -13,6 +14,11 @@ use std::fmt::{self, Display, Formatter};
 use raziel_policy_ir::ValidatedPolicyProgram;
 use sha2::{Digest, Sha256};
 
+pub use agent_api::{
+    AGENT_API_REQUEST_FORMAT_VERSION, AGENT_API_REQUEST_SIGNATURE_DOMAIN, AgentApiCanonicalError,
+    AgentApiRequestSignatureInputV1, MAX_AGENT_API_AUDIENCE_BYTES,
+    MAX_AGENT_API_TIMESTAMP_UNIX_SECONDS, agent_api_request_signature_message,
+};
 pub use encoding::CanonicalEncoder;
 pub use policy::{CANONICAL_POLICY_ENCODING_VERSION, encode_policy};
 pub use protected_request::{

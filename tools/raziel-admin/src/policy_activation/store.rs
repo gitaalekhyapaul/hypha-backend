@@ -29,7 +29,7 @@ const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_APPROVED_BY_BYTES: usize = 4096;
 const WRITER_ATTEMPTS: usize = 3;
 
-pub(super) struct PolicyActivationStore {
+pub(crate) struct PolicyActivationStore {
     candidate_root: PathBuf,
     activation_root: PathBuf,
     registry_root: PathBuf,
@@ -39,7 +39,7 @@ pub(super) struct PolicyActivationStore {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct StoredActivationProjection {
+pub(crate) struct StoredActivationProjection {
     pub record_id: String,
     pub policy_name: String,
     pub policy_version: String,
@@ -52,7 +52,7 @@ pub(super) struct StoredActivationProjection {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum StoreActivationError {
+pub(crate) enum StoreActivationError {
     InvalidRequest,
     Conflict,
     CandidateRejected,
@@ -60,7 +60,7 @@ pub(super) enum StoreActivationError {
 }
 
 impl PolicyActivationStore {
-    pub(super) fn new(
+    pub(crate) fn new(
         candidate_root: PathBuf,
         activation_root: PathBuf,
         registry_root: PathBuf,
@@ -94,9 +94,29 @@ impl PolicyActivationStore {
         &self,
         request: PolicyActivationRequestWire,
     ) -> Result<StoredActivationProjection, StoreActivationError> {
+        self.activate_inner(request, false)
+    }
+
+    pub(crate) fn activate_version(
+        &self,
+        request: PolicyActivationRequestWire,
+    ) -> Result<StoredActivationProjection, StoreActivationError> {
+        self.activate_inner(request, true)
+    }
+
+    fn activate_inner(
+        &self,
+        request: PolicyActivationRequestWire,
+        versioned: bool,
+    ) -> Result<StoredActivationProjection, StoreActivationError> {
         validate_request(&request)?;
         let now = trusted_now()?;
         let manifest = self.load_manifest(&request.candidate_id)?;
+        // Versioned packages need the composed-schema publication boundary. The
+        // legacy M5 activation path must not approve them as temporary candidates.
+        if manifest.policy_name.starts_with("family:") != versioned {
+            return Err(StoreActivationError::CandidateRejected);
+        }
         let current = self.load_registry(now)?;
         if let Some(record) = existing_record(&current, &manifest)? {
             self.remove_envelope_if_present(&request.candidate_id)?;
@@ -379,7 +399,7 @@ fn required_timestamp(value: Option<&prost_types::Timestamp>) -> Result<i64, Sto
     Ok(value.seconds)
 }
 
-fn trusted_now() -> Result<i64, StoreActivationError> {
+pub(crate) fn trusted_now() -> Result<i64, StoreActivationError> {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| StoreActivationError::Unavailable)?
@@ -411,5 +431,68 @@ fn map_writer_error(error: RegistryWriterClientError) -> StoreActivationError {
         | RegistryWriterClientError::StaleGeneration
         | RegistryWriterClientError::RegistryRejected
         | RegistryWriterClientError::PublicationFailed => StoreActivationError::Unavailable,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::DirBuilderExt;
+
+    #[test]
+    fn versioned_candidate_cannot_bypass_composed_publication_through_legacy_activation() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("raziel-activation-{}-{unique}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&root)
+            .unwrap();
+        let candidates = root.join("candidates");
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&candidates)
+            .unwrap();
+        let directory = candidates.join("candidate-1");
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&directory)
+            .unwrap();
+        let manifest = PolicyCandidateManifestWire {
+            format_version: 1,
+            candidate_id: "candidate-1".into(),
+            record_id: "record-1".into(),
+            policy_name: format!("family:{}:v1", "12".repeat(16)),
+            policy_version: "1".into(),
+            policy_hash: vec![1; 32],
+            expected_approval_epoch: 1,
+            valid_from_unix_seconds: 1,
+            valid_until_unix_seconds: i64::MAX,
+            ..Default::default()
+        };
+        atomic_write_new(&directory.join("candidate.pb"), &manifest.encode_to_vec()).unwrap();
+        let store = PolicyActivationStore::new(
+            candidates,
+            root.join("activation"),
+            root.join("registry"),
+            root.join("authority.sock"),
+            root.join("writer.sock"),
+            "test-version-publication",
+        )
+        .unwrap();
+        // No registry or sockets exist. Rejection must precede authority and writer access.
+        assert_eq!(
+            store.activate(PolicyActivationRequestWire {
+                format_version: 1,
+                candidate_id: "candidate-1".into(),
+                approved_by: "operator-test".into(),
+                operation: 0,
+            }),
+            Err(StoreActivationError::CandidateRejected)
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

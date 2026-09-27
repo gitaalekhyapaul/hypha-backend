@@ -1,0 +1,199 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+command -v node >/dev/null 2>&1 || {
+  printf 'check-m6-policy-compose requires the repository Node.js toolchain\n' >&2
+  exit 1
+}
+
+# Render only. This gate never starts, stops, builds or pulls a container.
+exec node --input-type=module - "$repo_root" <<'NODE'
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
+const root = process.argv[2];
+const expectedServices = [
+  "demo-access-api", "demo-access-private-init", "demo-console", "demo-console-init",
+  "demo-console-policy-tools", "demo-gateway", "demo-policy-activation",
+  "demo-policy-authority", "demo-policy-registry-init", "demo-policy-registry-writer",
+  "demo-policy-runtime-init", "redis", "spicedb",
+].sort();
+const composeArguments = ["-f", "docker-compose.yml", "-f", "docker-compose.m6.yml"];
+const environment = {
+  ...process.env,
+  RAZIEL_M6_CONSOLE_BIND_HOST: "127.0.0.1",
+  RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN: "",
+  RAZIEL_M6_TRUST_DOMAIN_ID: "raziel-m6-compose-check",
+};
+
+function render(profile, port) {
+  return JSON.parse(execFileSync(resolve(root, "scripts/compose"), [
+    ...composeArguments, "--profile", profile, "config", "--format", "json",
+  ], {
+    cwd: root,
+    env: { ...environment, RAZIEL_M6_CONSOLE_PORT: port },
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  }));
+}
+
+function mount(service, target, source, readOnly = false) {
+  const matches = (service.volumes ?? []).filter((entry) => entry.target === target);
+  assert.equal(matches.length, 1, `one mount required at ${target}`);
+  const entry = matches[0];
+  assert.equal(entry.source, source, `wrong source at ${target}`);
+  assert.equal(entry.read_only ?? false, readOnly, `wrong access at ${target}`);
+  return entry;
+}
+
+function network(service, expected) {
+  assert.deepEqual(Object.keys(service.networks ?? {}).sort(), expected.sort());
+  assert.equal(service.network_mode, undefined);
+}
+
+function check(config, port) {
+  assert.equal(config.name, "raziel-m6", "do not override the isolated M6 project name");
+  assert.deepEqual(Object.keys(config.services).sort(), expectedServices,
+    "M6 must not retain a legacy writer, snapshot, proof or verifier service");
+  const services = config.services;
+  const console = services["demo-console"];
+  const publisher = services["demo-policy-activation"];
+  const initializer = services["demo-console-policy-tools"];
+
+  for (const [name, service] of Object.entries(services)) {
+    assert.equal(service.build, undefined, `${name} must reuse the pinned image`);
+    assert.equal(service.pull_policy, "never", `${name} must not download an image`);
+    assert.deepEqual(service.profiles, ["apps"]);
+    if (name !== "spicedb" && name !== "redis") {
+      assert.equal(service.image, "raziel-toolchain:m0");
+      assert.equal(service.user, "0:0", `${name} must agree with private volume ownership`);
+    }
+    if (name !== "demo-console") assert.equal((service.ports ?? []).length, 0);
+    assert.equal(service.privileged ?? false, false);
+    for (const dependency of Object.keys(service.depends_on ?? {})) {
+      assert.ok(expectedServices.includes(dependency), `${name} retains a legacy dependency`);
+    }
+    for (const volume of service.volumes ?? []) {
+      assert.notEqual(volume.source, "/var/run/docker.sock");
+      if (volume.type === "bind") {
+        const isM6 = volume.source === resolve(root, ".raziel/m6") ||
+          volume.source.startsWith(`${resolve(root, ".raziel/m6")}/`);
+        const isPrebuilt = name === "demo-console-policy-tools" &&
+          volume.source === resolve(root, ".raziel/m5/policy-tools") && volume.read_only;
+        const isCode = volume.source === root &&
+          (volume.read_only || name === "demo-console" || name === "demo-gateway");
+        assert.ok(isM6 || isPrebuilt || isCode, `${name} aliases another runtime`);
+      }
+    }
+  }
+  for (const volume of Object.values(config.volumes)) {
+    assert.equal(volume.external ?? false, false);
+    assert.ok(volume.name.startsWith("raziel-m6_"), "volume escapes the M6 project");
+  }
+  for (const [name, settings] of Object.entries(config.networks)) {
+    assert.equal(settings.internal ?? false, name !== "default",
+      `${name} must match the console-only host-facing boundary`);
+    assert.equal(settings.external ?? false, false);
+    assert.equal(settings.name, `raziel-m6_${name}`);
+  }
+
+  assert.equal(console.environment.RAZIEL_POLICY_WORKFLOW, "versioned");
+  assert.equal(publisher.environment.RAZIEL_POLICY_PUBLICATION_MODE, "composed");
+  assert.equal(console.environment.RAZIEL_POLICY_PUBLICATION_SOCKET_PATH,
+    publisher.environment.RAZIEL_POLICY_ACTIVATION_SOCKET_PATH);
+  assert.equal(console.environment.RAZIEL_POLICY_ACTIVATION_SOCKET_PATH, undefined);
+  assert.equal(console.environment.RAZIEL_ACCESS_GRAPH_SOCKET_PATH, undefined);
+  assert.equal(console.environment.RAZIEL_RAZIELD_ENDPOINT, undefined);
+  assert.equal(console.environment.RAZIEL_CAPABILITY_MODE, "live");
+  assert.equal(console.environment.RAZIEL_POLICY_CANDIDATE_ROOT,
+    "/workspace/.raziel/m6/policy-candidates");
+  assert.equal(console.environment.RAZIEL_POLICY_VERSION_ROOT,
+    "/workspace/.raziel/m6/policy-versions");
+  assert.equal(console.environment.RAZIEL_OPERATOR_SECRET_PATH,
+    "/workspace/.raziel/m6/operator-secret.json");
+  assert.equal(console.environment.RAZIEL_OPERATOR_SECRET_PATH,
+    services["demo-console-init"].environment.RAZIEL_OPERATOR_SECRET_PATH);
+  assert.equal(console.environment.RAZIEL_OPERATOR_EXPECTED_ORIGIN, `http://127.0.0.1:${port}`);
+  assert.equal(console.ports.length, 1);
+  assert.equal(console.ports[0].host_ip, "127.0.0.1");
+  assert.equal(console.ports[0].published, String(port));
+  assert.equal(console.ports[0].target, 3000);
+  mount(console, "/workspace/apps/demo-console/.next", "m6-console-next");
+  mount(services["demo-gateway"], "/workspace/apps/demo-gateway/.next", "m6-gateway-next");
+  assert.equal(services["demo-gateway"].environment.RAZIEL_TRANSACTION_STORE_PATH,
+    "/workspace/.raziel/m6/transactions.json");
+  assert.equal(services["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, undefined);
+  assert.equal(services["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");
+  assert.equal(services["demo-gateway"].environment.RAZIEL_DATASET_BINDING_ROOT, "/var/lib/raziel/dataset-bindings");
+  mount(services["demo-gateway"], "/var/lib/raziel/dataset-bindings", "m6-dataset-bindings", true);
+  mount(services["demo-policy-runtime-init"], "/var/lib/raziel/dataset-bindings", "m6-dataset-bindings");
+  assert.equal(console.environment.RAZIEL_ACCESS_ENDPOINT, "http://demo-access-api:50054");
+  const access = services["demo-access-api"];
+  assert.equal(access.environment.RAZIEL_ACCESS_APPROVAL_MODE, "installed");
+  assert.equal(access.environment.RAZIEL_TRUST_DOMAIN_ID, console.environment.RAZIEL_TRUST_DOMAIN_ID);
+  mount(access, "/var/lib/raziel/policy-publication", "m6-policy-publication", true);
+  mount(access, "/var/lib/raziel/policy-packages", "m6-policy-packages", true);
+  mount(access, "/var/lib/raziel/registry", "m5-policy-registry", true);
+  mount(access, "/var/lib/raziel/dataset-bindings", "m6-dataset-bindings");
+  assert.equal(access.volumes.some((entry) => entry.source === "m5-policy-secrets"), false);
+
+  network(publisher, ["policy-internal"]);
+  network(services.spicedb, ["policy-internal"]);
+  network(console, ["default", "owner-internal"]);
+  for (const name of ["demo-gateway", "demo-access-api", "redis"]) {
+    network(services[name], ["owner-internal"]);
+  }
+  const expectedToken = `--grpc-preshared-key=${initializer.environment.RAZIEL_M6_SPICEDB_TOKEN}`;
+  assert.ok(services.spicedb.command.includes(expectedToken));
+  assert.ok(services.spicedb.command.includes("--datastore-engine=memory"));
+  for (const name of ["demo-policy-authority", "demo-policy-registry-writer",
+    "demo-policy-registry-init", "demo-policy-runtime-init", "demo-console-policy-tools",
+    "demo-console-init", "demo-access-private-init"]) {
+    assert.equal(services[name].network_mode, "none", `${name} must remain networkless`);
+    assert.equal(services[name].networks, undefined);
+  }
+  for (const name of ["demo-policy-activation", "demo-policy-authority", "demo-policy-registry-writer"]) {
+    const role = services[name];
+    assert.equal(role.read_only, true);
+    assert.deepEqual(role.cap_drop, ["ALL"]);
+    assert.equal(role.environment.RAZIEL_TRUST_DOMAIN_ID, console.environment.RAZIEL_TRUST_DOMAIN_ID);
+    assert.equal((role.volumes ?? []).some((entry) => entry.target === "/workspace"), false);
+  }
+  mount(publisher, "/var/lib/raziel/registry", "m5-policy-registry", true);
+  mount(publisher, "/var/lib/raziel/policy-versions", resolve(root, ".raziel/m6/policy-versions"), true);
+  mount(publisher, "/var/lib/raziel/policy-candidates", resolve(root, ".raziel/m6/policy-candidates"));
+  mount(services["demo-policy-authority"], "/var/lib/raziel/policy-candidates",
+    resolve(root, ".raziel/m6/policy-candidates"));
+  for (const [directory, volume] of [
+    ["/var/lib/raziel/policy-publication", "m6-policy-publication"],
+    ["/var/lib/raziel/policy-packages", "m6-policy-packages"],
+    ["/var/lib/raziel/policy-activation", "m5-policy-activation-state"],
+  ]) {
+    mount(publisher, directory, volume);
+    mount(services["demo-policy-runtime-init"], directory, volume);
+  }
+  assert.equal(publisher.environment.RAZIEL_POLICY_LEGACY_PACKAGE_ROOT, undefined);
+  assert.equal(publisher.environment.RAZIEL_SPICEDB_TOKEN_PATH, "/run/secrets/spicedb/token");
+  mount(publisher, "/run/secrets/spicedb", "m6-publication-token", true);
+  assert.equal(publisher.volumes.some((entry) => entry.source === "m5-policy-secrets"), false);
+  assert.equal(Object.keys(publisher.environment).some((key) => /KEY_PATH/.test(key)), false);
+  assert.equal(services["demo-policy-registry-writer"].volumes.some(
+    (entry) => entry.source === "m5-policy-secrets"), false);
+  for (const [directory, volume] of [
+    ["/run/raziel-policy-authority", "m5-policy-authority-ipc"],
+    ["/run/raziel-registry-writer", "m5-registry-writer-ipc"],
+    ["/run/raziel-policy-activation", "m5-policy-activation-ipc"],
+  ]) mount(publisher, directory, volume);
+  assert.equal(publisher.depends_on["demo-policy-authority"].condition, "service_healthy");
+  assert.equal(publisher.depends_on["demo-policy-registry-writer"].condition, "service_healthy");
+  assert.equal(services["demo-policy-registry-init"].depends_on["demo-console-policy-tools"].condition,
+    "service_completed_successfully");
+}
+
+check(render("apps", ""), 3000);
+check(render("*", "3011"), 3011);
+process.stdout.write("m6_policy_compose=pass profiles=apps,all ports=3000,3011 runtime=not-started\n");
+NODE

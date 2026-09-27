@@ -3668,6 +3668,7 @@ dependencies = [
  "raziel-snapshot",
  "raziel-verifier",
  "raziel-witness",
+ "redis",
  "serde",
  "serde_json",
  "spicedb-rs-proto",

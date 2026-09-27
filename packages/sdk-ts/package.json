@@ -27,7 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@raziel/proto-ts": "workspace:*"
+    "@gitaalekhyapaul/raziel-sdk-ts": "file:vendor/gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0065.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

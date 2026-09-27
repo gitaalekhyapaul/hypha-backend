@@ -265,7 +265,7 @@ function normalizeRows(rows: readonly SyntheticTransactionInput[]): SyntheticTra
     .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
 }
 
-function datasetChecksum(dataset: SyntheticDataset): string {
+export function datasetChecksum(dataset: SyntheticDataset): string {
   return sha256Hex(
     JSON.stringify({
       formatVersion: dataset.formatVersion,

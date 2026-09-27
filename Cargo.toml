@@ -38,6 +38,7 @@ raziel-policy-ir = { path = "crates/policy-ir", default-features = false }
 raziel-prover = { path = "crates/prover", default-features = false }
 raziel-proto = { path = "crates/proto", default-features = false }
 raziel-snapshot = { path = "crates/snapshot" }
+redis = { version = "=1.5.0", default-features = false }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = { version = "=0.10.9", default-features = false }

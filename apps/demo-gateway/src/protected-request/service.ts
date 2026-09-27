@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { ReconciliationValidationError } from "../reconciliation/model";
 import { DatasetNotFoundError } from "../reconciliation/store";
+import { type DatasetBinding, legacyDatasetBinding } from "./dataset-binding";
 import { AuthorizationRejectedError, ProtectedQueryInfrastructureError } from "./errors";
 import type {
   ProtectedQueryDependencies,
@@ -19,6 +20,7 @@ export class ProtectedQueryService {
     this.#dependencies = {
       ...dependencies,
       nowUnixSeconds: dependencies.nowUnixSeconds ?? systemNowUnixSeconds,
+      resolveDatasetBinding: dependencies.resolveDatasetBinding ?? legacyDatasetBinding,
     };
   }
 
@@ -133,15 +135,16 @@ export class ProtectedQueryService {
       requestTimestampUnixSeconds: envelope.requestTimestampUnixSeconds,
       occurredAtUnixSeconds: nowUnixSeconds,
     };
+    let binding: DatasetBinding | undefined;
     try {
       validateVerifiedClaims(
         verification.claims,
         inspection.capabilityId,
-        datasetId,
         envelope.agentPublicKeyHex,
         envelope.requestTimestampUnixSeconds,
         nowUnixSeconds,
       );
+      binding = await this.#dependencies.resolveDatasetBinding(verification.claims, datasetId);
     } catch (error) {
       if (!(error instanceof AuthorizationRejectedError)) {
         throw error;
@@ -169,7 +172,7 @@ export class ProtectedQueryService {
     }
 
     try {
-      const rows = await this.#dependencies.queryDataset(datasetId, envelope.query);
+      const rows = await this.#dependencies.queryDataset(datasetId, envelope.query, binding);
       const receipt = createPublicReceipt(receiptInput);
       try {
         await this.#dependencies.receiptStore.append(receipt);
@@ -225,11 +228,11 @@ export class ProtectedQueryService {
       validateVerifiedClaims(
         verification.claims,
         capabilityId,
-        datasetId,
         envelope.agentPublicKeyHex,
         envelope.requestTimestampUnixSeconds,
         nowUnixSeconds,
       );
+      await this.#dependencies.resolveDatasetBinding(verification.claims, datasetId);
     } catch (error) {
       if (error instanceof AuthorizationRejectedError) {
         return;
@@ -426,7 +429,6 @@ function wholeSecondUtc(unixSeconds: bigint): string {
 function validateVerifiedClaims(
   claims: VerifiedCapabilityClaims,
   inspectedCapabilityId: string,
-  datasetId: string,
   agentPublicKeyHex: string,
   requestTimestampUnixSeconds: bigint,
   nowUnixSeconds: bigint,
@@ -438,8 +440,6 @@ function validateVerifiedClaims(
     claims.capabilityId.length === 0 ||
     claims.capabilityId !== inspectedCapabilityId ||
     claims.action !== "query" ||
-    claims.resourceType !== "dataset" ||
-    claims.resourceScope !== datasetId ||
     claims.agentKeyThumbprintHex !== expectedThumbprint ||
     claims.issuedAtUnixSeconds > requestTimestampUnixSeconds ||
     requestTimestampUnixSeconds >= claims.expiresAtUnixSeconds ||

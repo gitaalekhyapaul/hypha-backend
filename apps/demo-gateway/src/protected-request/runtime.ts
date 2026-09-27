@@ -1,11 +1,12 @@
 import { getSyntheticDatasetStore } from "../reconciliation/runtime";
+import { datasetBindingResolver } from "./dataset-binding";
 import { ProtectedQueryInfrastructureError } from "./errors";
 import { RedisNonceStore } from "./nonce-store";
 import { JsonlReceiptStore } from "./receipt-store";
 import { ProtectedQueryService } from "./service";
 import { SdkProtectedRequestSignatureVerifier } from "./signature";
-import { ProcessProtectedRequestVerifier } from "./verifier";
 import { RedisVerificationCache } from "./verified-cache";
+import { ProcessProtectedRequestVerifier } from "./verifier";
 
 const SERVICE_SYMBOL = Symbol.for("raziel.m5.protected-query-service");
 
@@ -30,7 +31,9 @@ function createService(): ProtectedQueryService {
     signatureVerifier: new SdkProtectedRequestSignatureVerifier(),
     nonceStore: new RedisNonceStore(redisUrl),
     receiptStore: new JsonlReceiptStore(receiptPath),
-    queryDataset: (datasetId, query) => getSyntheticDatasetStore().query(datasetId, query),
+    resolveDatasetBinding: datasetBindingResolver(process.env),
+    queryDataset: (datasetId, query, binding) =>
+      getSyntheticDatasetStore().query(datasetId, query, binding),
   });
 }
 

@@ -1,0 +1,399 @@
+.access-request-view {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.access-request-boundary {
+  border-left: 3px solid #53718d;
+  padding: 9px 12px;
+  background: #edf2f6;
+  color: #354b60;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.access-request-toolbar,
+.access-request-filter,
+.access-request-list-heading,
+.access-request-detail-heading,
+.access-request-pagination,
+.access-request-actions,
+.access-request-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.access-request-toolbar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.access-request-views {
+  display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #bcc5be;
+}
+
+.access-request-views button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #606961;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.access-request-views button[aria-pressed="true"] {
+  border-bottom-color: #216847;
+  color: #174d33;
+}
+
+.access-request-filter {
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.access-request-filter input {
+  width: 240px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #bdc4bd;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2421;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.access-request-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.3fr);
+  min-height: 420px;
+  border-top: 1px solid #cfd4cd;
+}
+
+.access-request-inbox {
+  min-width: 0;
+  border-right: 1px solid #d5d9d3;
+  padding: 18px 18px 18px 0;
+}
+
+.access-request-list-heading,
+.access-request-detail-heading {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.access-request-view h2 {
+  font-size: 15px;
+}
+
+.access-request-row {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 10px;
+  border: 1px solid transparent;
+  border-bottom-color: #dfe3de;
+  border-radius: 0;
+  background: transparent;
+  color: #2a302d;
+  text-align: left;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.access-request-row:hover,
+.access-request-row[aria-pressed="true"] {
+  border-color: #9bb9aa;
+  background: #eaf2ed;
+}
+
+.access-request-row-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.access-request-row-heading strong {
+  min-width: 0;
+  flex: 1 1 120px;
+  font-size: 13px;
+}
+
+.access-request-row code,
+.access-request-row-time {
+  color: #606961;
+  font-size: 11px;
+}
+
+.access-request-status {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: #e7ebe8;
+  color: #4b554e;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.access-request-status[data-tone="pending"] {
+  background: #fff1d0;
+  color: #77510a;
+}
+
+.access-request-status[data-tone="active"] {
+  background: #e5eff8;
+  color: #305d84;
+}
+
+.access-request-status[data-tone="ready"] {
+  background: #dceee3;
+  color: #215c3c;
+}
+
+.access-request-pagination {
+  justify-content: space-between;
+  padding-top: 18px;
+  font-size: 12px;
+  color: #606961;
+}
+
+.access-request-view .access-request-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.access-request-detail {
+  min-width: 0;
+  padding: 18px 0 18px 26px;
+}
+
+.access-request-detail :is(.form-error, .form-notice) {
+  margin-bottom: 16px;
+}
+
+.access-request-summary h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.access-request-metadata {
+  display: grid;
+  gap: 14px;
+  margin: 24px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.access-request-metadata > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.access-request-metadata dt,
+.access-request-progress {
+  color: #606961;
+}
+
+.access-request-metadata dd {
+  overflow-wrap: anywhere;
+}
+
+.access-request-actions,
+.access-request-confirm {
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid #d5d9d3;
+  padding-top: 18px;
+}
+
+.access-request-confirm strong {
+  flex: 1 1 100%;
+  font-size: 13px;
+}
+
+.access-request-view .access-request-danger {
+  color: #a22932;
+  border-color: #c7999d;
+}
+
+.access-request-progress {
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.access-request-view :is(button, input, select, summary):focus-visible {
+  outline: 2px solid #315f8e;
+  outline-offset: 2px;
+}
+
+.access-request-approval {
+  min-width: 0;
+  padding: 18px 0;
+  border-top: 1px solid #d5d9d3;
+  font-size: 12px;
+}
+
+.access-request-approval h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.access-request-approval-fields {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.access-request-approval-policy,
+.access-request-grant-fields > div:not(.access-request-grant-checks) {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.access-request-approval label {
+  font-weight: 600;
+}
+
+.access-request-approval :is(select, input:not([type="checkbox"])) {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 7px 9px;
+  border: 1px solid #bdc4bd;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2421;
+  font-size: 12px;
+}
+
+.access-request-approval :is(select, input):disabled {
+  background: #f1f3f1;
+  color: #667168;
+}
+
+.access-request-approval-selection {
+  display: grid;
+  gap: 7px;
+  margin: 4px 0 0;
+  color: #606961;
+  font-size: 11px;
+}
+
+.access-request-approval-selection > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.access-request-approval-selection dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #354b60;
+}
+
+.access-request-grant summary {
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.access-request-grant-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 8px 0 0;
+}
+
+.access-request-grant-checks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  grid-column: 1 / -1;
+}
+
+.access-request-grant-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.access-request-grant-checks input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #216847;
+}
+
+.access-request-approval-submit button {
+  min-width: 150px;
+  min-height: 38px;
+}
+
+@media (max-width: 1100px) {
+  .access-request-metadata > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+
+@media (max-width: 760px) {
+  .access-request-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .access-request-inbox {
+    padding-right: 0;
+    border-right: 0;
+    border-bottom: 1px solid #d5d9d3;
+  }
+
+  .access-request-detail {
+    padding-left: 0;
+  }
+
+  .access-request-filter {
+    width: 100%;
+  }
+
+  .access-request-filter label {
+    flex-basis: 100%;
+  }
+
+  .access-request-filter input {
+    min-width: 0;
+    flex: 1 1 160px;
+  }
+}

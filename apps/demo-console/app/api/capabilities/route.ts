@@ -2,6 +2,7 @@ import { loadCapabilityProcessConfig } from "../../../lib/agent-capability/confi
 import { capabilityErrorResponse } from "../../../lib/agent-capability/http.ts";
 import { createCapability } from "../../../lib/agent-capability/lifecycle.ts";
 import { operatorAuthResponse, operatorAuthService } from "../../../lib/operator-auth/index.ts";
+import { policyWorkflowResponse } from "../../../lib/policy-workflow.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     return operatorAuthResponse(error);
   }
+  const unavailable = policyWorkflowResponse("legacy");
+  if (unavailable) return unavailable;
   try {
     const input = (await request.json()) as unknown;
     return Response.json(await createCapability(input, operatorId, loadCapabilityProcessConfig()), {

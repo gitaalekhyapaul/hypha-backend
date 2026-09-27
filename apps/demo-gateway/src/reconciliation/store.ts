@@ -7,6 +7,7 @@ import {
   createDraft,
   DATASET_FORMAT_VERSION,
   type DatasetDraftInput,
+  datasetChecksum,
   finalizeDataset,
   queryDataset,
   type ReconciliationQuery,
@@ -105,10 +106,29 @@ export class SyntheticDatasetStore {
   public async query(
     datasetId: string,
     query: ReconciliationQuery,
+    expected?: {
+      readonly dataset_id: string;
+      readonly dataset_revision: string;
+      readonly dataset_checksum: string;
+    },
   ): Promise<readonly SyntheticTransaction[]> {
-    return this.#exclusive(async () =>
-      queryDataset(this.#getFrom(await this.#read(), datasetId), query),
-    );
+    return this.#exclusive(async () => {
+      const dataset = this.#getFrom(await this.#read(), datasetId);
+      if (
+        expected &&
+        (dataset.datasetId !== expected.dataset_id ||
+          String(dataset.revision) !== expected.dataset_revision ||
+          dataset.status !== "FINALIZED" ||
+          dataset.finalization?.checksum !== expected.dataset_checksum ||
+          dataset.finalization.rowCount !== dataset.rows.length ||
+          datasetChecksum(dataset) !== expected.dataset_checksum)
+      ) {
+        throw new ReconciliationValidationError(
+          "dataset binding does not match finalized revision",
+        );
+      }
+      return queryDataset(dataset, query);
+    });
   }
 
   async #read(): Promise<PersistedStore> {

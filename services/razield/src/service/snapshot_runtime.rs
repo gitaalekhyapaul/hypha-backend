@@ -1,10 +1,11 @@
 use std::fs::File;
+use std::future::Future;
 use std::io::Read;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
 use raziel_admin::spicedb_candidate::CandidateRevisionHandoffReader;
-use raziel_admin::writer::{RegistryWriterClient, RegistryWriterClientError};
+use raziel_admin::writer::{RegistryWriterClient, RegistryWriterClientError, RegistryWriterResult};
 use raziel_authority::{AuthorityKeyStatus, AuthorityRole, AuthoritySigner, SnapshotRole};
 use raziel_authorization_core::{TRUSTED_POLICY_CEILINGS, TRUSTED_SNAPSHOT_LIMITS};
 use raziel_policy_ir::ValidatedPolicyProgram;
@@ -14,7 +15,7 @@ use raziel_snapshot::{
     ValidatedSnapshotDescriptorClaimsV1,
 };
 use raziel_verifier::{
-    RegistryGenerationV1, RegistryLoader, RootRecordStatus, default_registry_config,
+    LocalRegistry, RegistryGenerationV1, RegistryLoader, RootRecordStatus, default_registry_config,
     root_record_to_proto,
 };
 use tokio::sync::Mutex;
@@ -24,9 +25,21 @@ use super::{SnapshotOperations, SnapshotServiceConfig, SystemClock, TrustedClock
 use crate::private_snapshot::{
     PrivateRelationshipSnapshot, PrivateSnapshotError, PrivateSnapshotStore,
 };
-use crate::spicedb::SpiceDbSnapshotReader;
+use crate::spicedb::{RequestSnapshotSource, SpiceDbSnapshotReader};
+
+#[path = "request_snapshot_receipt.rs"]
+mod request_receipt;
 
 const MAX_SECRET_BYTES: u64 = 4_096;
+const MAX_REGISTRY_WRITE_ATTEMPTS: usize = 3;
+
+#[cfg(test)]
+#[path = "snapshot_runtime_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "request_snapshot_tests.rs"]
+mod request_tests;
 
 /// Production composition for trusted snapshot lifecycle operations.
 pub struct SnapshotCoordinator {
@@ -37,6 +50,10 @@ pub struct SnapshotCoordinator {
 }
 
 impl SnapshotCoordinator {
+    pub fn config(&self) -> &SnapshotServiceConfig {
+        &self.config
+    }
+
     pub fn open(config: SnapshotServiceConfig) -> Result<Self, SnapshotOperationError> {
         let private_store = PrivateSnapshotStore::open(config.private_snapshot_root())
             .map_err(|_| SnapshotOperationError::PrivateStore)?;
@@ -54,11 +71,46 @@ impl SnapshotCoordinator {
         &self,
         request: proto::BuildSnapshotRequest,
     ) -> Result<proto::BuildSnapshotResponse, SnapshotOperationError> {
-        let _guard = self.mutation_lock.lock().await;
         let now = SystemClock
             .now_unix_seconds()
             .map_err(|_| SnapshotOperationError::Clock)?;
-        let request = ValidatedBuildRequest::new(&self.config, request, now)?;
+        self.build_snapshot_at(request, None, now).await
+    }
+
+    /// Owner-only, exact-revision handoff. The trusted composer establishes that
+    /// the retained package is included in the accepted aggregate schema.
+    /// No proof job or public access-request transition starts here.
+    pub async fn build_from_request(
+        &self,
+        request: proto::BuildSnapshotRequest,
+        source: RequestSnapshotSource,
+    ) -> Result<proto::BuildSnapshotResponse, SnapshotOperationError> {
+        let now = SystemClock
+            .now_unix_seconds()
+            .map_err(|_| SnapshotOperationError::Clock)?;
+        self.build_snapshot_at(request, Some(source), now).await
+    }
+
+    async fn build_snapshot_at(
+        &self,
+        raw_request: proto::BuildSnapshotRequest,
+        source: Option<RequestSnapshotSource>,
+        now: i64,
+    ) -> Result<proto::BuildSnapshotResponse, SnapshotOperationError> {
+        let _guard = self.mutation_lock.lock().await;
+        let request = if let Some(source) = &source {
+            if self.config.request_snapshot_root().is_none()
+                || raw_request.spicedb_endpoint_ref != self.config.spicedb_endpoint_ref()
+                || raw_request.zed_token_secret_ref
+                    != format!("{}:{}", source.receipt_key, source.proposal_generation)
+                || raw_request.policy_record_id != source.policy_record_id
+            {
+                return Err(SnapshotOperationError::ConfigurationReferenceMismatch);
+            }
+            ValidatedBuildRequest::fields(raw_request.clone(), now)?
+        } else {
+            ValidatedBuildRequest::new(&self.config, raw_request.clone(), now)?
+        };
         let current = load_registry(&self.config, now).await?;
         let mut registry = raziel_verifier::LocalRegistry::new(
             default_registry_config(self.config.trust_domain_id())
@@ -76,6 +128,11 @@ impl SnapshotCoordinator {
         )
         .map_err(|_| SnapshotOperationError::PolicyGuestLimit)?;
         let policy_claims = policy_record.claims.claims();
+        if let Some(source) = &source {
+            source
+                .validate(&policy)
+                .map_err(|_| SnapshotOperationError::SpiceDb)?;
+        }
         if request.expires_at_unix_seconds > policy_claims.valid_until_unix_seconds {
             return Err(SnapshotOperationError::InvalidValidityWindow);
         }
@@ -107,6 +164,72 @@ impl SnapshotCoordinator {
             .map(|root| root.claims.claims().epoch)
             .max()
             .unwrap_or(0);
+
+        // Persist the exact descriptor before append. Recovery never reads a newer
+        // graph, generates another salt, or substitutes a different policy package.
+        let receipt = if let Some(source) = &source {
+            let root = self
+                .config
+                .request_snapshot_root()
+                .ok_or(SnapshotOperationError::ConfigurationReferenceMismatch)?
+                .to_owned();
+            let raw_request = raw_request.clone();
+            let source = source.clone();
+            Some(
+                tokio::task::spawn_blocking(move || {
+                    request_receipt::RequestReceipt::open(&root, &raw_request, &source)
+                })
+                .await
+                .map_err(|_| SnapshotOperationError::BlockingTask)??,
+            )
+        } else {
+            None
+        };
+        if let Some(receipt) = &receipt
+            && let Some(retained) = receipt.read()?
+        {
+            let descriptor = retained.descriptor;
+            let retained_request = ValidatedBuildRequest::fields(retained.request, now)?;
+            validate_request_descriptor(
+                &self.config,
+                &retained_request,
+                source.as_ref().unwrap(),
+                &descriptor,
+                authority_key,
+                now,
+            )?;
+            let store = self.private_store.clone();
+            let policy = policy.clone();
+            let snapshot_id = descriptor.snapshot_id.clone();
+            let root = descriptor
+                .relationship_snapshot_root
+                .as_slice()
+                .try_into()
+                .map_err(|_| SnapshotOperationError::PrivateStore)?;
+            tokio::task::spawn_blocking(move || store.load(&policy, &snapshot_id, &root))
+                .await
+                .map_err(|_| SnapshotOperationError::BlockingTask)?
+                .map_err(map_private_store_error)?;
+            if let Some(existing) = current
+                .accepted_roots
+                .iter()
+                .find(|root| root.claims.claims().snapshot_id == descriptor.snapshot_id)
+            {
+                if root_record_to_proto(existing).descriptor.as_ref() != Some(&descriptor) {
+                    return Err(SnapshotOperationError::RegistryConfirmation);
+                }
+                registry
+                    .resolve_snapshot_exact(&descriptor.snapshot_id, now)
+                    .map_err(|_| SnapshotOperationError::RegistryConfirmation)?;
+                return Ok(proto::BuildSnapshotResponse {
+                    snapshot: Some(descriptor),
+                });
+            }
+            if retained_request.expected_previous_epoch != high_watermark {
+                return Err(SnapshotOperationError::StaleEpoch);
+            }
+            return self.append_prepared_snapshot(registry, descriptor).await;
+        }
         if request.expected_previous_epoch != high_watermark {
             return Err(SnapshotOperationError::StaleEpoch);
         }
@@ -115,16 +238,20 @@ impl SnapshotCoordinator {
             .ok_or(SnapshotOperationError::StaleEpoch)?;
 
         let auth_token = read_secret(self.config.spicedb_auth_token_path()).await?;
-        let zed_token = load_zed_token(&self.config, &request).await?;
+        let zed_token = match &source {
+            Some(source) => source.zed_token.clone(),
+            None => load_zed_token(&self.config, &request).await?,
+        };
         let mut reader =
             SpiceDbSnapshotReader::connect(self.config.spicedb_endpoint(), &auth_token)
                 .await
                 .map_err(|_| SnapshotOperationError::SpiceDb)?;
         drop(auth_token);
-        let relationships = reader
-            .read_exact(&policy, &zed_token)
-            .await
-            .map_err(|_| SnapshotOperationError::SpiceDb)?;
+        let relationships = match &source {
+            Some(source) => reader.read_request_source(&policy, source).await,
+            None => reader.read_exact(&policy, &zed_token).await,
+        }
+        .map_err(|_| SnapshotOperationError::SpiceDb)?;
 
         let mut snapshot_salt = [0_u8; 32];
         getrandom::fill(&mut snapshot_salt).map_err(|_| SnapshotOperationError::Entropy)?;
@@ -177,28 +304,48 @@ impl SnapshotCoordinator {
             .map_err(|_| SnapshotOperationError::BlockingTask)?
             .map_err(map_private_store_error)?;
 
-        let writer = self.writer.clone();
-        let descriptor_for_writer = descriptor.clone();
-        let registry_generation = current.generation;
-        let written = tokio::task::spawn_blocking(move || {
-            writer.append_snapshot(registry_generation, descriptor_for_writer)
-        })
-        .await
-        .map_err(|_| SnapshotOperationError::BlockingTask)?
-        .map_err(map_writer_error)?;
-        let confirmed = load_registry(&self.config, now).await?;
-        let confirmed_record = confirmed
-            .accepted_roots
-            .iter()
-            .find(|root| root.claims.claims().snapshot_id == descriptor.snapshot_id)
-            .map(root_record_to_proto)
-            .ok_or(SnapshotOperationError::RegistryConfirmation)?;
-        if confirmed.generation != written.registry_generation
-            || confirmed_record != written.root_record
-            || confirmed_record.descriptor.as_ref() != Some(&descriptor)
-        {
-            return Err(SnapshotOperationError::RegistryConfirmation);
-        }
+        let _receipt_guard = if let Some(receipt) = receipt {
+            let retained = descriptor.clone();
+            Some(
+                tokio::task::spawn_blocking(move || {
+                    receipt.publish(&retained)?;
+                    Ok::<_, SnapshotOperationError>(receipt)
+                })
+                .await
+                .map_err(|_| SnapshotOperationError::BlockingTask)??,
+            )
+        } else {
+            None
+        };
+
+        self.append_prepared_snapshot(registry, descriptor).await
+    }
+
+    async fn append_prepared_snapshot(
+        &self,
+        registry: LocalRegistry,
+        descriptor: proto::RelationshipSnapshotDescriptor,
+    ) -> Result<proto::BuildSnapshotResponse, SnapshotOperationError> {
+        // Retry only the registry mutation, never the tree, salt, or private publication.
+        mutate_snapshot_registry(
+            registry,
+            &descriptor,
+            proto::SnapshotStatus::Accepted,
+            |generation| {
+                let writer = self.writer.clone();
+                let descriptor = descriptor.clone();
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        writer.append_snapshot(generation, descriptor)
+                    })
+                    .await
+                    .map_err(|_| SnapshotOperationError::BlockingTask)?
+                    .map_err(map_writer_error)
+                }
+            },
+            || load_current_registry(&self.config),
+        )
+        .await?;
         Ok(proto::BuildSnapshotResponse {
             snapshot: Some(descriptor),
         })
@@ -244,44 +391,150 @@ impl SnapshotCoordinator {
         if root.status != RootRecordStatus::Accepted {
             return Err(SnapshotOperationError::AlreadyRevoked);
         }
-        let writer = self.writer.clone();
-        let snapshot_id = request.snapshot_id;
-        let reason = request.reason;
-        let written = tokio::task::spawn_blocking(move || {
-            writer.revoke_snapshot(current.generation, snapshot_id, reason)
-        })
-        .await
-        .map_err(|_| SnapshotOperationError::BlockingTask)?
-        .map_err(map_writer_error)?;
-        let confirmed = load_registry(&self.config, now).await?;
-        let confirmed_record = confirmed
-            .accepted_roots
-            .iter()
-            .find(|root| {
-                root.claims.claims().snapshot_id
-                    == written
-                        .root_record
-                        .descriptor
-                        .as_ref()
-                        .map_or("", |descriptor| descriptor.snapshot_id.as_str())
-            })
-            .map(root_record_to_proto)
-            .ok_or(SnapshotOperationError::RegistryConfirmation)?;
-        if confirmed.generation != written.registry_generation
-            || confirmed_record != written.root_record
-            || confirmed_record.status != proto::SnapshotStatus::Revoked as i32
-        {
-            return Err(SnapshotOperationError::RegistryConfirmation);
-        }
-        let descriptor = confirmed_record
+        let descriptor = root_record_to_proto(root)
             .descriptor
             .ok_or(SnapshotOperationError::RegistryConfirmation)?;
+        let mut registry = LocalRegistry::new(
+            default_registry_config(self.config.trust_domain_id())
+                .map_err(|_| SnapshotOperationError::RegistryRead)?,
+        );
+        registry
+            .install_generation(current)
+            .map_err(|_| SnapshotOperationError::RegistryRead)?;
+        let confirmed_record = mutate_snapshot_registry(
+            registry,
+            &descriptor,
+            proto::SnapshotStatus::Revoked,
+            |generation| {
+                let writer = self.writer.clone();
+                let snapshot_id = request.snapshot_id.clone();
+                let reason = request.reason.clone();
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        writer.revoke_snapshot(generation, snapshot_id, reason)
+                    })
+                    .await
+                    .map_err(|_| SnapshotOperationError::BlockingTask)?
+                    .map_err(map_writer_error)
+                }
+            },
+            || load_current_registry(&self.config),
+        )
+        .await?;
         Ok(proto::RevokeSnapshotResponse {
             snapshot_id: descriptor.snapshot_id,
             status: proto::SnapshotStatus::Revoked as i32,
             revoked_at: confirmed_record.revoked_at,
         })
     }
+}
+
+async fn mutate_snapshot_registry<Write, WriteFuture, Load, LoadFuture>(
+    mut registry: LocalRegistry,
+    descriptor: &proto::RelationshipSnapshotDescriptor,
+    expected_status: proto::SnapshotStatus,
+    mut write: Write,
+    mut load: Load,
+) -> Result<proto::AcceptedRootRecord, SnapshotOperationError>
+where
+    Write: FnMut(u64) -> WriteFuture,
+    WriteFuture: Future<Output = Result<RegistryWriterResult, SnapshotOperationError>>,
+    Load: FnMut() -> LoadFuture,
+    LoadFuture: Future<Output = Result<(RegistryGenerationV1, i64), SnapshotOperationError>>,
+{
+    for attempt in 0..MAX_REGISTRY_WRITE_ATTEMPTS {
+        let generation = registry
+            .generation()
+            .ok_or(SnapshotOperationError::RegistryRead)?;
+        match write(generation).await {
+            Ok(written) => {
+                let (confirmed, now) = load().await?;
+                return confirm_snapshot_mutation(
+                    &mut registry,
+                    confirmed,
+                    now,
+                    descriptor,
+                    expected_status,
+                    written,
+                );
+            }
+            Err(SnapshotOperationError::WriterStaleGeneration)
+                if attempt + 1 < MAX_REGISTRY_WRITE_ATTEMPTS =>
+            {
+                let (current, now) = load().await?;
+                registry
+                    .install_generation(current)
+                    .map_err(|_| SnapshotOperationError::RegistryConfirmation)?;
+                if expected_status == proto::SnapshotStatus::Accepted {
+                    let policy_hash = descriptor
+                        .policy_hash
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| SnapshotOperationError::RegistryConfirmation)?;
+                    registry
+                        .resolve_policy_exact(&descriptor.policy_record_id, &policy_hash, now)
+                        .map_err(|_| SnapshotOperationError::PolicyResolution)?;
+                    if descriptor
+                        .expires_at
+                        .as_ref()
+                        .is_none_or(|expiry| expiry.seconds <= now)
+                    {
+                        return Err(SnapshotOperationError::InvalidValidityWindow);
+                    }
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(SnapshotOperationError::WriterStaleGeneration)
+}
+
+fn confirm_snapshot_mutation(
+    registry: &mut LocalRegistry,
+    confirmed: RegistryGenerationV1,
+    now: i64,
+    descriptor: &proto::RelationshipSnapshotDescriptor,
+    expected_status: proto::SnapshotStatus,
+    written: RegistryWriterResult,
+) -> Result<proto::AcceptedRootRecord, SnapshotOperationError> {
+    if confirmed.generation < written.registry_generation
+        || written.root_record.registry_generation != written.registry_generation
+    {
+        return Err(SnapshotOperationError::RegistryConfirmation);
+    }
+    let confirmed_record = confirmed
+        .accepted_roots
+        .iter()
+        .find(|root| root.claims.claims().snapshot_id == descriptor.snapshot_id)
+        .map(root_record_to_proto)
+        .ok_or(SnapshotOperationError::RegistryConfirmation)?;
+    let mut expected_record = written.root_record;
+    // Every registry publication updates this field, including unrelated policy writes.
+    expected_record.registry_generation = confirmed.generation;
+    if confirmed_record != expected_record
+        || confirmed_record.descriptor.as_ref() != Some(descriptor)
+        || confirmed_record.status != expected_status as i32
+    {
+        return Err(SnapshotOperationError::RegistryConfirmation);
+    }
+    registry
+        .install_generation(confirmed)
+        .map_err(|_| SnapshotOperationError::RegistryConfirmation)?;
+    if expected_status == proto::SnapshotStatus::Accepted {
+        registry
+            .resolve_snapshot_exact(&descriptor.snapshot_id, now)
+            .map_err(|_| SnapshotOperationError::RegistryConfirmation)?;
+    }
+    Ok(confirmed_record)
+}
+
+async fn load_current_registry(
+    config: &SnapshotServiceConfig,
+) -> Result<(RegistryGenerationV1, i64), SnapshotOperationError> {
+    let now = SystemClock
+        .now_unix_seconds()
+        .map_err(|_| SnapshotOperationError::Clock)?;
+    Ok((load_registry(config, now).await?, now))
 }
 
 #[tonic::async_trait]
@@ -328,6 +581,13 @@ impl ValidatedBuildRequest {
         {
             return Err(SnapshotOperationError::ConfigurationReferenceMismatch);
         }
+        Self::fields(request, now)
+    }
+
+    fn fields(
+        request: proto::BuildSnapshotRequest,
+        now: i64,
+    ) -> Result<Self, SnapshotOperationError> {
         if !valid_identifier(&request.policy_record_id)
             || !valid_identifier(&request.authority_key_id)
         {
@@ -376,7 +636,50 @@ async fn load_zed_token(
             .await
             .map_err(|_| SnapshotOperationError::BlockingTask)?
         }
+        ZedTokenSourceConfig::RequestRoot { .. } => {
+            Err(SnapshotOperationError::ConfigurationReferenceMismatch)
+        }
     }
+}
+
+fn validate_request_descriptor(
+    config: &SnapshotServiceConfig,
+    request: &ValidatedBuildRequest,
+    source: &RequestSnapshotSource,
+    descriptor: &proto::RelationshipSnapshotDescriptor,
+    key: &raziel_authority::TrustedAuthorityKey,
+    now: i64,
+) -> Result<(), SnapshotOperationError> {
+    if descriptor.policy_record_id != request.policy_record_id
+        || descriptor.policy_hash != request.policy_hash
+        || descriptor.spicedb_revision != source.zed_token
+        || descriptor.epoch
+            != request
+                .expected_previous_epoch
+                .checked_add(1)
+                .ok_or(SnapshotOperationError::StaleEpoch)?
+        || descriptor.expires_at != Some(timestamp(request.expires_at_unix_seconds))
+        || descriptor.signing_key_id != request.authority_key_id
+    {
+        return Err(SnapshotOperationError::PrivateStore);
+    }
+    let root = raziel_verifier::root_record_from_proto(
+        proto::AcceptedRootRecord {
+            format_version: 1,
+            descriptor: Some(descriptor.clone()),
+            status: proto::SnapshotStatus::Accepted as i32,
+            registered_at: descriptor.issued_at,
+            revoked_at: None,
+            revocation_reason: String::new(),
+            registry_generation: 1,
+        },
+        &default_registry_config(config.trust_domain_id())
+            .map_err(|_| SnapshotOperationError::RegistryRead)?,
+        now,
+    )
+    .map_err(|_| SnapshotOperationError::PrivateStore)?;
+    key.verify_snapshot_descriptor(now, &root.claims, &root.authority_signature)
+        .map_err(|_| SnapshotOperationError::PrivateStore)
 }
 
 async fn load_registry(

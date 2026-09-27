@@ -1,143 +1,141 @@
 # Current Engineering Baton
 
-- Baton ID: B-0063
-- State: REVIEW
-- Milestone: M6, external agent contract and policy provisioning design
-- Owner: Codex
-- Started UTC: 2026-09-25T07:27:28Z
-- Last updated UTC: 2026-09-25T07:49:10Z
+- Baton ID: B-0066
+- State: READY
+- Milestone: M6, serial agent capability dispatch and SDK delivery
+- Owner: unassigned
+- Started UTC: Not started
+- Last updated UTC: 2026-09-27T07:43:00Z
 - Branch: `main`
-- Worktree: B-0062 planning is committed as `1b05501`. B-0063 adds a proposed ADR
-  and API specification with related roadmap corrections. Runtime remains the M0-M5
-  baseline. Sibling repositories are unchanged.
+- Worktree: B-0064/B-0065 backend and SDK checkpoint selected for commit and push.
+- Execution: Paused by the maintainer after B-0065. Do not start without resume.
 
 ## Objective
 
-Specify the versioned external-agent authentication and access-request contracts,
-plus the policy provisioning migration needed for the approved M6-M7 plan.
+Connect approved access requests to one-at-a-time proof dispatch, final agent
+signatures, and reusable protected queries through the external SDK.
 
 ## Acceptance Criteria
 
-- [x] Signed agent requests bind the registered key, token identity, method, target,
-      payload, freshness, and replay fields through an explicit reviewed encoding.
-- [x] Request and proof-job states, error types, ownership, idempotency, dispatch
-      reservations, cancellation, expiry, and offline-agent behavior are concrete.
-- [x] Independent policy publication has a design preserving immutable versions and jobs.
-- [x] Shared SpiceDB schema provisioning and durable policy packages have a viable
-      migration path without a proof-long publication lock.
-- [x] SDK interfaces, transport packaging, compatibility, and dependency pins are listed.
-- [x] B-0064 has a bounded first implementation slice and focused validation plan.
-- [ ] Maintainer approves ADR-0020 before the new security-boundary implementation.
-
-Checked criteria above concern the reviewed design, not running feature code.
+- [ ] Two approved requests wait durably and dispatch one at a time.
+- [ ] Reserve workflow capacity before invoking B-0065 private snapshot preparation.
+- [ ] Publish the exact issuance proposal and accept the registered agent's signature.
+- [ ] Retries, cancellation, deadlines, and restart recovery preserve request ownership.
+- [ ] Polling and terminal results reach the SDK without private witness material.
+- [ ] The external SDK completes a protected query and repeats it through the cache.
+- [ ] Package consumer checks pass and public release prerequisites are resolved.
+- [ ] The provisional VM deployment runbook matches the executable stack.
 
 ## Architecture Constraints
 
-- Follow ADR-0019 and `docs/spec/M6-M7-AGENT-DEMO-PLAN.md`.
-- M6 is external agent access and the public SDK. M7 is the three-dashboard demo.
-- Use seeded or portal-created synthetic rows and real sequential local Plonk proofs.
-- Preserve the guest, canonical commitments, existing capability signatures, and
-  independent verifier. New agent API signatures need a separate explicit contract.
-- Agents own their private keys. Tokens are bound to registered public keys.
-- Policy publication does not create snapshots. Approved access requests trigger them.
-- SDK responses never expose PolicyIR, relationship data, salts, or Merkle openings.
+- Inherit approved ADR-0019 and ADR-0020. Do not change proof or commitment semantics.
+- BullMQ remains the proof queue. Only one proof runs at a time.
+- Final issuance signatures occur after capacity reservation and snapshot preparation.
+- Independent policy publication does not wait through a proof.
+- Agents receive no PolicyIR, tuples, recipes, salts, openings, or witness traces.
+- Authentication and inbox approval alone never authorize protected data.
+- The verifier never calls the issuer. Cold and cached paths check exact dataset bindings.
 
 ## File Scope
 
-- `docs/decisions/0020-agent-api-and-request-provisioning.md`
-- `docs/spec/AGENT-API-V1.md`
-- `docs/spec/M6-M7-AGENT-DEMO-PLAN.md`
-- `docs/spec/POC-TECHNICAL-SPEC.md`
-- `ARCHITECTURE.md`
-- `proto/raziel/v1/` for read-only comparison until the contract is settled
-- `packages/sdk-ts/` and current service/portal modules for read-only migration analysis
-- `docs/agent/CURRENT-BATON.md` and the B-0063 history record
-
-Codex owns the documents. Completed read-only SDK/authentication analysis came from
-Beauvoir. Boole reviewed policy migration and then API lifecycle consistency. Both
-reviews are integrated and the helpers are closed.
+On resume, select one bounded slice within owner dispatch, issuance HTTP/RPC,
+SDK polling/signing/protected queries, required Compose wiring, and focused tests.
+Sibling writes remain subject to filesystem permissions. Do not edit VM source.
 
 ## Out Of Scope
 
-- Public npm publication, remote deployment, and remote pushes
-- New guest semantics, private-policy evaluation in an agent, and parallel proofs
-- Real-data acquisition or a second domain scenario
-- Sibling writes before filesystem access is available
+- B-0067 agent dashboards, LLM adapters, and the shared message channel
+- B-0068 three-dashboard VM demonstration and final evidence
+- Parallel proving, new proof semantics, or implicit M5 state migration
 
 ## Decisions
 
-- Accepted: ADR-0019 records the maintainer's scope and two final clarifications.
-- LLM integration assumes an OpenAI-compatible endpoint with configurable model and key.
-- Agent B returns a bounded synthetic match result, settlement amount/reference,
-  amount difference, and gateway receipt reference.
-- Proposed, not yet approved: ADR-0020 and `docs/spec/AGENT-API-V1.md` specify the
-  new signature domain, registered-key tokens, route isolation, request lifecycle,
-  serial dispatch, per-version policy identities, and schema composition.
-- Preserve strict current guest, registry epoch, capability, and protected-request rules.
-- Keep private normalized intent data for the seven-day retry window. Delete private
-  proof/issuance envelopes after terminal cleanup. No context enters queue payloads.
+- The maintainer requested completing B-0065, then pausing.
+- Direct use of the existing Redis 1.5.0 pin and pinned SpiceDB download was approved.
+- M6 remains opt-in and isolated from the default M5 runtime.
+- The backend consumes the local B-0065 SDK candidate, not a public npm release.
+- Maintainer authorized committing and pushing the current backend and SDK progress.
+  This is a checkpoint operation, not a resume of B-0066. Npm publication and VM
+  deployment remain outside this authorization.
 
 ## Open Questions And Blockers
 
-- Approval needed: ADR-0020's exact API-authentication boundary and per-version
-  policy/schema provisioning amendment. Existing high-level product choices stand.
-- Sibling write access must be obtained before cross-repository implementation.
-- Live endpoint/model credentials and npm ownership/license metadata are release inputs.
-- ADR-0018's single-schema write and candidate cleanup need the documented M6
-  amendment. Runtime checks for the replacement remain future implementation work.
+- No unresolved decision blocks the completed B-0065 slice.
+- Public npm release still needs authenticated publication and confirmed metadata.
+- The local M6 preview has memory-backed SpiceDB. Durable deployment or explicit
+  safe recovery is required before a VM demonstration.
 
 ## Work Completed
 
-- M0-M5 remain complete with their recorded evidence.
-- B-0062 produced ADR-0019 and the plan with 15 user flows and six implementation steps.
-- The old B-0061 real-data objective is archived as deferred and uncompleted.
-- Current roadmap documents now agree on the revised M6-M7 scope.
-- Both sibling repositories exist. The SDK repo's untracked `.DS_Store` was preserved.
-- Added a complete proposed API contract with fields, endpoint ownership, error codes,
-  expiry/cancellation/retry rules, SDK surface, and a mapping for AF-01 through AF-15.
-- Policy migration retains immutable source packages, composes namespaced definitions,
-  preserves old verification artifacts, and binds gateway routes to finalized data.
-- Integrated six policy review findings and four API review findings. These include
-  owner-qualified request IDs, cancellation during uncertain submission, private
-  idempotency retention, and refresh of both query signatures on read retries.
-- Corrected stale current documentation about SDK repository separation and the
-  already-implemented M5 capability hex transport. Historical evidence is unchanged.
+B-0064 delivered registration, tokens, signed transport, and the external SDK base.
+B-0065 delivered agent-owned intents, operator approve/reject/cancel, independently
+published immutable policy versions, exact dataset bindings, and request-triggered
+signed snapshot preparation. Real SpiceDB preparation and exact retry reuse passed.
+
+The browser stops at `APPROVED_WAITING`. Private preparation is callable and tested,
+but no automatic dispatcher invokes it yet. No new proof ran in B-0065. M0-M5 remain
+complete. M6 and M7 are not complete. All B-0065 workers finished and were closed.
+
+See [B-0065 evidence](history/B-0065-access-inbox-and-policy-packages.md) and the
+[access inbox runbook](../runbooks/AGENT-ACCESS-INBOX.md).
 
 ## Validation Plan
 
-- Compare proposed signatures and fields with existing ADR-0002, ADR-0011, ADR-0014,
-  ADR-0018, Protobuf contracts, registry behavior, and signing vectors.
-- Map every approved user flow to an endpoint and owning repository.
-- Validate modified documentation links and run `git diff --check`.
-- Schedule only the focused cross-language and behavior tests required by later code.
+On resume, start with the narrow dispatch slice. Reuse existing queue, issuance,
+signature, SDK, and snapshot checks. Add two-request serial progress and exact-retry
+coverage. Run a real VM proof only at the connected provisional checkpoint.
 
 ## Validation Evidence
 
 | Check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
-| B-0062 document links and JSON | PASS | 46 relative targets and plan example | 2026-09-25T07:22:18Z |
-| B-0062 whitespace and scope review | PASS | Documentation-only changes | 2026-09-25T07:22:18Z |
-| Static policy migration review | PASS | Six findings incorporated into proposed contract, runtime untested | 2026-09-25T07:49:10Z |
-| Static API lifecycle review | PASS | Four findings incorporated, existing signature/expiry rules compared | 2026-09-25T07:49:10Z |
-| Documentation targets and JSON examples | PASS | 38 relative targets, unchanged Mermaid blocks | 2026-09-25T07:49:10Z |
-| `git diff --check` | PASS | Tracked documentation whitespace | 2026-09-25T07:49:10Z |
-| Sibling status | PASS | SDK keeps pre-existing `.DS_Store`; agent repo clean | 2026-09-25T07:49:10Z |
-| Runtime tests, Docker, SSH | SKIP | Documentation-only work, no runtime changes | 2026-09-25T07:49:10Z |
-| New API implementation and cross-language vectors | NOT AVAILABLE | Pending approval and B-0064 | 2026-09-25T07:49:10Z |
+| B-0065 real preparation and retry | PASS | Real SpiceDB and signed snapshot, selected policy pinned, same descriptor reused, no proof | 2026-09-27T07:22:45Z |
+| B-0065 focused checks | PASS | Admin, service, reader, Redis approval/preparation, console, types, Clippy, Compose; opt-in skips listed in archive | 2026-09-27 |
+| B-0066 implementation and tests | SKIP | Not started, paused by maintainer | 2026-09-27 |
+| VM and npm publication | SKIP | Not part of this checkpoint | 2026-09-27 |
+
+## Commit Checkpoint
+
+The maintainer requested a GitHub checkpoint after the B-0065 pause. Preserve the
+archived implementation evidence. Check source, tests, generated public SDK files,
+and the exact vendored SDK candidate. Exclude credentials, runtime data, build
+outputs, and macOS metadata. No agent-demo source changes exist for this checkpoint.
+Record completed commit checks and remote synchronization here before handoff.
+
+Checkpoint validation on 2026-09-27:
+
+- PASS: backend TypeScript suites, 492 tests. Eighteen opt-in console tests skipped
+  in this invocation. Their earlier live evidence remains in the B-0065 archive.
+- PASS: all backend TypeScript typechecks, Biome lint, full format check, Buf lint,
+  deterministic generation, and M6 Compose configuration.
+- PASS: Rust canonical, authority, and admin tests, including protocol vectors.
+  Four admin integration gates were ignored here and retain separate archived evidence.
+- PASS: all Go compiler packages with the existing offline module/build cache.
+- PASS: SDK 220 tests, package build, declared lint and format scripts.
+- PASS: staged private-file and credential-pattern checks. Only public SDK release
+  candidates are included. The selected tarball matches its recorded SHA-256.
+- The full SDK whitespace check reports four generator-produced blank EOF lines.
+  Handwritten sources pass. Generated files are kept byte-exact with their hashes.
+  An extra combined Biome check reports import-order suggestions beyond the SDK's
+  declared lint/format scripts. No SDK behavior was changed for those suggestions.
+- Ten existing backend import-order violations were fixed mechanically in separate
+  commit `d7095fd`. Three Rust formatting differences were corrected.
+- An initial Go invocation used an empty cache and failed offline. The configured
+  existing cache passed without downloading dependencies.
+- Full proof, VM deployment, and the complete CI build matrix were not rerun.
 
 ## Risks And Private-Data Notes
 
-- Authentication signatures do not replace proof capability authorization.
-- Waiting requests must not exhaust the signed proof window or duplicate issuance.
-- Publishing a policy must not retarget an admitted proof or invalidate a snapshot.
-- LLM output and business evidence do not prove reconciliation accuracy.
-- No keys, API tokens, private graph material, or real transaction data enter Git.
-- These proposed controls have static review only. They do not establish implemented
-  authentication, deployment isolation, or proof dispatch behavior.
+- Exact approved policy, agent, dataset revision, and request scope must survive dispatch.
+- Snapshot receipt recovery reuses private state, never a fresh salt on an exact retry.
+- Keep authority keys, grant recipes, tuples, and snapshots in owner-only runtime storage.
+- The preview at `http://127.0.0.1:3011/` supports datasets, registration, policy
+  versions, and request review. It is not a full M6 demonstration.
+- Do not restart memory-backed SpiceDB or delete its volumes to bypass drift checks.
+- Local prebuilt debug tools passed. A fresh release build is not claimed here.
+- Installed approval recovery works. Unfinished browser draft recovery remains deferred.
 
 ## Exact Next Action
 
-Obtain approval for the two decisions in ADR-0020. Then archive B-0063, claim B-0064,
-and implement registration/token UI, strict Rust API authentication, `/me`, and the
-standalone SDK signer/client foundation. Request scoped sibling write permission when
-that first external package edit is ready. No VM deployment or npm publication yet.
+Remain paused. After explicit maintainer resume, inspect this baton and the dirty
+worktree, then claim the bounded serial-dispatch slice. Do not start B-0067.

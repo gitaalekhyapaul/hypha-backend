@@ -8,6 +8,7 @@ publish = false
 
 [features]
 default = ["capability-service"]
+access-service = ["dep:redis", "dep:serde", "dep:serde_json"]
 capability-service = [
   "dep:bullmq",
   "dep:raziel-prover",
@@ -32,6 +33,7 @@ raziel-proto = { workspace = true, features = ["services"] }
 raziel-snapshot.workspace = true
 raziel-verifier = { path = "../../crates/verifier" }
 raziel-witness = { path = "../../crates/witness", optional = true }
+redis = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 spicedb-rs-proto.workspace = true
@@ -45,3 +47,38 @@ raziel-canonical.workspace = true
 name = "razield-prover"
 path = "src/bin/razield-prover.rs"
 required-features = ["one-shot-prover"]
+
+[[bin]]
+name = "razield"
+path = "src/main.rs"
+required-features = ["capability-service"]
+
+[[bin]]
+name = "razield-capability"
+path = "src/bin/razield-capability.rs"
+required-features = ["capability-service"]
+
+[[bin]]
+name = "razield-proof-launcher"
+path = "src/bin/razield-proof-launcher.rs"
+required-features = ["capability-service"]
+
+[[bin]]
+name = "razield-proof-worker"
+path = "src/bin/razield-proof-worker.rs"
+required-features = ["capability-service"]
+
+[[bin]]
+name = "razield-access"
+path = "src/bin/razield-access.rs"
+required-features = ["access-service"]
+
+[[test]]
+name = "access_request"
+path = "src/access_request/tests.rs"
+required-features = ["access-service"]
+
+[[test]]
+name = "request_preparation"
+path = "tests/request_preparation.rs"
+required-features = ["access-service"]

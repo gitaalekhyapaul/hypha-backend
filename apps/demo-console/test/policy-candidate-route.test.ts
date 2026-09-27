@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { POST as loginRoute } from "../app/api/operator/login/route.ts";
 import { GET as candidateGetRoute } from "../app/api/policies/candidates/[candidateId]/route.ts";
 import { POST as candidatePostRoute } from "../app/api/policies/candidates/route.ts";
+import { GET as versionGetRoute } from "../app/api/policies/versions/[candidateId]/route.ts";
+import { POST as versionPostRoute } from "../app/api/policies/versions/route.ts";
 import {
   derivePasswordVerifierForProvisioning,
   OPERATOR_CSRF_HEADER,
@@ -20,6 +22,7 @@ const environmentNames = [
   "RAZIEL_OPERATOR_EXPECTED_ORIGIN",
   "RAZIEL_OPERATOR_LIVE_MODE",
   "RAZIEL_POLICY_CANDIDATE_ROOT",
+  "RAZIEL_POLICY_VERSION_ROOT",
   "RAZIEL_POLICY_COMPILER_EXECUTABLE",
   "RAZIEL_ADMIN_EXECUTABLE",
 ] as const;
@@ -33,6 +36,50 @@ afterEach(async () => {
 });
 
 describe("M5 authenticated policy candidate routes", () => {
+  it("returns only allocated identity and safe review data from version routes", async () => {
+    await configureRouteFixture();
+    const session = await login();
+    const created = await versionPostRoute(candidateRequest(session));
+    expect(created.status).toBe(201);
+    const result = await created.json();
+    expect(Object.keys(result).sort()).toEqual(["candidate", "identity"]);
+    expect(result.identity).toEqual({
+      familyId: "12".repeat(16),
+      versionId: "34".repeat(16),
+      version: 1,
+    });
+    expect(result.candidate.policy_name).toBe(`family:${"12".repeat(16)}:v1`);
+    expect(result.candidate.resource_type).toBe(`dataset_${"34".repeat(16)}`);
+    const read = await versionGetRoute(
+      new Request(`${ORIGIN}/api/policies/versions/candidate-route-001`, {
+        headers: { cookie: session.cookie },
+      }),
+      { params: Promise.resolve({ candidateId: "candidate-route-001" }) },
+    );
+    expect(read.status).toBe(200);
+    expect(await read.json()).toEqual(result);
+    const unauthorized = await versionGetRoute(
+      new Request(`${ORIGIN}/api/policies/versions/candidate-route-001`),
+      { params: Promise.resolve({ candidateId: "candidate-route-001" }) },
+    );
+    expect(unauthorized.status).toBe(401);
+  });
+
+  it("authenticates a version mutation before reading its body", async () => {
+    await configureRouteFixture();
+    const unread = new Request(`${ORIGIN}/api/policies/versions`, { method: "POST" });
+    Object.defineProperty(unread, "text", {
+      value: async () => {
+        throw new Error("body should not be read");
+      },
+    });
+    expect((await versionPostRoute(unread)).status).toBe(403);
+    const session = await login();
+    expect(
+      (await versionPostRoute(candidateRequest(session, { "content-length": "40000" }))).status,
+    ).toBe(400);
+  });
+
   it("creates and reads one safe candidate projection", async () => {
     await configureRouteFixture();
     const session = await login();
@@ -164,6 +211,8 @@ async function configureRouteFixture(): Promise<void> {
   await chmod(root, 0o700);
   const candidateRoot = join(root, "candidates");
   await mkdir(candidateRoot, { mode: 0o700 });
+  const versionRoot = join(root, "versions");
+  await mkdir(versionRoot, { mode: 0o700 });
   const secretPath = join(root, "operator-secret.json");
   const salt = Buffer.alloc(16, 0x51);
   const verifier = await derivePasswordVerifierForProvisioning(PASSWORD, salt);
@@ -188,6 +237,7 @@ async function configureRouteFixture(): Promise<void> {
   process.env.RAZIEL_OPERATOR_EXPECTED_ORIGIN = ORIGIN;
   process.env.RAZIEL_OPERATOR_LIVE_MODE = "false";
   process.env.RAZIEL_POLICY_CANDIDATE_ROOT = candidateRoot;
+  process.env.RAZIEL_POLICY_VERSION_ROOT = versionRoot;
   process.env.RAZIEL_POLICY_COMPILER_EXECUTABLE = compiler;
   process.env.RAZIEL_ADMIN_EXECUTABLE = admin;
 }
@@ -208,6 +258,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 const value = (name) => process.argv[process.argv.indexOf(name) + 1];
 const timestamp = (name) => ({ nanos: 0, seconds: value(name) });
+if (process.argv[2] === "allocate-policy-version") {
+  await writeFile(join(value("--root"), value("--candidate-id") + ".json"), JSON.stringify({
+    format_version: 1, candidate_id: value("--candidate-id"), request_digest: value("--request-digest"),
+    requested_family_id: null, family_id: "12".repeat(16), version_id: "34".repeat(16), version: 1
+  }), { mode: 0o600 });
+  process.exit(0);
+}
 const schema = await readFile(join(dirname(value("--policy")), "schema.zed"));
 const projection = {
   candidate_id: value("--candidate-id"),

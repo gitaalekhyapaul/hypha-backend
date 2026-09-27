@@ -1,4 +1,7 @@
-export function WorkspaceOverview() {
+import type { PolicyWorkflow } from "../lib/policy-workflow.ts";
+
+export function WorkspaceOverview({ workflow = "legacy" }: { readonly workflow?: PolicyWorkflow }) {
+  const versioned = workflow === "versioned";
   return (
     <section className="workspace-view" aria-labelledby="workspace-heading">
       <header className="view-header">
@@ -12,11 +15,11 @@ export function WorkspaceOverview() {
       <dl className="workspace-metrics">
         <div>
           <dt>Policy mode</dt>
-          <dd>Visual rules</dd>
+          <dd>{versioned ? "Immutable versions" : "Visual rules"}</dd>
         </div>
         <div>
-          <dt>Proof mode</dt>
-          <dd>Local Plonk</dd>
+          <dt>{versioned ? "Agent proof dispatch" : "Proof mode"}</dt>
+          <dd>{versioned ? "Pending" : "Local Plonk"}</dd>
         </div>
         <div>
           <dt>Verifier</dt>
@@ -34,16 +37,29 @@ export function WorkspaceOverview() {
             <p className="eyebrow">Scenario state</p>
             <h2 id="workflow-heading">Workflow</h2>
           </div>
-          <span className="section-count">1 / 7 available</span>
+          <span className="section-count">{versioned ? "4 / 7 available" : "1 / 7 available"}</span>
         </div>
         <ol className="workflow-list">
           <WorkflowItem label="Dataset" state="Available" active />
-          <WorkflowItem label="Policy" state="Pending" />
-          <WorkflowItem label="Access graph" state="Pending" />
-          <WorkflowItem label="Capability" state="Pending" />
-          <WorkflowItem label="Reconciliation" state="Pending" />
-          <WorkflowItem label="Denial lab" state="Pending" />
-          <WorkflowItem label="Receipts" state="Pending" />
+          {versioned ? (
+            <>
+              <WorkflowItem label="Agent registration" state="Available" active />
+              <WorkflowItem label="Policy versions" state="Available" active />
+              <WorkflowItem label="Request inbox" state="Available" active />
+              <WorkflowItem label="Approval and snapshot" state="Pending" />
+              <WorkflowItem label="Agent capabilities" state="Pending" />
+              <WorkflowItem label="Reconciliation" state="Pending" />
+            </>
+          ) : (
+            <>
+              <WorkflowItem label="Policy" state="Pending" />
+              <WorkflowItem label="Access graph" state="Pending" />
+              <WorkflowItem label="Capability" state="Pending" />
+              <WorkflowItem label="Reconciliation" state="Pending" />
+              <WorkflowItem label="Denial lab" state="Pending" />
+              <WorkflowItem label="Receipts" state="Pending" />
+            </>
+          )}
         </ol>
       </section>
     </section>

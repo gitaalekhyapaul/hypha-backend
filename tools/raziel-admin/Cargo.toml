@@ -60,3 +60,11 @@ path = "src/bin/raziel-capability-client.rs"
 [[bin]]
 name = "raziel-verifier-client"
 path = "src/bin/raziel-verifier-client.rs"
+
+[[bin]]
+name = "raziel-agent-auth"
+path = "src/bin/raziel-agent-auth.rs"
+
+[[bin]]
+name = "raziel-access-client"
+path = "src/bin/raziel-access-client.rs"

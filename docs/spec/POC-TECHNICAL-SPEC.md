@@ -92,11 +92,21 @@ The following decisions must be closed before their milestone begins:
 
 O-007 closed on 2026-08-24 when the maintainer accepted ADR-0002.
 
-[ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md) proposes the new
+[ADR-0020](../decisions/0020-agent-api-and-request-provisioning.md) approves the new
 agent-authentication envelope and independent policy-version provisioning contract.
 Its [Agent API v1 specification](AGENT-API-V1.md) lists endpoints, fields, state
 transitions, resource bounds, retry behavior, and the SDK boundary. These decisions
-await maintainer approval. Existing proof contracts remain unchanged.
+were approved on 2026-09-25. B-0064 authentication is implemented and locally tested.
+B-0065 request admission, own-request inspection, operator inbox, rejection, and
+cancellation pass locally. Composed policy publication passes a two-version local
+SpiceDB gate and the connected visual builder in an isolated opt-in M6 runtime.
+The owner catalogue and connected installed-approval view pass locally. Immutable
+dataset-binding storage and cold/cache gateway enforcement are implemented. Operator
+approval writes that mapping and pins exact private input. The browser and packaged
+SDK observed APPROVED_WAITING without a capability. Private snapshot preparation
+passed against real SpiceDB with an exact pinned revision and signed descriptor.
+Retry reused that descriptor and private tree. Automatic dispatch remains B-0066
+work. Existing proof contracts remain unchanged.
 
 ## Actors and entities
 
@@ -278,8 +288,8 @@ near proof dispatch. See the [new user flows](M6-M7-AGENT-DEMO-PLAN.md#user-flow
 
 This tree describes the backend repository. ADR-0019 moves SDK source ownership into
 the sibling `raziel-sdk-ts` repository and adds `raziel-demo-agents` for the two agent
-applications. The existing `packages/sdk-ts` remains implemented M5 code until its
-consumers migrate to a pinned public package. Do not maintain two SDK implementations.
+applications. `packages/sdk-ts` now re-exports a pinned local release candidate from
+the sibling SDK. Public npm publication remains pending. There is one SDK implementation.
 
 ```text
 apps/
@@ -813,9 +823,11 @@ snapshot-authority signature. Policy approval, relationship changes, signed snap
 publication, and capability issuance remain separate explicit actions.
 
 M6-M7 coordinates relationship and snapshot steps from an approved agent request.
-The operator can publish policy versions independently. The three-dashboard flow,
-registration, agent request inbox, and external SDK are specified in the
-[implementation plan](M6-M7-AGENT-DEMO-PLAN.md) and remain pending.
+The planned operator flow can publish policy versions independently. Registration,
+token management, signed identity lookup, and the request inbox pass locally.
+Approval and request-triggered private preparation pass locally. Explicit M5
+policy-version migration and the three-dashboard flow remain pending in the
+[implementation plan](M6-M7-AGENT-DEMO-PLAN.md).
 
 ### Gateway
 
@@ -1293,9 +1305,17 @@ Exit gate:
 
 ### M6: External agent access and public SDK
 
-Status: planned under ADR-0019. The former real-data objective is deferred.
-The detailed B-0063 contract is drafted in [Agent API v1](AGENT-API-V1.md).
-ADR-0020 approval and feature implementation remain pending.
+Status: in progress under ADR-0019. The former real-data objective is deferred.
+The detailed B-0063 contract is accepted in [Agent API v1](AGENT-API-V1.md).
+ADR-0020 is approved. B-0064 agent authentication and SDK foundation pass local
+Rust, TypeScript, and live HTTP/Redis gates. B-0065 request storage and inbox pass
+local checks. Owner-allocated version identities and namespaced candidate compilation
+pass local checks. Composed owner publication passed against pinned SpiceDB with two
+coexisting versions and an exact retry. The visual builder and exclusive-writer M6
+preview passed locally. Connected operator approval and agent reads pass locally.
+Request-triggered grant provisioning and signed snapshot preparation pass against
+real SpiceDB. Exact retries retain the same snapshot. B-0065 is locally complete.
+B-0066 is pending, and work is paused by the maintainer. No VM deployment is claimed.
 
 Deliver:
 

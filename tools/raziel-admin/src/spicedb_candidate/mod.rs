@@ -238,7 +238,7 @@ async fn write_prepared_candidate(
     Ok(result_from(prepared))
 }
 
-fn relationship_update(
+pub(crate) fn relationship_update(
     value: &RelationshipRecord,
 ) -> Result<authzed::RelationshipUpdate, CandidateWriteError> {
     let optional_caveat = value

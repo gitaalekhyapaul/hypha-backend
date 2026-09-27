@@ -1,0 +1,313 @@
+# Opt-in B-0065 runtime. This is publication and the access inbox, not proof issuance.
+# Requires Compose with !override/!reset support and current prebuilt policy tools.
+# ./scripts/compose -f docker-compose.yml -f docker-compose.m6.yml --profile apps config
+# Use RAZIEL_M6_CONSOLE_PORT=3011 for a separate local preview. Default: 3000.
+# No existing M5 schema or private state is imported. Do not override the project name.
+name: raziel-m6
+
+services:
+  # Remove, rather than reprofile, every legacy schema/snapshot/proof entry point.
+  # Even --profile '*' or explicit service selection cannot start these roles here.
+  toolchain: !reset null
+  sp1-plonk-benchmark: !reset null
+  spicedb-equivalence: !reset null
+  razield-private-init: !reset null
+  razield-proof-dependency-fetch: !reset null
+  razield-proof-build: !reset null
+  razield-proof-init: !reset null
+  razield-proof-sandbox: !reset null
+  razield-proof-worker: !reset null
+  razield: !reset null
+  raziel-registry-writer: !reset null
+  bullmq-conformance: !reset null
+  verifierd-worker-build: !reset null
+  verifierd-worker-init: !reset null
+  verifierd-worker-sandbox: !reset null
+  verifierd-test-build-init: !reset null
+  verifierd: !reset null
+  verifierd-retained-proof-test: !reset null
+  raziel-admin-policy: !reset null
+  raziel-admin-snapshot: !reset null
+  demo-console-sdk-build: !reset null
+  demo-access-graph: !reset null
+  demo-snapshot: !reset null
+  demo-capability-private-init: !reset null
+  demo-proof-init: !reset null
+  demo-proof-sandbox: !reset null
+  demo-proof-worker: !reset null
+  demo-capability-api: !reset null
+  demo-verifier-init: !reset null
+  demo-verifier-sandbox: !reset null
+  demo-verifierd: !reset null
+
+  spicedb:
+    pull_policy: never
+    command:
+      - serve
+      - --datastore-engine=memory
+      - --grpc-preshared-key=${RAZIEL_M6_SPICEDB_TOKEN:-raziel-m6-development-only}
+      - --skip-release-check
+      - --telemetry-endpoint=
+    ports: !reset []
+    networks: !override [policy-internal]
+    profiles: !override [apps]
+
+  redis:
+    pull_policy: never
+    ports: !reset []
+    profiles: !override [apps]
+
+  # Reuse compiled tools, never the M5 candidates, keys or approval state. Copying
+  # into a project-local volume gives all owner roles consistent Linux ownership.
+  demo-console-policy-tools:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    command: ["/workspace/scripts/prepare-m6-policy-runtime", "prepare"]
+    environment: !override
+      RAZIEL_M6_SPICEDB_TOKEN: ${RAZIEL_M6_SPICEDB_TOKEN:-raziel-m6-development-only}
+    network_mode: none
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    volumes: !override
+      - .:/workspace:ro
+      - ./.raziel/m6:/workspace/.raziel/m6
+      - type: bind
+        source: ./.raziel/m5/policy-tools
+        target: /opt/raziel/prebuilt-tools
+        read_only: true
+        bind:
+          create_host_path: false
+      - m6-policy-tools:/opt/raziel/m6/policy-tools
+      - m5-policy-secrets:/var/lib/raziel/m5-secrets
+      - m6-publication-token:/run/secrets/spicedb
+
+  demo-console-init:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    environment:
+      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m6/operator-secret.json
+    network_mode: none
+    volumes: !override
+      - .:/workspace:ro
+      - ./.raziel/m6:/workspace/.raziel/m6
+    depends_on:
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+
+  demo-policy-registry-init:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    environment:
+      RAZIEL_M5_POLICY_RUNTIME_ROOT: /opt/raziel/m6
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    # The base helper reads both authority keys to initialize trusted records.
+    # Only this initializer and the authority mount the signing-key directory.
+    volumes: !override
+      - .:/workspace:ro
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-registry:/var/lib/raziel/m5-registry
+      - m5-policy-secrets:/var/lib/raziel/m5-secrets:ro
+
+  demo-policy-runtime-init:
+    build: !reset null
+    pull_policy: never
+    command: ["/workspace/scripts/prepare-m6-policy-runtime", "ipc"]
+    volumes: !override
+      - .:/workspace:ro
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+      - m5-policy-activation-state:/var/lib/raziel/policy-activation
+      - m6-policy-publication:/var/lib/raziel/policy-publication
+      - m6-policy-packages:/var/lib/raziel/policy-packages
+      - m6-dataset-bindings:/var/lib/raziel/dataset-bindings
+
+  demo-policy-authority:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    command: ["/opt/raziel/m6/policy-tools/raziel-policy-authority"]
+    environment:
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    volumes: !override
+      - ./.raziel/m6/policy-candidates:/var/lib/raziel/policy-candidates
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m5-policy-secrets:/run/secrets/raziel:ro
+
+  demo-policy-registry-writer:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    command: ["/opt/raziel/m6/policy-tools/raziel-registry-writer"]
+    environment:
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    volumes: !override
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-registry:/var/lib/raziel/registry
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+
+  demo-policy-activation:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    command: ["/opt/raziel/m6/policy-tools/raziel-policy-activation"]
+    network_mode: !reset null
+    networks: !override [policy-internal]
+    environment:
+      RAZIEL_POLICY_PUBLICATION_MODE: composed
+      RAZIEL_POLICY_PUBLICATION_ROOT: /var/lib/raziel/policy-publication
+      RAZIEL_POLICY_PACKAGE_ROOT: /var/lib/raziel/policy-packages
+      RAZIEL_POLICY_VERSION_ROOT: /var/lib/raziel/policy-versions
+      RAZIEL_POLICY_COMPILER_EXECUTABLE: /opt/raziel/m6/policy-tools/spicedb-ir-compiler
+      RAZIEL_SPICEDB_ENDPOINT: http://spicedb:50051
+      RAZIEL_SPICEDB_TOKEN_PATH: /run/secrets/spicedb/token
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    volumes: !override
+      - ./.raziel/m6/policy-candidates:/var/lib/raziel/policy-candidates
+      - ./.raziel/m6/policy-versions:/var/lib/raziel/policy-versions:ro
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
+      - m5-policy-activation-state:/var/lib/raziel/policy-activation
+      - m5-policy-authority-ipc:/run/raziel-policy-authority
+      - m5-registry-writer-ipc:/run/raziel-registry-writer
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m6-policy-publication:/var/lib/raziel/policy-publication
+      - m6-policy-packages:/var/lib/raziel/policy-packages
+      # This separate directory contains only the SpiceDB token, never signing keys.
+      - m6-publication-token:/run/secrets/spicedb:ro
+    depends_on:
+      spicedb:
+        condition: service_started
+
+  demo-access-private-init:
+    build: !reset null
+    pull_policy: never
+    environment:
+      HOST_UID: "0"
+      HOST_GID: "0"
+
+  demo-access-api:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    command: ["/opt/raziel/m6/policy-tools/razield-access"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      RAZIEL_ACCESS_APPROVAL_MODE: installed
+      RAZIEL_POLICY_PUBLICATION_ROOT: /var/lib/raziel/policy-publication
+      RAZIEL_POLICY_PACKAGE_ROOT: /var/lib/raziel/policy-packages
+      RAZIEL_REGISTRY_PATH: /var/lib/raziel/registry
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+      RAZIEL_DATASET_BINDING_ROOT: /var/lib/raziel/dataset-bindings
+    volumes: !override
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m6-access-intents:/var/lib/raziel/access-intents
+      - m6-policy-publication:/var/lib/raziel/policy-publication:ro
+      - m6-policy-packages:/var/lib/raziel/policy-packages:ro
+      - m5-policy-registry:/var/lib/raziel/registry:ro
+      - m6-dataset-bindings:/var/lib/raziel/dataset-bindings
+
+    depends_on:
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+      demo-policy-registry-init:
+        condition: service_completed_successfully
+
+  # Dataset CRUD and source metadata only. No verifier or capability service starts.
+  demo-gateway:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    environment: !override
+      NEXT_TELEMETRY_DISABLED: "1"
+      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m6/receipts.jsonl
+      RAZIEL_TRANSACTION_STORE_PATH: /workspace/.raziel/m6/transactions.json
+      RAZIEL_DATASET_BINDING_MODE: required
+      RAZIEL_DATASET_BINDING_ROOT: /var/lib/raziel/dataset-bindings
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+    ports: !reset []
+    networks: !override [owner-internal]
+    volumes: !override
+      # Next dev rewrites next-env.d.ts beside .next. Keep the base development
+      # bind writable, but isolate build caches and select only M6 runtime paths.
+      - .:/workspace
+      - ./.raziel/m6:/workspace/.raziel/m6
+      - m6-gateway-next:/workspace/apps/demo-gateway/.next
+      - m6-dataset-bindings:/var/lib/raziel/dataset-bindings:ro
+    depends_on: !override
+      demo-console-init:
+        condition: service_completed_successfully
+      demo-console-policy-tools:
+        condition: service_completed_successfully
+      demo-policy-runtime-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  demo-console:
+    build: !reset null
+    pull_policy: never
+    user: "0:0"
+    environment: !override
+      NEXT_TELEMETRY_DISABLED: "1"
+      RAZIEL_POLICY_WORKFLOW: versioned
+      RAZIEL_POLICY_PUBLICATION_SOCKET_PATH: /run/raziel-policy-activation/activation.sock
+      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m6/policy-candidates
+      RAZIEL_POLICY_VERSION_ROOT: /workspace/.raziel/m6/policy-versions
+      RAZIEL_POLICY_COMPILER_EXECUTABLE: /opt/raziel/m6/policy-tools/spicedb-ir-compiler
+      RAZIEL_ADMIN_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-admin
+      RAZIEL_POLICY_ACTIVATION_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-policy-activate
+      RAZIEL_AGENT_AUTH_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-agent-auth
+      RAZIEL_ACCESS_CLIENT_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-access-client
+      RAZIEL_ACCESS_ENDPOINT: http://demo-access-api:50054
+      RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+      RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
+      RAZIEL_GATEWAY_INTERNAL_URL: http://demo-gateway:3001
+      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m6/operator-secret.json
+      RAZIEL_OPERATOR_EXPECTED_ORIGIN: ${RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN:-http://127.0.0.1:${RAZIEL_M6_CONSOLE_PORT:-3000}}
+      RAZIEL_OPERATOR_LIVE_MODE: "false"
+      RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS: ${RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS:-}
+      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m6/receipts.jsonl
+      # Do not silently fall back to recorded M5 capabilities. Route guards reject
+      # legacy operations, and there is no issuance endpoint in this runtime.
+      RAZIEL_CAPABILITY_MODE: live
+    ports: !override
+      - "${RAZIEL_M6_CONSOLE_BIND_HOST:-127.0.0.1}:${RAZIEL_M6_CONSOLE_PORT:-3000}:3000"
+    networks: !override [default, owner-internal]
+    volumes: !override
+      # Development-only source bind, not filesystem isolation from the M5 tree.
+      - .:/workspace
+      - ./.raziel/m6:/workspace/.raziel/m6
+      - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
+      - m5-policy-activation-ipc:/run/raziel-policy-activation
+      - m6-console-next:/workspace/apps/demo-console/.next
+    depends_on: !override
+      demo-policy-activation:
+        condition: service_healthy
+      demo-console-init:
+        condition: service_completed_successfully
+      demo-gateway:
+        condition: service_healthy
+      demo-access-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  m6-policy-tools:
+  m6-policy-publication:
+  m6-policy-packages:
+  m6-publication-token:
+  m6-console-next:
+  m6-gateway-next:
+  m6-dataset-bindings:
+
+networks:
+  policy-internal:
+    internal: true

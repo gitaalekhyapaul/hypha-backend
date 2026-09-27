@@ -16,8 +16,10 @@ import { basename, join } from "node:path";
 import {
   M5_COMPILER_VERSION,
   type PolicyDraftV1,
+  type PolicyVersionIdentity,
   type RenderedPolicySource,
   renderPolicySource,
+  renderPolicyVersionSource,
 } from "../policy-draft/index.ts";
 import { runDirectProcess } from "./process.ts";
 import {
@@ -83,11 +85,41 @@ export async function preparePolicyCandidate(
   dependencies: PolicyCandidateDependencies = {},
 ): Promise<PolicyCandidateProjection> {
   const request = validateCandidateRequest(input);
+  return prepareRenderedCandidate(
+    request,
+    renderPolicySource(request.draft),
+    candidateConfig,
+    dependencies,
+  );
+}
+
+/** Owner-only entry point. Identity comes from the durable allocator, never the HTTP body. */
+export async function prepareAllocatedPolicyCandidate(
+  input: unknown,
+  identity: PolicyVersionIdentity,
+  candidateConfig: PolicyCandidateConfig,
+  dependencies: PolicyCandidateDependencies = {},
+): Promise<PolicyCandidateProjection> {
+  const request = validateCandidateRequest(input);
+  const rendered = renderPolicyVersionSource(request.draft, identity);
+  return prepareRenderedCandidate(
+    { ...request, draft: rendered.draft },
+    rendered,
+    candidateConfig,
+    dependencies,
+  );
+}
+
+async function prepareRenderedCandidate(
+  request: PreparePolicyCandidateRequest,
+  rendered: RenderedPolicySource,
+  candidateConfig: PolicyCandidateConfig,
+  dependencies: PolicyCandidateDependencies,
+): Promise<PolicyCandidateProjection> {
   const config = validateCandidateConfig(candidateConfig);
   const nowUnixSeconds = dependencies.nowUnixSeconds ?? systemNowUnixSeconds;
   const runProcess = dependencies.runProcess ?? runDirectProcess;
   const paths = candidatePaths(config.candidateRoot, request.draft.candidateId);
-  const rendered = renderPolicySource(request.draft);
   const recordId = deriveRecordId(request.draft);
   const digest = requestDigest(request);
 

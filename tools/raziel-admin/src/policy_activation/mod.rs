@@ -2,8 +2,11 @@
 
 mod codec;
 mod server;
-mod store;
-mod wire;
+pub(crate) mod store;
+pub(crate) mod wire;
+
+#[cfg(test)]
+mod tests;
 
 use std::error::Error;
 use std::fmt;
@@ -12,6 +15,9 @@ use std::time::Duration;
 
 use serde::Serialize;
 
+pub use crate::policy_publication::catalogue::{
+    CatalogueIdentity, CataloguePolicy, CatalogueProjection,
+};
 pub use server::run_from_env;
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -47,6 +53,7 @@ pub struct PolicyActivationRequest {
 #[derive(Clone)]
 pub struct PolicyActivationClient {
     socket_path: PathBuf,
+    timeout: Duration,
 }
 
 impl PolicyActivationClient {
@@ -55,7 +62,10 @@ impl PolicyActivationClient {
         if !valid_absolute_path(&socket_path) {
             return Err(PolicyActivationClientError::InvalidConfiguration);
         }
-        Ok(Self { socket_path })
+        Ok(Self {
+            socket_path,
+            timeout: SOCKET_TIMEOUT,
+        })
     }
 
     pub fn activate(
@@ -68,8 +78,14 @@ impl PolicyActivationClient {
                 format_version: PROTOCOL_VERSION,
                 candidate_id: request.candidate_id,
                 approved_by: request.approved_by,
+                operation: wire::PolicyOperationWire::Activate as i32,
             },
+            self.timeout,
         )
+    }
+
+    pub fn list_catalogue(&self) -> Result<CatalogueProjection, PolicyActivationClientError> {
+        codec::send_catalogue_request(&self.socket_path, self.timeout)
     }
 }
 
@@ -108,23 +124,50 @@ impl fmt::Display for PolicyActivationClientError {
 impl Error for PolicyActivationClientError {}
 
 pub fn run_client_from_env() -> Result<(), PolicyActivationClientError> {
-    let (candidate_id, approved_by) = parse_client_arguments()?;
+    let operation = parse_client_arguments(std::env::args().skip(1))?;
     let socket_path = std::env::var("RAZIEL_POLICY_ACTIVATION_SOCKET_PATH")
         .map(PathBuf::from)
         .map_err(|_| PolicyActivationClientError::InvalidConfiguration)?;
-    let projection =
-        PolicyActivationClient::new(socket_path)?.activate(PolicyActivationRequest {
-            candidate_id,
-            approved_by,
-        })?;
-    let output =
-        serde_json::to_string(&projection).map_err(|_| PolicyActivationClientError::Protocol)?;
+    let mut client = PolicyActivationClient::new(socket_path)?;
+    match std::env::var("RAZIEL_POLICY_PUBLICATION_MODE").as_deref() {
+        Ok("composed") => client.timeout = Duration::from_secs(120),
+        Err(std::env::VarError::NotPresent) | Ok("legacy")
+            if matches!(operation, ClientOperation::Activate(_)) => {}
+        _ => return Err(PolicyActivationClientError::InvalidConfiguration),
+    }
+    let output = match operation {
+        ClientOperation::Activate(request) => serde_json::to_string(&client.activate(request)?),
+        ClientOperation::ListCatalogue => serde_json::to_string(&client.list_catalogue()?),
+    }
+    .map_err(|_| PolicyActivationClientError::Protocol)?;
+    if output.len() > MAX_FRAME_BYTES {
+        return Err(PolicyActivationClientError::Protocol);
+    }
     println!("{output}");
     Ok(())
 }
 
-fn parse_client_arguments() -> Result<(String, String), PolicyActivationClientError> {
-    let mut arguments = std::env::args().skip(1);
+#[derive(Debug, PartialEq, Eq)]
+enum ClientOperation {
+    Activate(PolicyActivationRequest),
+    ListCatalogue,
+}
+
+fn parse_client_arguments(
+    arguments: impl Iterator<Item = String>,
+) -> Result<ClientOperation, PolicyActivationClientError> {
+    let mut arguments = arguments.peekable();
+    if arguments
+        .peek()
+        .is_some_and(|value| value == "--list-approved")
+    {
+        arguments.next();
+        return if arguments.next().is_none() {
+            Ok(ClientOperation::ListCatalogue)
+        } else {
+            Err(PolicyActivationClientError::InvalidRequest)
+        };
+    }
     let mut candidate_id = None;
     let mut approved_by = None;
     while let Some(option) = arguments.next() {
@@ -137,10 +180,10 @@ fn parse_client_arguments() -> Result<(String, String), PolicyActivationClientEr
             _ => return Err(PolicyActivationClientError::InvalidRequest),
         }
     }
-    Ok((
-        candidate_id.ok_or(PolicyActivationClientError::InvalidRequest)?,
-        approved_by.ok_or(PolicyActivationClientError::InvalidRequest)?,
-    ))
+    Ok(ClientOperation::Activate(PolicyActivationRequest {
+        candidate_id: candidate_id.ok_or(PolicyActivationClientError::InvalidRequest)?,
+        approved_by: approved_by.ok_or(PolicyActivationClientError::InvalidRequest)?,
+    }))
 }
 
 fn valid_absolute_path(path: &Path) -> bool {

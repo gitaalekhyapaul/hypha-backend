@@ -22,6 +22,7 @@ export interface PolicyActivationProjection {
 export interface PolicyActivationConfig {
   readonly executable: string;
   readonly socketPath: string;
+  readonly publication?: true;
 }
 
 export class PolicyActivationError extends Error {

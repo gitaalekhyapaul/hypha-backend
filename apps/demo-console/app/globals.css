@@ -2631,3 +2631,243 @@ strong {
     width: 100%;
   }
 }
+
+.agent-registration-view {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.agent-registration-view .header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.agent-registration-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  min-height: 360px;
+  border-top: 1px solid #cfd4cd;
+}
+
+.agent-registration-list {
+  min-width: 0;
+  padding: 16px 16px 16px 0;
+  border-right: 1px solid #d5d9d3;
+}
+
+.agent-registration-list h2,
+.agent-registration-detail h2 {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.agent-registration-row {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 12px 10px;
+  border: 1px solid transparent;
+  border-bottom-color: #dfe3de;
+  border-radius: 0;
+  background: transparent;
+  color: #2a302d;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.agent-registration-row:hover,
+.agent-registration-row[aria-pressed="true"] {
+  border-color: #9bb9aa;
+  background: #eaf2ed;
+}
+
+.agent-registration-row strong {
+  font-size: 13px;
+}
+
+.agent-registration-row code {
+  font-size: 11px;
+  color: #606961;
+}
+
+.agent-registration-detail {
+  min-width: 0;
+  padding: 20px 0 20px 24px;
+}
+
+.agent-registration-metadata {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 24px;
+  font-size: 12px;
+}
+
+.agent-registration-metadata > div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.agent-registration-metadata dt,
+.agent-registration-muted {
+  color: #606961;
+}
+
+.agent-registration-metadata dd {
+  overflow-wrap: anywhere;
+}
+
+.agent-registration-form {
+  display: grid;
+  gap: 20px;
+  max-width: 640px;
+}
+
+.agent-registration-form textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #bdc4bd;
+  border-radius: 4px;
+  padding: 9px;
+  background: #ffffff;
+  color: #1f2421;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.agent-registration-view :is(button, textarea):focus-visible {
+  outline: 2px solid #315f8e;
+  outline-offset: 2px;
+}
+
+.agent-registration-tokens {
+  display: grid;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid #d5d9d3;
+}
+
+.agent-registration-token-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.agent-registration-token-form .field-group {
+  width: 165px;
+}
+
+.agent-registration-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.agent-registration-token-table {
+  width: 100%;
+  min-width: 740px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.agent-registration-token-table :is(th, td) {
+  padding: 10px 8px;
+  border-bottom: 1px solid #dfe3de;
+  vertical-align: top;
+}
+
+.agent-registration-token-table th {
+  color: #606961;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agent-registration-token-table code {
+  display: block;
+  width: 140px;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.agent-registration-token-status {
+  font-weight: 650;
+  color: #62676b;
+}
+
+.agent-registration-token-status[data-status="Active"] {
+  color: #216847;
+}
+
+.agent-registration-token-status[data-status="Expired"] {
+  color: #845414;
+}
+
+.agent-registration-revoke-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.agent-registration-revoke-confirm > span {
+  width: 100%;
+}
+
+.agent-registration-danger {
+  color: #8a332e;
+  border-color: #bd807b;
+}
+
+.agent-registration-secret {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #aabac8;
+  border-radius: 4px;
+  background: #f2f7fb;
+  padding: 16px;
+  font-size: 12px;
+}
+
+.agent-registration-secret h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.agent-registration-secret-value {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+  padding: 10px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .agent-registration-layout {
+    grid-template-columns: minmax(170px, 200px) minmax(0, 1fr);
+  }
+
+  .agent-registration-metadata > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+}
+
+@media (max-width: 760px) {
+  .agent-registration-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-registration-list {
+    border-right: 0;
+    border-bottom: 1px solid #d5d9d3;
+    padding-right: 0;
+  }
+
+  .agent-registration-detail {
+    padding-left: 0;
+  }
+}

@@ -1,4 +1,5 @@
 import type { ReconciliationQuery, SyntheticTransaction } from "../reconciliation/model";
+import type { DatasetBinding, DatasetBindingResolver } from "./dataset-binding";
 
 export const PROTECTED_REQUEST_FORMAT_VERSION = 1;
 export const PROTECTED_QUERY_MAX_BODY_BYTES = 1_048_576;
@@ -118,9 +119,11 @@ export interface ProtectedQueryDependencies {
   readonly signatureVerifier: ProtectedRequestSignatureVerifier;
   readonly nonceStore: NonceStore;
   readonly receiptStore: ReceiptStore;
+  readonly resolveDatasetBinding?: DatasetBindingResolver;
   readonly queryDataset: (
     datasetId: string,
     query: ReconciliationQuery,
+    binding?: DatasetBinding,
   ) => Promise<readonly SyntheticTransaction[]>;
   readonly nowUnixSeconds?: () => bigint;
 }

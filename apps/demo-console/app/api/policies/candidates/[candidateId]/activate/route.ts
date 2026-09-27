@@ -7,6 +7,7 @@ import {
   loadPolicyActivationConfig,
   policyActivationResponse,
 } from "../../../../../../lib/policy-activation/index.ts";
+import { policyWorkflowResponse } from "../../../../../../lib/policy-workflow.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export async function POST(request: Request, context: ActivationRouteContext): P
   } catch (error) {
     return operatorAuthResponse(error);
   }
+  const unavailable = policyWorkflowResponse("legacy");
+  if (unavailable) return unavailable;
   try {
     const { candidateId } = await context.params;
     const projection = await activatePolicyCandidate(
