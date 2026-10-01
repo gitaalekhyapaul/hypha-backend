@@ -144,7 +144,10 @@ signed identity lookup, and a standalone SDK candidate. B-0065 adds durable agen
 requests and an operator inbox with detail, approve, reject, and cancel actions.
 Private snapshot preparation passes locally against real SpiceDB with exact retry
 reuse. B-0066 adds serial preparation, final signature acceptance, proof-service
-handoff, and retained public results. Public release and two agent dashboards remain pending.
+handoff, and retained public results. Public release remains deferred. B-0067 adds
+both agent dashboards, persistent separate keys, bounded LLM tools, an authenticated
+message channel, and editable synthetic processor/bank seed drafts. Local checks and
+Docker desktop startup pass. The two-agent proof-backed VM flow remains pending.
 Owner-allocated policy identities and namespaced candidate compilation
 pass local checks. The composed owner publication path passed a two-version test
 against pinned SpiceDB. The visual builder now publishes versions in the isolated,
@@ -160,6 +163,8 @@ and second-scenario gates are deferred. Existing runbooks describe the completed
 stack. The [access inbox runbook](docs/runbooks/AGENT-ACCESS-INBOX.md#local-m6-preview)
 documents the partial local M6 preview. The [M6 VM runbook](docs/runbooks/M6-LIVE-VM.md)
 documents the separate provisional live deployment and its remaining proof gate.
+The [three-dashboard runbook](docs/runbooks/M7-AGENT-DEMO.md) adds the agent containers,
+SSH port forwards, free HTTPS tunnel option, and reconciliation recording flow.
 The [agent registration runbook](docs/runbooks/AGENT-REGISTRATION.md) covers the new
 authentication slice and its current limits. The
 [access inbox runbook](docs/runbooks/AGENT-ACCESS-INBOX.md) covers the connected local

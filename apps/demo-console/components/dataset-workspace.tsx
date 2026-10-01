@@ -8,6 +8,7 @@ import type {
   SyntheticDatasetDraft,
   SyntheticTransactionDraft,
 } from "../lib/dataset-client/index.ts";
+import { seedReconciliationLedgers } from "../lib/portal-client/datasets.ts";
 import {
   cloneDataset,
   finalizeDataset,
@@ -21,7 +22,7 @@ interface DatasetWorkspaceProps {
   readonly onSessionExpired: () => void;
 }
 
-type MutationState = "clone" | "finalize" | "save" | null;
+type MutationState = "clone" | "finalize" | "save" | "seed" | null;
 
 export function DatasetWorkspace({ csrfToken, onSessionExpired }: DatasetWorkspaceProps) {
   const [datasets, setDatasets] = useState<readonly SyntheticDataset[]>([]);
@@ -82,6 +83,18 @@ export function DatasetWorkspace({ csrfToken, onSessionExpired }: DatasetWorkspa
       setDatasets((current) => upsertDataset(current, saved));
       selectDataset(saved, setSelectedId, setDraft, setCloneId);
       setNotice("Draft saved");
+    });
+  }
+
+  async function seedLedgers() {
+    await runMutation("seed", async () => {
+      const result = await seedReconciliationLedgers(csrfToken);
+      setDatasets((current) => result.datasets.reduce(upsertDataset, current));
+      setNotice(
+        result.createdDatasetIds.length === 0
+          ? "Reconciliation ledgers already exist. Existing revisions were preserved."
+          : `Created ${result.createdDatasetIds.length} reconciliation ledger drafts. Existing revisions were preserved.`,
+      );
     });
   }
 
@@ -156,6 +169,14 @@ export function DatasetWorkspace({ csrfToken, onSessionExpired }: DatasetWorkspa
         </div>
         <div className="header-actions">
           <span className="classification-flag">Synthetic</span>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={loading || mutation !== null}
+            onClick={() => void seedLedgers()}
+          >
+            {mutation === "seed" ? "Seeding..." : "Seed reconciliation ledgers"}
+          </button>
           <button className="secondary-button" type="button" onClick={beginNewDraft}>
             New draft
           </button>

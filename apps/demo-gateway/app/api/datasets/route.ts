@@ -16,6 +16,16 @@ export async function GET(): Promise<NextResponse> {
   }
 }
 
+export async function POST(request: Request): Promise<NextResponse> {
+  try {
+    const draft = parseDatasetDraft(await readOperatorJson(request));
+    const dataset = await getSyntheticDatasetStore().createDraft(draft);
+    return NextResponse.json(dataset, { status: 201 });
+  } catch (error) {
+    return reconciliationErrorResponse(error);
+  }
+}
+
 export async function PUT(request: Request): Promise<NextResponse> {
   try {
     const draft = parseDatasetDraft(await readOperatorJson(request));

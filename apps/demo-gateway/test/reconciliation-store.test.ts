@@ -1,22 +1,27 @@
-import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { POST as createRoute, PUT as putRoute } from "../app/api/datasets/route.ts";
 
 import {
   DATASET_CLASSIFICATION,
+  type DatasetDraftInput,
   MAX_QUERY_RANGE_SECONDS,
   ReconciliationValidationError,
   type SyntheticTransactionInput,
   schemaFingerprint,
 } from "../src/reconciliation/model.ts";
-import { SyntheticDatasetStore } from "../src/reconciliation/store.ts";
+import * as datasetRuntime from "../src/reconciliation/runtime.ts";
+import { DatasetConflictError, SyntheticDatasetStore } from "../src/reconciliation/store.ts";
 
 const temporaryDirectories: string[] = [];
 const NOW = "2026-08-27T03:00:00Z";
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -25,6 +30,110 @@ afterEach(async () => {
 });
 
 describe("synthetic reconciliation dataset store", () => {
+  it.each(["DRAFT", "FINALIZED"])(
+    "rejects exact and changed creates without writing an existing %s",
+    async (status) => {
+      const { store, filePath } = await temporaryStore();
+      const input = createOnlyDraft();
+      let original = await store.createDraft(input, NOW);
+      if (status === "FINALIZED") {
+        original = await store.finalize(input.datasetId, NOW);
+      }
+      const before = await readFile(filePath, "utf8");
+      for (const attempt of [input, { ...input, sourceId: "operator-edited" }]) {
+        await expect(store.createDraft(attempt, "2026-08-27T03:02:00Z")).rejects.toBeInstanceOf(
+          DatasetConflictError,
+        );
+        expect(await readFile(filePath, "utf8")).toBe(before);
+        expect(await store.get(input.datasetId)).toEqual(original);
+      }
+    },
+  );
+
+  it("admits one concurrent create and rejects the competing create without replacement", async () => {
+    const { store } = await temporaryStore();
+    const input = createOnlyDraft();
+    const results = await Promise.allSettled([
+      store.createDraft(input, NOW),
+      store.createDraft({ ...input, sourceId: "competing-source" }, NOW),
+    ]);
+    expect(results[0]).toMatchObject({ status: "fulfilled" });
+    expect(results[1]).toMatchObject({
+      status: "rejected",
+      reason: expect.any(DatasetConflictError),
+    });
+    expect(await store.list()).toHaveLength(1);
+    expect((await store.get(input.datasetId)).source.sourceId).toBe(input.sourceId);
+  });
+
+  it("keeps an operator write queued before create-only and leaves operator PUT editable", async () => {
+    const { store } = await temporaryStore();
+    const input = createOnlyDraft();
+    const operatorInput = { ...input, sourceId: "operator-local" };
+    const results = await Promise.allSettled([
+      store.putDraft(operatorInput, NOW),
+      store.createDraft(input, NOW),
+    ]);
+    expect(results[0]).toMatchObject({ status: "fulfilled" });
+    expect(results[1]).toMatchObject({
+      status: "rejected",
+      reason: expect.any(DatasetConflictError),
+    });
+    expect((await store.get(input.datasetId)).source.sourceId).toBe("operator-local");
+    const edited = await store.putDraft({ ...operatorInput, rows: [secondRow()] }, NOW);
+    expect(await store.get(input.datasetId)).toEqual(edited);
+    expect(edited.rows[0]?.transactionId).toBe("txn-002");
+  });
+
+  it("rejects invalid new creates without a write and permits a later valid create", async () => {
+    const { store } = await temporaryStore();
+    const input = createOnlyDraft();
+    await expect(
+      store.createDraft({ ...input, rows: [{ ...firstRow(), amountMinor: "01" }] }, NOW),
+    ).rejects.toBeInstanceOf(ReconciliationValidationError);
+    expect(await store.list()).toEqual([]);
+    expect((await store.createDraft(input, NOW)).status).toBe("DRAFT");
+  });
+
+  it("returns 201 for create-only POST, 409 for existing IDs, and keeps PUT edits unchanged", async () => {
+    const { store, filePath } = await temporaryStore();
+    vi.spyOn(datasetRuntime, "getSyntheticDatasetStore").mockReturnValue(store);
+    const input = createOnlyDraft();
+    const created = await createRoute(datasetRequest("POST", input));
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ datasetId: input.datasetId, status: "DRAFT" });
+    const before = await readFile(filePath, "utf8");
+    for (const attempt of [input, { ...input, sourceId: "operator-edited" }]) {
+      const conflict = await createRoute(datasetRequest("POST", attempt));
+      expect(conflict.status).toBe(409);
+      expect(await conflict.json()).toMatchObject({ error: "DATASET_CONFLICT" });
+      expect(await readFile(filePath, "utf8")).toBe(before);
+    }
+    const edited = await putRoute(datasetRequest("PUT", { ...input, sourceId: "operator-edited" }));
+    expect(edited.status).toBe(200);
+    expect((await edited.json()).source.sourceId).toBe("operator-edited");
+    await store.finalize(input.datasetId);
+    const finalizedBytes = await readFile(filePath, "utf8");
+    expect((await createRoute(datasetRequest("POST", input))).status).toBe(409);
+    expect(await readFile(filePath, "utf8")).toBe(finalizedBytes);
+  });
+
+  it("returns a typed 400 for invalid create-only POST bodies without saving rows", async () => {
+    const { store } = await temporaryStore();
+    vi.spyOn(datasetRuntime, "getSyntheticDatasetStore").mockReturnValue(store);
+    for (const body of [
+      "{",
+      JSON.stringify({ ...createOnlyDraft(), rows: [{ ...firstRow(), amountMinor: "01" }] }),
+    ]) {
+      const response = await createRoute(
+        new Request("http://demo-gateway:3001/api/datasets", { method: "POST", body }),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "INVALID_SYNTHETIC_DATASET" });
+      expect(await store.list()).toEqual([]);
+    }
+  });
+
   it("checks the pinned revision and recomputes its checksum in the same read as the query", async () => {
     const { store, filePath } = await temporaryStore();
     await store.putDraft(
@@ -196,6 +305,23 @@ function firstRow(): SyntheticTransactionInput {
     transactionType: "payment",
     reconciliationStatus: "UNMATCHED",
   };
+}
+
+function createOnlyDraft(): DatasetDraftInput {
+  return {
+    datasetId: "create-only-demo",
+    sourceId: "portal-local",
+    sourceLabel: "Synthetic create-only test",
+    rows: [firstRow()],
+  };
+}
+
+function datasetRequest(method: "POST" | "PUT", input: DatasetDraftInput): Request {
+  return new Request("http://demo-gateway:3001/api/datasets", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 function secondRow(): SyntheticTransactionInput {

@@ -38,6 +38,10 @@ export class SyntheticDatasetClient {
     return decodeDataset(await this.#request("PUT", "/api/datasets", draft));
   }
 
+  public async createDraft(draft: SyntheticDatasetDraft): Promise<SyntheticDataset> {
+    return decodeDataset(await this.#request("POST", "/api/datasets", draft));
+  }
+
   public async finalize(datasetIdInput: unknown): Promise<SyntheticDataset> {
     const datasetId = validateDatasetReference(datasetIdInput);
     return decodeDataset(await this.#request("POST", `${datasetPath(datasetId)}/finalize`));

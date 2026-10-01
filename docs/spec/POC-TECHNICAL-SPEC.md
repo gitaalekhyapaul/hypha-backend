@@ -1349,7 +1349,17 @@ Exit gate:
 
 ### M7: Three-dashboard reconciliation demonstration
 
-Status: planned. Depends on M6 contracts and services.
+Status: in progress under B-0067. Depends on the M6 live proof gate.
+
+Both agent desktop dashboards, private persistent identities/tasks, packaged SDK
+request/sign/query flows, the authenticated channel, bounded LLM tools, and editable
+synthetic ledger seed are implemented. Local agent checks, seed/store checks, and
+Docker/browser startup pass. The SoC API passed a bounded completion-connectivity
+check, not a proof-backed business tool journey. Capability reuse with an editable
+UTC query window retains the task, dataset, and agent binding. The
+[three-dashboard runbook](../runbooks/M7-AGENT-DEMO.md) records the deployment path.
+Two real connected capabilities, independent/cached queries, and the complete
+three-dashboard recording remain pending. No production mock-proof flag was added.
 
 Deliver:
 

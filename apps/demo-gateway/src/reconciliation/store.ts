@@ -54,6 +54,24 @@ export class SyntheticDatasetStore {
     return this.#exclusive(async () => this.#getFrom(await this.#read(), datasetId));
   }
 
+  public async createDraft(
+    input: DatasetDraftInput,
+    now = wholeSecondNow(),
+  ): Promise<SyntheticDataset> {
+    return this.#exclusive(async () => {
+      const persisted = await this.#read();
+      if (persisted.datasets.some((dataset) => dataset.datasetId === input.datasetId)) {
+        throw new DatasetConflictError("dataset already exists");
+      }
+      const draft = createDraft(input, now);
+      await this.#write({
+        formatVersion: DATASET_FORMAT_VERSION,
+        datasets: replaceDataset(persisted.datasets, draft),
+      });
+      return draft;
+    });
+  }
+
   public async putDraft(
     input: DatasetDraftInput,
     now = wholeSecondNow(),

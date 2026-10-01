@@ -1,8 +1,8 @@
 # M6-M7 Agent Reconciliation Demo Plan
 
-Status: B-0064 through B-0066 implementation checkpoints complete. Pausing before B-0067.
+Status: B-0064 through B-0066 implementation checkpoints complete. B-0067 active.
 
-Date: 2026-09-27
+Date: 2026-10-01
 
 Decision: [ADR-0019](../decisions/0019-public-sdk-and-two-agent-reconciliation.md)
 
@@ -49,7 +49,11 @@ domain scenario move to the deferred backlog. No claim of real-data validation i
   request-triggered snapshot gate. M5 migration
   is not implicit. The legacy
   publisher rejects the reserved versioned namespace.
-- Agent dashboards and their message channel remain pending.
+- B-0067 now implements both desktop dashboards, persistent separate identities,
+  SDK-only task/request/query flows, bounded LLM tools, and an authenticated internal
+  message channel. Docker startup and focused checks pass locally. Operator seeding
+  creates two editable synthetic drafts and preserves concurrent operator writes.
+  The connected real-proof VM flow and final recording remain pending.
 
 ## Repository Ownership
 
@@ -274,8 +278,12 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 ## Remaining Inputs And Risks
 
 - No further product clarification is needed for this plan.
-- SDK sibling writes were approved and applied locally. Agent-repository edits remain later work.
-- Live inference needs a configured endpoint, model, and secret at deployment time.
+- SDK and agent sibling writes were approved and applied locally. The task sandbox
+  still requires scoped sibling write approval.
+- The supplied private SoC configuration passed a bounded API completion check.
+  VM secret placement and the business tool journey remain deployment checks.
+- Containers need a reachable trusted HTTPS operator endpoint. A free ngrok assigned
+  domain can serve both agents. No paid account or separate agent tunnel is required.
 - Public npm release needs package ownership, authentication, and license metadata.
 - ADR-0020 approves compatible shared-schema provisioning and exact agent-request
   signatures. Authentication and schema provisioning pass local live tests.
@@ -288,8 +296,9 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 
 ## Exact Next Action
 
-Wait for explicit maintainer resume. The maintainer deferred npm publication.
-The packaged candidate is enough for provisional VM testing. Use the M6 live VM
-runbook after resume, then begin B-0067's two-agent dashboards.
+Finish the B-0067 local checkpoint, reconcile the baton, then commit/push the backend
+and agent changes through the approved Git workflow. Use the M6 live VM and M7 agent
+runbooks for the connected deployment. The maintainer deferred npm publication.
+The packaged candidate is enough for provisional VM testing.
 Local component checks do not constitute a public npm release or a new proof-backed
 VM demonstration.

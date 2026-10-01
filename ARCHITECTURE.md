@@ -1,8 +1,8 @@
 # Raziel PoC Architecture
 
-Status: M0 through M5 validated; M6 authentication and request inbox implemented locally
+Status: M0 through M5 validated; M6 services and M7 agent features implemented locally
 
-Last updated: 2026-09-27
+Last updated: 2026-10-01
 
 ## Human-readable overview
 
@@ -43,7 +43,7 @@ a third dashboard. Real-data acceptance is deferred under
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
 | M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
 | M6 | In progress | Registration, inbox, policy publication, snapshot preparation, serial dispatch, signature acceptance, and terminal retention pass local checks. Packaged SDK signing, polling, and cold/cache query delivery pass. Live VM proof validation and public npm publication remain pending |
-| M7 | Planned | Two-ledger reconciliation, three dashboards, LLM tools, messages, and live proof-backed demo |
+| M7 | In progress | Two agent dashboards, persistent identities, SDK task flows, bounded messages, LLM tools, and synthetic ledger seeding are implemented. The connected two-proof VM demonstration remains pending |
 
 The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
 evidence keeps its original milestone labels. The
@@ -98,6 +98,19 @@ adds dedicated PostgreSQL-backed SpiceDB for restart persistence. Private snapsh
 remain owner-only files, not database rows. The live project imports no preview or
 M5 state. The [VM runbook](docs/runbooks/M6-LIVE-VM.md) gives preparation, startup,
 SDK flows, and the remaining real-proof gate.
+
+B-0067 adds the separate `raziel-demo-agents` runtime. Two non-root containers retain
+separate Ed25519 keys, tokens, exact intent/signing attempts, and task state. Their
+desktop dashboards use the packaged SDK for requests and protected queries. Follow-up
+queries can change the UTC window without changing the capability or dataset binding.
+An authenticated internal message service carries bounded synthetic lookup/results.
+The OpenAI-compatible adapter validates tool calls and keeps credentials server-side.
+The supplied SoC service passed a bounded completion-connectivity check. It has not
+yet run the proof-backed reconciliation task. Local agent checks and Docker/browser
+startup pass. The operator seed creates two editable drafts with exact, missing, and
+ambiguous settlement cases. Its create-only store operation preserves operator writes.
+The [agent demo runbook](docs/runbooks/M7-AGENT-DEMO.md) distinguishes this checkpoint
+from the pending real VM proof and three-dashboard recording gates.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,
