@@ -1,0 +1,38 @@
+services:
+  raziel-ngrok:
+    profiles: [ngrok]
+    image: ${NGROK_IMAGE}
+    pull_policy: never
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=16777216,mode=1777"]
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      RAZIEL_NGROK_URL: ${RAZIEL_NGROK_URL:-}
+    command:
+      - http
+      - ${RAZIEL_NGROK_UPSTREAM:-http://host.docker.internal:3000}
+      - --url=${RAZIEL_NGROK_URL:-}
+      - --inspect=false
+      - --pooling-enabled=false
+      - --config=/etc/raziel-ngrok/agent.yml
+      - --traffic-policy-file=/etc/raziel-ngrok/traffic-policy.json
+    volumes:
+      - ./tools/ngrok/agent.yml:/etc/raziel-ngrok/agent.yml:ro
+      - ./tools/ngrok/traffic-policy.json:/etc/raziel-ngrok/traffic-policy.json:ro
+    networks: [ngrok-egress]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -n "$$RAZIEL_NGROK_URL" && wget -q -T 5 -O - http://127.0.0.1:4040/api/tunnels | grep -F -- "\"$$RAZIEL_NGROK_URL\"" >/dev/null
+      interval: 5s
+      timeout: 6s
+      retries: 12
+      start_period: 10s
+
+networks:
+  ngrok-egress:

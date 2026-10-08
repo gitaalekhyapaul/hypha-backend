@@ -117,6 +117,13 @@ published on 2026-10-01. Registry metadata, `latest`, and archive integrity are
 verified. Connected VM proof validation remains pending. Existing proof contracts
 are unchanged.
 
+[ADR-0022](../decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in
+Compose-managed fixed-domain HTTPS ingress for the synthetic demo. Agent APIs and
+protected queries use that route. Operator pages remain SSH-only. One backend serves
+the domain at a time, with pooling and local inspection disabled. Ngrok can see
+permitted API traffic at its HTTPS edge. The real cloud endpoint check still needs
+private token configuration. No SDK TLS or authorization check changes.
+
 ## Actors and entities
 
 | Entity | Baseline identifier | Meaning |

@@ -99,6 +99,15 @@ remain owner-only files, not database rows. The live project imports no preview 
 M5 state. The [VM runbook](docs/runbooks/M6-LIVE-VM.md) gives preparation, startup,
 SDK flows, and the remaining real-proof gate.
 
+[ADR-0022](docs/decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in,
+Docker-managed ngrok ingress on the active backend host. Its fixed HTTPS domain
+serves the signed agent API and protected-query routes, not operator pages.
+Browser dashboards stay on SSH forwarding. The ingress joins no owner networks
+and mounts no private state. Pooling and local inspection are disabled. Only one
+backend uses the domain at a time. Ngrok's cloud terminates HTTPS and can see
+permitted API traffic. This is a synthetic-demo deployment, not a production
+confidentiality claim. The SDK, signatures, proof contracts, and registries are unchanged.
+
 B-0067 adds the separate `raziel-demo-agents` runtime. Two non-root containers retain
 separate Ed25519 keys, tokens, exact intent/signing attempts, and task state. Their
 desktop dashboards use the packaged SDK for requests and protected queries. Follow-up

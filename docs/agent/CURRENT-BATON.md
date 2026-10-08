@@ -5,15 +5,21 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-08T02:25:24Z
+- Last updated UTC: 2026-10-08T07:32:08Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
-- Execution: the three-repository release checkpoint and local deployment-guide
-  correction are complete. Guided VM setup is requested. Agent API ingress needs
-  a deployment choice before the connected flow can run.
+- Execution: maintainer selected a Compose-managed ngrok tunnel with the account's
+  fixed dev domain, portable between the Mac and VM. The bounded deployment follow-up
+  is implemented and locally checked. No remote source or runtime edits.
 
 ## Objective
+
+Next bounded objective: configure the private ngrok token and validate the signed
+Agent A approval-to-data path on the VM. The fixed-domain Compose ingress and both
+agent origin defaults are implemented. Preserve authentication, SDK TLS checks, and
+private owner networks. One host serves the domain at a time. No SDK release or proof
+change belongs to this deployment checkpoint.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -55,6 +61,10 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 - Recheck writable roots, current files, and runtime availability on the next resume.
 - The October 8 guide correction touches only the M6/M7 runbooks, agent demo plan,
   current baton, and its dated documentation evidence.
+- Ngrok follow-up: Compose overlay and wrapper, startup/preflight scripts, ngrok
+  configuration and route policy, one deployment ADR, focused checks, architecture
+  and runbook docs. Agents: configuration, default-origin presentation, Compose,
+  env example, README, and focused tests. SDK remains read-only.
 
 ## Out Of Scope
 
@@ -82,17 +92,21 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - A changed query window can reuse a capability within its task/dataset binding.
 - SSH forwarding supplies Mac browser access to all three dashboards. It does not
   supply an API listener inside the VM agent containers.
-- Ngrok is an optional HTTPS API route, not a Raziel dependency. A private VM HTTPS
-  frontend can replace it. The current Compose files do not provision that frontend.
-  No TLS bypass, new dependency, public exposure, or remote edit is authorized by
-  the documentation correction.
+- Maintainer selected ngrok ingress on October 8. Use the account's fixed HTTPS dev
+  domain, start the tunnel inside Compose on the active backend host, and disable
+  pooling. Expose agent API/protected-query routes, not operator routes or services.
+  No TLS bypass, automatic VM pull, SDK release, or private-state migration.
+- ADR-0022 records the chosen route and cloud trust boundary. The supplied domain is
+  `https://either-anymore-immunize.ngrok-free.dev`. Image download was approved and
+  completed. Agent dashboard origins protect their own browser actions, not SDK
+  requests to the backend. This change adds no backend CORS or origin allowlist.
 - Ask for Docker or SSH ControlMaster if unavailable. Never modify VM source directly.
 
 ## Open Questions And Blockers
 
-- No feature or dependency decision is pending.
-- Agent API ingress is a deployment choice: supply a trusted VM-reachable HTTPS
-  endpoint, add a private VM TLS frontend, or approve the existing public tunnel route.
+- Private ngrok token configuration remains pending. The URL is known and the image
+  is present locally. Keep the token in ignored backend settings, never chat or Git.
+  Live cloud-policy acceptance and signed API validation require the private token.
 - Live VM release build, API reachability, and real M6/M7 proof validation are unrun.
 - The October 8 read-only check found a working SSH ControlMaster and reachable VM.
   The backend was clean at `7710e9a`; the agent checkout was absent at that check.
@@ -130,7 +144,20 @@ Mac forwarding. They distinguish Compose settings, LLM credentials, generated
 identity keys, and UI-provisioned Raziel tokens. The stale plan statement about
 deferred npm publication is corrected. No app, SDK, VM, or credential changed.
 
+The ngrok follow-up adds opt-in Compose startup on the VM and standalone Mac ingress.
+Its API-only traffic policy excludes operator routes. Pooling and local inspection
+are disabled. Both agents prefill the configured domain without replacing stored
+connections. The runbook now documents separate browser origins and API destinations.
+The SDK and its exact public package dependency are unchanged.
+Agent fixed-origin checkpoint: `71d238ecca44fe5a98c50193fc028c1b2208da6e`.
+The backend ingress checkpoint is the commit containing this updated baton.
+
 ## Validation Plan
+
+For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
+inspection/pooling, and credential scope. Validate the real CLI/config after image
+approval. Agent tests cover configured-origin defaults without replacing stored
+connections. No expensive proof rerun is needed for the transport-only checkpoint.
 
 On resume, follow [M6 Live VM](../runbooks/M6-LIVE-VM.md) and
 [M7 Agent Demo](../runbooks/M7-AGENT-DEMO.md). Start with Agent A's approval-to-data
@@ -159,6 +186,17 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Connected VM proofs/deployment | SKIP | No remote source, runtime, proof, or recording action ran |
 | Deployment guide static checks | PASS | Relative links, shell example syntax, ignored settings paths, and diff whitespace |
 | Guide correction runtime tests | SKIP | Documentation only; no services, credentials, or VM configuration changed |
+| Ngrok image and CLI | PASS | Approved exact digest downloaded; real version 3.39.11, config check, flags and health-check tools confirmed |
+| Ngrok Compose layouts | PASS | Standalone Mac and integrated M6 render; fixed domain, token scope, network/mount isolation and pooling/inspection flags |
+| Existing M6 limits | PASS | Render keeps 56 GiB/eight CPUs/no swap and 2 GiB/networkless verifier |
+| API route vectors | PASS | Nine allowed routes and twelve denied methods/paths; static check, not cloud acceptance |
+| Missing URL/token | PASS | Both preflight cases reject configuration without starting services |
+| Agent types and tests | PASS | Direct pinned Node/TypeScript: 14 tests, zero failed/skipped in sequential run |
+| Initial concurrent agent run | FAIL, resolved | Channel child missed existing startup window under contention; isolated and complete sequential runs pass without app/test changes |
+| Agent formatting and image | PASS | 22 files, no fixes; frozen install layer cached; both image roles load supplied default origin |
+| Initial networkless image build | FAIL, resolved | Different build cache key missed package cache; normal cache-backed build passes with no dependency edits |
+| Ingress documentation | PASS | Relative links and shell examples parse; private settings are ignored |
+| Public endpoint and real proofs | SKIP | No token, live tunnel, remote runtime, or proof was used in this follow-up |
 
 ## Risks And Private-Data Notes
 
@@ -169,9 +207,10 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Resolve the agent API HTTPS route with the maintainer. Keep browser access on SSH
-forwarding. Have the maintainer pull the backend guide correction and clone/update
-the public-package agent checkpoint on the VM. Configure the two repo-local settings
+Have the maintainer pull both deployment checkpoints on the VM. Add the private
+ngrok token and supplied domain to `.env.m6`, and the matching API default to
+`.env.agents`. Follow the updated runbook and start the backend with `--ngrok`.
+Keep browser access on SSH forwarding. Configure the two repo-local settings
 files and private SoC credentials path as documented. Check Docker and the existing
 SSH ControlMaster before runtime work. Validate Agent A's registration, inbox
 approval, exact signing, real proof, and protected query, then Agent B and reconciliation.
@@ -184,3 +223,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Agent migration and October 8 follow-up](history/2026-10-01-agent-public-sdk-consumption.md)
 - [Preserved pre-release state](history/2026-10-08-b0067-pre-release-state.md)
 - [VM guide and secret-loading correction](history/2026-10-08-vm-runbook-and-secret-loading.md)
+- [Fixed-domain ingress checkpoint](history/2026-10-08-fixed-domain-ngrok-ingress.md)

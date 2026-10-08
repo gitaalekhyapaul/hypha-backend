@@ -1,0 +1,21 @@
+services:
+  demo-console:
+    networks: !override [default, owner-internal, ngrok-upstream]
+
+  raziel-ngrok:
+    command: !override
+      - http
+      - http://demo-console:3000
+      - --url=${RAZIEL_NGROK_URL:-}
+      - --inspect=false
+      - --pooling-enabled=false
+      - --config=/etc/raziel-ngrok/agent.yml
+      - --traffic-policy-file=/etc/raziel-ngrok/traffic-policy.json
+    networks: !override [ngrok-egress, ngrok-upstream]
+    depends_on:
+      demo-console:
+        condition: service_healthy
+
+networks:
+  ngrok-upstream:
+    internal: true

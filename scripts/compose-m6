@@ -4,6 +4,12 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 
+ngrok=false
+if [ "${1:-}" = "--ngrok" ]; then
+  ngrok=true
+  shift
+fi
+
 # Never alias the memory-backed preview or M5 runtime directories.
 export RAZIEL_M6_RUNTIME_PATH=./.raziel/m6-live
 export RAZIEL_M6_TOOLS_PATH=./.raziel/m6-live-tools
@@ -14,6 +20,12 @@ export RAZIEL_EXPECTED_SP1_VKEY_HASH=$(sed -n '1p' "$key_root/sp1-vkey-hash.txt"
 environment=${RAZIEL_M6_ENV_FILE:-.env.m6}
 if [ -f "$environment" ]; then
   set -- --env-file "$environment" "$@"
+fi
+if [ "$ngrok" = true ]; then
+  exec ./scripts/compose \
+    -f docker-compose.yml -f docker-compose.m6.yml -f docker-compose.m6-live.yml \
+    -f docker-compose.ngrok.yml -f docker-compose.m6-ngrok.yml \
+    --project-name raziel-m6-live --profile ngrok "$@"
 fi
 exec ./scripts/compose \
   -f docker-compose.yml -f docker-compose.m6.yml -f docker-compose.m6-live.yml \

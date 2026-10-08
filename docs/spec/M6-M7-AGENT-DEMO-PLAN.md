@@ -254,6 +254,12 @@ The runbook must state each dashboard port, API base URL, origin setting, and tu
 mapping after they exist. Support the VM-to-Mac demonstration arrangement and optional
 external HTTPS publishing. Do not bake one hostname into protocol identity.
 
+ADR-0022 records the selected Docker-managed ngrok route. The configured fixed origin
+is `https://either-anymore-immunize.ngrok-free.dev`. One backend uses it at a time.
+The tunnel permits agent/protected-query APIs only. Dashboard forwarding remains SSH.
+The VM starts ingress with the backend. Mac development can start the same ingress
+container against its existing local backend, not a local replacement for VM proving.
+
 Agent containers use their own key/state volumes and API tokens. They have no owner
 registry, SpiceDB, witness, authority-key, or backend database mounts. Agent dashboards
 talk to their own servers, which use the SDK. The operator stays separately authenticated.
@@ -282,10 +288,11 @@ synthetic data revision, and redacted public receipts in the final evidence bund
   still requires scoped sibling write approval.
 - The supplied private SoC configuration passed a bounded API completion check.
   VM secret placement and the business tool journey remain deployment checks.
-- Containers need a reachable trusted HTTPS operator endpoint. SSH forwarding supplies
-  Mac browser access, not a backend listener inside an agent container. Ngrok is one
-  optional API route. A private VM TLS frontend is another deployment choice and is
-  not provisioned by current Compose files. See the M7 deployment runbook.
+- Containers use the selected fixed-domain ngrok HTTPS API route. SSH supplies Mac
+  browser access, not an API listener inside an agent container. Private token setup
+  and real cloud-policy acceptance remain deployment gates. Ngrok can see permitted
+  API traffic, so this route serves labeled synthetic records only. See ADR-0022 and
+  the M7 deployment runbook. Private VM TLS remains a deferred deployment option.
 - Public SDK `0.1.0` is published. Agents pin that exact npm version and lockfile.
   No SDK source checkout or publishing token is needed on the VM.
 - ADR-0020 approves compatible shared-schema provisioning and exact agent-request
@@ -300,7 +307,7 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 ## Exact Next Action
 
 The B-0067 local feature and public-package checkpoints are committed and pushed.
-Resolve agent API HTTPS ingress, then follow the [M6 backend](../runbooks/M6-LIVE-VM.md)
+Configure the private ngrok token, then follow the [M6 backend](../runbooks/M6-LIVE-VM.md)
 and [M7 three-dashboard](../runbooks/M7-AGENT-DEMO.md) runbooks for connected deployment.
 Keep VM backend settings, VM agent settings, and private SoC credentials separate.
 Start with Agent A's approval-to-data flow, then Agent B and reconciliation.

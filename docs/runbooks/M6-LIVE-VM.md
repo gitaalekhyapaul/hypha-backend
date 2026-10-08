@@ -21,9 +21,11 @@ match `RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN` to it.
 
 ```mermaid
 flowchart LR
-  Agent[External agent and SDK] --> Console[Port 3000: agent facade and operator console]
+  Agent[External agent and SDK] -->|Signed HTTPS requests| Edge[Fixed ngrok domain]
+  Edge --> Tunnel[Backend ngrok container]
+  Tunnel -->|Agent and protected-query routes only| Console[Port 3000: agent facade and operator console]
   Console --> Inbox[Access request API]
-  Operator[Operator] --> Console
+  Operator[Operator] -->|SSH-forwarded browser| Console
   Inbox --> Redis[(Redis: requests and queues)]
   Dispatcher[Serial dispatcher] --> Redis
   Dispatcher --> SpiceDB[SpiceDB]
@@ -42,6 +44,11 @@ Only port 3000 is published, on VM loopback by default. No database, Redis, gate
 owner RPC, or prover port needs forwarding. The proof has eight CPUs, 56 GiB RAM,
 and no swap. The verifier has 2 GiB RAM. Their child sandboxes have no network.
 One proof runs at a time. There is no production mock-proof flag.
+
+The selected demo adds an opt-in fixed-domain ngrok container for agent API and
+protected-query traffic. Operator browser access remains SSH-only. The tunnel
+joins no owner network and mounts no private state. Ngrok's cloud can see permitted
+API traffic. This route serves synthetic data, not private production records.
 
 The Compose project is `raziel-m6-live`. Its named volumes and `.raziel/m6-live`
 files are separate from M5 and the memory-backed `raziel-m6` preview. No state is
@@ -67,6 +74,8 @@ RAZIEL_M6_SPICEDB_TOKEN=replace-with-a-long-random-token
 RAZIEL_M6_TRUST_DOMAIN_ID=raziel-m6-nus
 RAZIEL_M6_CONSOLE_PORT=3000
 RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN=http://127.0.0.1:3000
+RAZIEL_NGROK_URL=https://either-anymore-immunize.ngrok-free.dev
+NGROK_AUTHTOKEN=replace-with-your-private-ngrok-authtoken
 ```
 
 Keep the PostgreSQL password alphanumeric. It is inserted into an internal database
@@ -78,15 +87,19 @@ source the file or export every value manually.
 Initializers generate policy/snapshot signing keys and the operator password
 verifier in private runtime storage. Do not put those private keys in `.env.m6`.
 Changing the configured password alone does not reset a retained operator record.
+Edit the ngrok token in this private file. It reaches only the tunnel container.
+No token belongs in chat or agent settings.
 
 ```bash
 cd ~/hypha-backend
 chmod 0600 .env.m6
 docker pull postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+docker pull ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd
 ./scripts/check-m6-live-compose
+./scripts/check-ngrok-compose --m6
 ./scripts/prepare-m6-demo
-./scripts/start-m6-demo
-./scripts/compose-m6 --profile apps ps
+./scripts/start-m6-demo --ngrok
+./scripts/compose-m6 --ngrok --profile apps ps
 ```
 
 Preparation downloads repository-locked dependencies, generates protocol code, and
@@ -94,6 +107,10 @@ builds current owner, proof, and verifier executables. It creates no proof or gr
 It can take longer on the first build. It never installs host language toolchains.
 No automatic image pull occurs during startup. Existing pinned toolchain, Redis,
 and SpiceDB images must already be present from the prior VM setup.
+
+`--ngrok` starts the fixed endpoint inside the backend Compose stack and waits for
+its health. No manual host tunnel is required. The plain command without this flag
+retains backend-only startup for a separately supplied HTTPS ingress.
 
 ## Mac: View Backend
 
@@ -106,8 +123,9 @@ ssh -N -L 3000:127.0.0.1:3000 gapaul-vm-i
 Open `http://127.0.0.1:3000` on the Mac. This is local forwarding through SSH, not a
 second application server. SSH alone is enough for this browser connection.
 The operator's browser URL must match `RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN`.
-Agent containers need a separate reachable HTTPS API origin. The full M7 runbook
-explains private HTTPS and optional ngrok routes. Do not expose internal service ports.
+Agent containers use `https://either-anymore-immunize.ngrok-free.dev`. The full M7
+runbook documents the Compose tunnel, agent settings, and public route checks.
+Do not expose internal service ports.
 
 ## Testable Flow
 
@@ -148,10 +166,10 @@ separates upload acceptance from normal registry availability.
 
 ```bash
 cd ~/hypha-backend
-./scripts/compose-m6 --profile apps logs --tail 80 m6-dispatcher m6-capability-api m6-proof-worker
-./scripts/compose-m6 --profile apps logs --tail 80 m6-proof-sandbox m6-verifierd
-./scripts/compose-m6 --profile apps stop
-./scripts/start-m6-demo
+./scripts/compose-m6 --ngrok --profile apps logs --tail 80 m6-dispatcher m6-capability-api m6-proof-worker
+./scripts/compose-m6 --ngrok --profile apps logs --tail 80 m6-proof-sandbox m6-verifierd
+./scripts/compose-m6 --ngrok --profile apps stop
+./scripts/start-m6-demo --ngrok
 ```
 
 Stop/start retains PostgreSQL, Redis, approvals, private snapshots, intents, and keys.

@@ -3,6 +3,16 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 
+if [ "$#" -gt 1 ]; then
+  printf 'usage: ./scripts/start-m6-demo [--ngrok]\n' >&2
+  exit 1
+fi
+case "${1:-}" in
+  "") ;;
+  --ngrok) ./scripts/check-ngrok-compose --m6 ;;
+  *) printf 'usage: ./scripts/start-m6-demo [--ngrok]\n' >&2; exit 1 ;;
+esac
+
 for binary in razield-access-dispatch razield-capability razield-proof-worker verifierd raziel-verifier-client; do
   test -x ".raziel/m6-live-tools/$binary" || {
     printf 'missing M6 tool: %s; run ./scripts/prepare-m6-demo\n' "$binary" >&2
@@ -15,4 +25,4 @@ test -d .sp1/circuits/plonk/v6.1.0 || {
 }
 # Compose's proof initializer checks VM memory before starting its 56 GiB cgroup.
 # The existing no-swap, eight-CPU proof and 2 GiB verifier limits are unchanged.
-exec ./scripts/compose-m6 --profile apps up --detach --wait --wait-timeout 900
+exec ./scripts/compose-m6 "$@" --profile apps up --detach --wait --wait-timeout 900

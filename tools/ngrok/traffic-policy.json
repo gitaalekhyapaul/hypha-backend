@@ -1,0 +1,22 @@
+{
+  "on_http_request": [
+    {
+      "expressions": [
+        "!(req.method == 'GET' && req.url.path.matches('^/api/agent/v1/(me|access-requests(/[0-9a-f-]{36})?)$') || req.method == 'POST' && req.url.path.matches('^/api/(agent/v1/access-requests(/[0-9a-f-]{36}/(resume|issuance|cancel))?|datasets/[^/]+/protected-query)$'))"
+      ],
+      "actions": [
+        {
+          "type": "custom-response",
+          "config": {
+            "status_code": 404,
+            "body": "{\"error\":\"NOT_FOUND\"}",
+            "headers": {
+              "content-type": "application/json",
+              "cache-control": "no-store"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

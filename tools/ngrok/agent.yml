@@ -1,0 +1,11 @@
+version: 3
+agent:
+  console_ui: false
+  inspect_db_size: 0
+  log: stdout
+  log_level: warn
+  log_format: json
+  remote_management: false
+  update_check: false
+  # Readiness API stays inside this container. No host port is published.
+  web_addr: 127.0.0.1:4040

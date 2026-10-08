@@ -8,6 +8,8 @@ Public-SDK agent checkpoint with archive cleanup, committed and pushed:
 `84f9eb135532cc52b89bbfbf20d77c1f85b12b7d`.
 SDK release documentation checkpoint, committed and pushed:
 `6239fad9d02b1047806b3c449eb593ea7cd9f119`.
+Agent fixed-origin deployment checkpoint:
+`71d238ecca44fe5a98c50193fc028c1b2208da6e`.
 SDK runtime source: `e7f1cd6b354f236f0323d9d19aa4a431c5dfa470`. Agent source now
 pins public npm package `@gitaalekhyapaul/raziel-sdk-ts@0.1.0`. The lockfile records
 the verified registry integrity. See the
@@ -50,7 +52,8 @@ Every command below names its machine and working directory.
 | VM backend | `~/hypha-backend` | Operator, API, database, queue, prover, verifier | `.env.m6` |
 | VM agents | `~/raziel-demo-agents` | Agent A, Agent B, shared channel | `.env.agents` |
 | VM private files | `~/raziel-secrets` | Supplied SoC credentials, outside both repos | `soclaas.env` |
-| Mac | Any directory | SSH dashboard forwarding and optional HTTPS tunnel | Existing SSH/tunnel account configuration |
+| Mac browser | Any directory | SSH dashboard forwarding | Existing SSH ControlMaster |
+| Mac backend development | Local `hypha-backend` checkout | Optional Docker ingress to an existing local backend | `.env.ngrok` |
 
 The SDK source checkout is not needed on the VM. Agent builds install exact public
 SDK `0.1.0` from the lockfile. Installation needs registry access on a cold cache,
@@ -77,6 +80,8 @@ RAZIEL_M6_SPICEDB_TOKEN=replace-with-a-long-random-token
 RAZIEL_M6_TRUST_DOMAIN_ID=raziel-m6-nus
 RAZIEL_M6_CONSOLE_PORT=3000
 RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN=http://127.0.0.1:13000
+RAZIEL_NGROK_URL=https://either-anymore-immunize.ngrok-free.dev
+NGROK_AUTHTOKEN=replace-with-your-private-ngrok-authtoken
 ```
 
 ```bash
@@ -97,6 +102,10 @@ initializer stores a salted password verifier, not a plain-text login password.
 The policy and snapshot signing keys are generated on first initialization and
 retained in owner-only runtime volumes. Do not create those keys in an env file.
 
+The ngrok token belongs only in backend settings. Get it from your account and edit
+the private file directly. Do not send it through chat or put it in agent settings.
+The domain is public and stable. It is not the registration audience or an agent ID.
+
 ## VM Backend: Prepare And Start
 
 Working directory: `~/hypha-backend`.
@@ -112,16 +121,23 @@ old stack before starting M6 on the same VM. Stopping preserves its volumes.
 cd ~/hypha-backend
 ./scripts/compose --profile apps --profile m5-live stop
 docker pull postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+docker pull ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd
 ./scripts/check-m6-live-compose
+./scripts/check-ngrok-compose --m6
 ./scripts/prepare-m6-demo
-./scripts/start-m6-demo
-./scripts/compose-m6 --profile apps ps
+./scripts/start-m6-demo --ngrok
+./scripts/compose-m6 --ngrok --profile apps ps
 ```
 
 Preparation builds dependencies and binaries. It generates no authorization proof.
 Startup waits for service health. The project is `raziel-m6-live`, with separate
 volumes and runtime files. It imports no M5 or preview state. Never use
 `down --volumes` as a startup repair.
+
+The startup command starts ngrok inside Compose and waits for its fixed endpoint.
+It forwards directly to the console container. A host ngrok process and a Mac API
+tunnel are not needed. The image is pinned for native Mac arm64 and VM amd64.
+Cold setup needs the explicit image pull above. Startup never downloads images.
 
 ## VM Private Files: Prepare SoC Credentials
 
@@ -176,6 +192,7 @@ git status --short
 
 Use the public-package checkpoint listed at the top or a later compatible commit.
 The obsolete SDK archive is not a dependency.
+The fixed API-origin default needs the newer deployment checkpoint listed above.
 
 ## VM Agents: Configure
 
@@ -195,6 +212,7 @@ Edit this file with private values and the absolute VM path to the SoC file:
 AGENT_DASHBOARD_PASSWORD=replace-with-at-least-12-characters
 CHANNEL_TOKEN_A=replace-with-a-random-token-at-least-32-characters
 CHANNEL_TOKEN_B=replace-with-a-different-token-at-least-32-characters
+RAZIEL_API_BASE_URL=https://either-anymore-immunize.ngrok-free.dev
 SOCLAAS_ENV_PATH=/home/sadm/raziel-secrets/soclaas.env
 AGENT_A_ORIGINS=http://127.0.0.1:13001
 AGENT_B_ORIGINS=http://127.0.0.1:13002
@@ -212,6 +230,25 @@ shared channel or backend. They are not copied into the Docker image.
 `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` override the matching SoC values.
 Do not set `LLM_ENV_FILE` for this Compose route. That setting is for a native
 process reading a file directly. Without LLM configuration, manual controls remain.
+
+`RAZIEL_API_BASE_URL` prefills both Identity forms. It does not connect an agent or
+replace its token. A saved connection keeps its stored URL across restarts and
+overrides this default. Do not switch an agent with retained tasks to a different
+installation. Its registrations, tokens, tasks, and capabilities belong to that backend.
+
+Browser origins and API destinations have separate roles:
+
+| Setting | Checked by | Purpose |
+| --- | --- | --- |
+| `RAZIEL_API_BASE_URL` | Agent configuration and SDK | Destination for server-side signed requests to Raziel |
+| `AGENT_A_ORIGINS`, `AGENT_B_ORIGINS` | Each agent dashboard server | Protect its own cookie-authenticated browser actions |
+| `RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN` | Backend operator console | Protect operator browser actions, accepting its own request origin too |
+
+The backend does not inspect the agent-dashboard origin lists. SDK calls run on
+the agent server, not in the browser, so browser CORS does not apply to that hop.
+No new backend origin allowlist belongs to this ngrok change. For another browser
+port or hostname, edit that dashboard's comma-separated origin setting. Keep
+unrelated websites outside cookie-authenticated mutation access.
 
 An env file is private local configuration, not a production secret vault.
 VM administrators and users with Docker access can inspect container environments.
@@ -252,42 +289,83 @@ Open the operator at `http://127.0.0.1:13000`, Agent A at
 SSH alone supplies this browser access. No ngrok process is needed to open or
 control the dashboards. Only these three ports need browser forwarding.
 
-## Choose The Agent API Route
+## Agent API Route
 
 This is separate from browser forwarding. The SDK runs inside the agent
 containers on the VM. Their `127.0.0.1` addresses belong to those containers,
 not the VM host or Mac. SSH `-L` creates Mac listeners; it does not create a
 backend listener inside either agent container.
 
-The current SDK accepts HTTP for loopback development and requires HTTPS for
-other hosts. The current agent Compose stack has no direct backend connection
-or private TLS frontend. Do not put a Mac browser URL into the agent API field.
-Do not join agents to backend owner networks or disable TLS checks.
+The SDK keeps its non-loopback HTTPS requirement. The selected route is
+`https://either-anymore-immunize.ngrok-free.dev`, managed inside backend Compose.
+Do not put the Mac browser URL into an agent API field, join agents to owner
+networks, or disable TLS checks.
 
-Ngrok is not a Raziel dependency. There are two deployment choices:
-
-| Choice | Browser route | Agent-to-backend route | Current status |
-| --- | --- | --- | --- |
-| Private VM HTTPS endpoint | SSH | VM-reachable HTTPS frontend | Requires a supplied endpoint or a private TLS deployment addition |
-| Existing Mac ngrok route | SSH | HTTPS tunnel to forwarded VM console | Documented demo option; requires explicit public-exposure approval |
-
-For an existing trusted VM HTTPS endpoint, use its origin as both agents' API
-base URL. No ngrok command is needed. A private TLS frontend needs correct DNS,
-certificate trust, and a reachable frontend network. The current Compose files
-do not provision it. Select this deployment work before promising an SSH-only
-full agent data flow.
-
-For the existing Mac ngrok option, keep the dashboard SSH tunnel above running.
-In a second Mac terminal, using the configured tunnel account:
-
-```bash
-ngrok http 13000
+```mermaid
+flowchart LR
+  Mac[Mac browser] -->|SSH: 13000-13002| Dashboards[Three VM dashboards]
+  A[Agent A and SDK] -->|Signed HTTPS requests| Edge[Fixed ngrok domain]
+  B[Agent B and SDK] -->|Signed HTTPS requests| Edge
+  Edge --> Tunnel[VM ngrok container]
+  Tunnel -->|Agent and protected-query routes only| API[Console API]
+  API --> Backend[Raziel owner services and independent gateway]
 ```
 
-Use the reported HTTPS origin as the agent API base URL. This exposes the
-console/API endpoint, not Redis, databases, verifier RPC, or private prover services.
-The Mac and both tunnels must remain running. No ngrok installation on the VM
-belongs to this option. Do not start public exposure without deployment approval.
+The traffic policy returns 404 for operator pages, operator APIs, and unknown paths.
+Permitted routes still require their existing token, signature, and capability
+checks. A 401 from an unsigned `/api/agent/v1/me` probe is expected. A 502 indicates
+an upstream problem, not a rejected capability. Use these public, credential-free
+checks after startup:
+
+```bash
+curl --silent --output /dev/null --write-out '%{http_code}\n' https://either-anymore-immunize.ngrok-free.dev/
+curl --silent --output /dev/null --write-out '%{http_code}\n' https://either-anymore-immunize.ngrok-free.dev/api/agent/v1/me
+```
+
+Expect 404 for the root and 401 for the unsigned identity request. Then connect
+each agent through its Identity form to test the signed route. Do not use an
+unsigned probe as proof of authenticated access or protected-query readiness.
+
+Ngrok terminates HTTPS at its cloud edge. It can see permitted API traffic,
+including bearer tokens and authorized synthetic rows. Local traffic inspection
+is disabled, but this does not establish provider-side confidentiality or retention.
+Use synthetic demo data only. No private graph, witness, database, or authority key
+passes through the public API. See [ADR-0022](../decisions/0022-fixed-domain-ngrok-demo-ingress.md).
+
+## Mac Backend: Optional Ingress
+
+This option serves an existing Mac backend, not the VM backend. It does not start
+the proof stack or replace VM proving. Stop the VM tunnel first, on the VM:
+
+```bash
+cd ~/hypha-backend
+./scripts/compose-m6 --ngrok stop raziel-ngrok
+```
+
+In the local Mac backend checkout, create ignored `.env.ngrok` from
+`.env.ngrok.example` on first setup. Edit its private `NGROK_AUTHTOKEN`, retain the
+fixed domain, and leave `RAZIEL_NGROK_UPSTREAM=http://host.docker.internal:3000`
+for a backend on Mac port 3000. Change that port for a different local listener.
+
+```bash
+cp .env.ngrok.example .env.ngrok
+chmod 0600 .env.ngrok
+./scripts/start-ngrok
+./scripts/compose-ngrok ps
+```
+
+The approved pinned image is already downloaded on this Mac. Another machine
+needs the explicit image pull from the VM preparation section. No host ngrok CLI
+is needed. To release the domain from the Mac:
+
+```bash
+./scripts/compose-ngrok stop
+```
+
+Only one host uses this fixed domain at a time. Pooling is disabled. Do not start
+both tunnels and expect shared state. Changing the active host transfers no
+registrations, tasks, datasets, keys, or capability state. Restart the VM route
+with `./scripts/start-m6-demo --ngrok` after releasing the Mac tunnel.
 
 ## Dashboards: Register Agent Credentials
 
@@ -297,7 +375,7 @@ This step happens in the browser, not in either env file.
    in the agent volume.
 2. In the operator's **Agents** page, register that public key and issue a separate
    API token for that agent.
-3. In that agent's **Identity** panel, enter the reachable HTTPS API origin,
+3. In that agent's **Identity** panel, retain the prefilled fixed HTTPS API origin,
    exact registration audience, and issued token, then connect.
 4. Repeat for the second agent with its own key and token.
 

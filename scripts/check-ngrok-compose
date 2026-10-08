@@ -1,0 +1,67 @@
+#!/bin/sh
+set -eu
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec node --input-type=module - "$repo_root" "${1:-}" <<'NODE'
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const root = process.argv[2];
+const mode = process.argv[3];
+assert.ok(mode === "" || mode === "--m6", "use --m6 for the integrated backend");
+const config = JSON.parse(execFileSync(resolve(root, mode ? "scripts/compose-m6" : "scripts/compose-ngrok"),
+  [...(mode ? ["--ngrok"] : []), "--profile", "*", "config", "--format", "json"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }));
+const tunnel = config.services["raziel-ngrok"];
+const value = tunnel.environment.RAZIEL_NGROK_URL;
+assert.ok(typeof value === "string" && /^https:\/\/[a-z0-9.-]+$/.test(value),
+  "set RAZIEL_NGROK_URL to the exact fixed HTTPS origin from your ngrok account");
+const url = new URL(value);
+assert.equal(url.origin, value, "RAZIEL_NGROK_URL must contain only an HTTPS origin");
+assert.ok(!value.includes("your-fixed-domain"), "replace the example ngrok domain");
+const token = tunnel.environment.NGROK_AUTHTOKEN;
+assert.ok(typeof token === "string" && token.length >= 16 && !/\s/.test(token) && !token.startsWith("replace-"),
+  "set a private NGROK_AUTHTOKEN in the deployment settings file");
+assert.equal(tunnel.image,
+  "ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd");
+assert.equal(tunnel.platform, undefined);
+assert.equal(tunnel.pull_policy, "never");
+assert.equal(tunnel.read_only, true);
+assert.equal(tunnel.user, "1000:1000");
+assert.equal(tunnel.privileged ?? false, false);
+assert.deepEqual(tunnel.cap_drop, ["ALL"]);
+assert.ok(tunnel.security_opt.includes("no-new-privileges:true"));
+assert.equal(tunnel.restart, "unless-stopped");
+assert.equal((tunnel.ports ?? []).length, 0);
+assert.ok(tunnel.command.includes(`--url=${value}`));
+assert.ok(tunnel.command.includes("--inspect=false"));
+assert.ok(tunnel.command.includes("--pooling-enabled=false"));
+assert.equal(tunnel.volumes.length, 2);
+for (const mount of tunnel.volumes) {
+  assert.equal(mount.type, "bind");
+  assert.equal(mount.read_only, true);
+  assert.ok(mount.source.startsWith(resolve(root, "tools/ngrok/")));
+}
+for (const [name, service] of Object.entries(config.services)) {
+  if (name !== "raziel-ngrok") assert.equal(service.environment?.NGROK_AUTHTOKEN, undefined, name);
+}
+if (mode) {
+  assert.deepEqual(Object.keys(tunnel.networks).sort(), ["ngrok-egress", "ngrok-upstream"]);
+  assert.equal(config.networks["ngrok-upstream"].internal, true);
+  assert.equal(tunnel.command[1], "http://demo-console:3000");
+  assert.equal(tunnel.depends_on["demo-console"].condition, "service_healthy");
+  const members = Object.entries(config.services).filter(([, service]) =>
+    Object.hasOwn(service.networks ?? {}, "ngrok-upstream"));
+  assert.deepEqual(members.map(([name]) => name).sort(), ["demo-console", "raziel-ngrok"]);
+} else {
+  assert.deepEqual(Object.keys(tunnel.networks), ["ngrok-egress"]);
+  assert.deepEqual(Object.keys(config.services), ["raziel-ngrok"]);
+}
+const policy = JSON.parse(readFileSync(resolve(root, "tools/ngrok/traffic-policy.json"), "utf8"));
+assert.equal(policy.on_http_request.length, 1);
+assert.equal(policy.on_http_request[0].actions[0].type, "custom-response");
+assert.equal(policy.on_http_request[0].actions[0].config.status_code, 404);
+process.stdout.write(`ngrok_compose=pass mode=${mode ? "m6" : "standalone"} fixed_url=${value} runtime=not-started\n`);
+NODE
