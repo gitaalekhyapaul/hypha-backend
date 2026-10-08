@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-08T08:36:17Z
+- Last updated UTC: 2026-10-08T08:49:12Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,11 @@
 
 ## Objective
 
-Next bounded objective: have the maintainer pull the dispatcher tmpfs repair and
-retry `./scripts/start-m6-demo --ngrok` on the VM. The malformed mount is fixed and
-verified with real networkless container creation. Then validate signed Agent A
-approval-to-data access. No app, dependency, private state, or proof change belongs
-to this deployment repair.
+The nested runtime mount repair is implemented and passes local cold-start Docker
+checks. The next bounded objective is the maintainer's VM startup retry, then Agent A's
+connected approval-to-data path. All four roles map the same host runtime to
+`/var/lib/raziel/m6`. No host-state migration, permission relaxation, app protocol,
+dependency, SDK, or proof change belongs to this repair.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -68,6 +68,9 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 - Startup mount repair: `docker-compose.m6-live.yml`, `scripts/check-m6-live-compose`,
   `scripts/check-ngrok-compose`, M7 runbook, and dated baton evidence. Both siblings
   remain read-only. Reproduce with an isolated, networkless container, not the stack.
+- Nested runtime repair: `docker-compose.m6.yml`, `scripts/prepare-m6-policy-runtime`,
+  the policy/live/ngrok Compose checks, M7 runbook, and dated baton evidence. Existing
+  host data sources stay fixed. Test isolated cold-start mounts for all four roles.
 
 ## Out Of Scope
 
@@ -107,10 +110,13 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 
 ## Open Questions And Blockers
 
-- Private ngrok token configuration remains pending. The URL is known and the image
-  is present locally. Keep the token in ignored backend settings, never chat or Git.
-  Live cloud-policy acceptance and signed API validation require the private token.
-- Live VM release build, API reachability, and real M6/M7 proof validation are unrun.
+- The maintainer's October 8 VM ngrok render check passed. It confirms valid token
+  configuration, not a working public endpoint. No token was shared or inspected.
+  Local repair probes use synthetic settings and never start a tunnel. Keep the
+  real token in ignored backend settings, never chat or Git.
+- VM startup now passes dispatcher container creation but hit a separate nested
+  runtime mount failure. The local repair is ready for a VM retry. Public API
+  reachability and real M6/M7 proof validation remain unrun.
 - The October 8 read-only check found a working SSH ControlMaster and reachable VM.
   The backend was clean at `7710e9a`; the agent checkout was absent at that check.
   Those are dated observations, not a claim about later maintainer changes.
@@ -162,6 +168,14 @@ scripts now reject relative tmpfs entries. A real isolated container passes with
 the rendered mount. The runbook documents a pull and startup retry without deletion
 or rebuilding. No VM or sibling source changed in this repair.
 
+The maintainer's next startup exposed `/workspace/.raziel/m6` beneath a read-only
+source mount. A disposable fresh workspace reproduced Docker's mountpoint-creation
+failure. The repair moves only the container target to `/var/lib/raziel/m6` and
+updates initializer, operator, policy, transaction, and receipt paths. Host sources
+and existing state are unchanged. All four rendered role mounts pass real Docker
+probes. Actual operator provisioning creates a 0600 record and retains it unchanged
+on restart. Both initializers still reject writes to the source mount.
+
 ## Validation Plan
 
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
@@ -211,6 +225,12 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Repaired mount runtime | PASS | Real networkless container starts from rendered tmpfs; 0700 mode and 256 MiB size verified |
 | Repair Compose checks | PASS | Baseline and ngrok-integrated M6 layouts, all tmpfs targets absolute, dispatcher exactly one mount |
 | VM repair retry | SKIP | Maintainer must pull and retry startup; no remote action taken |
+| Maintainer VM retry after tmpfs repair | PARTIAL | Render checks pass and dispatcher is created; nested runtime mount blocks policy-tools creation |
+| Nested runtime failure reproduction | PASS | Fresh workspace reproduces Docker read-only mountpoint creation at the old target |
+| Runtime path Compose checks | PASS | Policy preview, live M6, and ngrok-integrated layouts agree on all four runtime mounts |
+| Actual cold runtime mounts | PASS | Four networkless disposable containers start with a fresh workspace; shared runtime is writable and both initializer source mounts stay read-only |
+| Operator provisioning and restart | PASS | Actual initializer script creates a 0600 record at the configured path; second run leaves its contents unchanged |
+| Runtime repair VM acceptance | SKIP | No remote source, services, tunnel, or proof changed locally |
 
 ## Risks And Private-Data Notes
 
@@ -221,7 +241,10 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull the backend mount repair and retry startup. Retain the
+Have the maintainer pull the backend runtime bind-mount repair and retry startup.
+Run `./scripts/check-m6-live-compose`, then `./scripts/start-m6-demo --ngrok`.
+No repeated dependency preparation, image rebuild, or proof generation is required.
+Retain the
 existing `.env.m6`, volumes, and agent checkout. For first setup, add the private
 ngrok token and supplied domain to `.env.m6`, and the matching API default to
 `.env.agents`. Follow the updated runbook and start the backend with `--ngrok`.
@@ -240,3 +263,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [VM guide and secret-loading correction](history/2026-10-08-vm-runbook-and-secret-loading.md)
 - [Fixed-domain ingress checkpoint](history/2026-10-08-fixed-domain-ngrok-ingress.md)
 - [Dispatcher tmpfs startup repair](history/2026-10-08-m6-dispatcher-tmpfs-repair.md)
+- [Runtime bind-mount startup repair](history/2026-10-08-m6-runtime-bind-mount-repair.md)

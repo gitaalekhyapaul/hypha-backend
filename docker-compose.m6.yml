@@ -71,7 +71,7 @@ services:
     security_opt: [no-new-privileges:true]
     volumes: !override
       - .:/workspace:ro
-      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/var/lib/raziel/m6
       - type: bind
         source: ${RAZIEL_M6_TOOLS_PATH:-./.raziel/m5/policy-tools}
         target: /opt/raziel/prebuilt-tools
@@ -87,11 +87,11 @@ services:
     pull_policy: never
     user: "0:0"
     environment:
-      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m6/operator-secret.json
+      RAZIEL_OPERATOR_SECRET_PATH: /var/lib/raziel/m6/operator-secret.json
     network_mode: none
     volumes: !override
       - .:/workspace:ro
-      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/var/lib/raziel/m6
     depends_on:
       demo-console-policy-tools:
         condition: service_completed_successfully
@@ -226,8 +226,8 @@ services:
     user: "0:0"
     environment: !override
       NEXT_TELEMETRY_DISABLED: "1"
-      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m6/receipts.jsonl
-      RAZIEL_TRANSACTION_STORE_PATH: /workspace/.raziel/m6/transactions.json
+      RAZIEL_RECEIPT_STORE_PATH: /var/lib/raziel/m6/receipts.jsonl
+      RAZIEL_TRANSACTION_STORE_PATH: /var/lib/raziel/m6/transactions.json
       RAZIEL_DATASET_BINDING_MODE: required
       RAZIEL_DATASET_BINDING_ROOT: /var/lib/raziel/dataset-bindings
       RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
@@ -237,7 +237,7 @@ services:
       # Next dev rewrites next-env.d.ts beside .next. Keep the base development
       # bind writable, but isolate build caches and select only M6 runtime paths.
       - .:/workspace
-      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/var/lib/raziel/m6
       - m6-gateway-next:/workspace/apps/demo-gateway/.next
       - m6-dataset-bindings:/var/lib/raziel/dataset-bindings:ro
     depends_on: !override
@@ -258,8 +258,8 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       RAZIEL_POLICY_WORKFLOW: versioned
       RAZIEL_POLICY_PUBLICATION_SOCKET_PATH: /run/raziel-policy-activation/activation.sock
-      RAZIEL_POLICY_CANDIDATE_ROOT: /workspace/.raziel/m6/policy-candidates
-      RAZIEL_POLICY_VERSION_ROOT: /workspace/.raziel/m6/policy-versions
+      RAZIEL_POLICY_CANDIDATE_ROOT: /var/lib/raziel/m6/policy-candidates
+      RAZIEL_POLICY_VERSION_ROOT: /var/lib/raziel/m6/policy-versions
       RAZIEL_POLICY_COMPILER_EXECUTABLE: /opt/raziel/m6/policy-tools/spicedb-ir-compiler
       RAZIEL_ADMIN_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-admin
       RAZIEL_POLICY_ACTIVATION_EXECUTABLE: /opt/raziel/m6/policy-tools/raziel-policy-activate
@@ -269,11 +269,11 @@ services:
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
       RAZIEL_REDIS_URL: redis://${RAZIEL_REDIS_USERNAME:-raziel}:${RAZIEL_REDIS_PASSWORD:-raziel-local-development-only}@redis:6379/0
       RAZIEL_GATEWAY_INTERNAL_URL: http://demo-gateway:3001
-      RAZIEL_OPERATOR_SECRET_PATH: /workspace/.raziel/m6/operator-secret.json
+      RAZIEL_OPERATOR_SECRET_PATH: /var/lib/raziel/m6/operator-secret.json
       RAZIEL_OPERATOR_EXPECTED_ORIGIN: ${RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN:-http://127.0.0.1:${RAZIEL_M6_CONSOLE_PORT:-3000}}
       RAZIEL_OPERATOR_LIVE_MODE: "false"
       RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS: ${RAZIEL_CONSOLE_ALLOWED_DEV_ORIGINS:-}
-      RAZIEL_RECEIPT_STORE_PATH: /workspace/.raziel/m6/receipts.jsonl
+      RAZIEL_RECEIPT_STORE_PATH: /var/lib/raziel/m6/receipts.jsonl
       # Do not silently fall back to recorded M5 capabilities. Route guards reject
       # legacy operations, and there is no issuance endpoint in this runtime.
       RAZIEL_CAPABILITY_MODE: live
@@ -283,7 +283,7 @@ services:
     volumes: !override
       # Development-only source bind, not filesystem isolation from the M5 tree.
       - .:/workspace
-      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/workspace/.raziel/m6
+      - ${RAZIEL_M6_RUNTIME_PATH:-./.raziel/m6}:/var/lib/raziel/m6
       - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
       - m5-policy-activation-ipc:/run/raziel-policy-activation
       - m6-console-next:/workspace/apps/demo-console/.next

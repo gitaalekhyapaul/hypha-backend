@@ -34,6 +34,25 @@ for (const volume of Object.values(config.volumes)) {
   assert.equal(volume.external ?? false, false);
   assert.ok(volume.name.startsWith("raziel-m6-live_"));
 }
+for (const name of ["demo-console-policy-tools", "demo-console-init", "demo-console", "demo-gateway"]) {
+  const mounts = s[name].volumes.filter((entry) => entry.target === "/var/lib/raziel/m6");
+  assert.equal(mounts.length, 1, `${name}: runtime must stay outside the workspace mount`);
+  assert.equal(mounts[0].source, resolve(root, ".raziel/m6-live"));
+  assert.equal(mounts[0].read_only ?? false, false);
+  assert.equal(s[name].volumes.some((entry) => entry.target === "/workspace/.raziel/m6"), false);
+}
+for (const name of ["demo-console-policy-tools", "demo-console-init"]) {
+  assert.equal(s[name].volumes.find((entry) => entry.target === "/workspace").read_only, true);
+}
+for (const name of ["demo-console", "demo-console-init"]) {
+  assert.equal(s[name].environment.RAZIEL_OPERATOR_SECRET_PATH, "/var/lib/raziel/m6/operator-secret.json");
+}
+assert.equal(s["demo-console"].environment.RAZIEL_POLICY_CANDIDATE_ROOT, "/var/lib/raziel/m6/policy-candidates");
+assert.equal(s["demo-console"].environment.RAZIEL_POLICY_VERSION_ROOT, "/var/lib/raziel/m6/policy-versions");
+for (const name of ["demo-console", "demo-gateway"]) {
+  assert.equal(s[name].environment.RAZIEL_RECEIPT_STORE_PATH, "/var/lib/raziel/m6/receipts.jsonl");
+}
+assert.equal(s["demo-gateway"].environment.RAZIEL_TRANSACTION_STORE_PATH, "/var/lib/raziel/m6/transactions.json");
 for (const name of ["demo-access-graph", "demo-snapshot", "razield", "demo-capability-api",
   "demo-proof-worker", "verifierd"]) assert.equal(s[name], undefined);
 assert.equal(config.networks["database-internal"].internal, true);

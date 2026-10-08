@@ -51,6 +51,13 @@ for (const [name, service] of Object.entries(config.services)) {
   }
 }
 if (mode) {
+  for (const name of ["demo-console-policy-tools", "demo-console-init", "demo-console", "demo-gateway"]) {
+    const mounts = config.services[name].volumes.filter((entry) => entry.target === "/var/lib/raziel/m6");
+    assert.equal(mounts.length, 1, `${name}: runtime must stay outside the workspace mount`);
+    assert.equal(mounts[0].source, resolve(root, ".raziel/m6-live"));
+    assert.equal(mounts[0].read_only ?? false, false);
+    assert.equal(config.services[name].volumes.some((entry) => entry.target === "/workspace/.raziel/m6"), false);
+  }
   assert.deepEqual(Object.keys(tunnel.networks).sort(), ["ngrok-egress", "ngrok-upstream"]);
   assert.equal(config.networks["ngrok-upstream"].internal, true);
   assert.equal(tunnel.command[1], "http://demo-console:3000");

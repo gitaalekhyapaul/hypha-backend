@@ -151,6 +151,19 @@ git pull --ff-only origin main
 ./scripts/start-m6-demo --ngrok
 ```
 
+If startup reports `error mounting` at `/workspace/.raziel/m6` followed by
+`read-only file system`, pull the runtime bind-mount repair and use the same retry
+commands above. The old target was nested inside the initializers' read-only source
+mount. A fresh workspace did not contain that mountpoint.
+
+The repaired containers mount the existing host `.raziel/m6-live` directory at
+`/var/lib/raziel/m6`. Operator records, policy drafts, versions, transactions, and
+receipts keep their host locations. All four runtime consumers use the new container
+path. Initializers retain their read-only source mounts. No data migration,
+permission change, dependency preparation, image rebuild, or proof rerun is needed.
+Let normal startup recreate the affected containers. Do not create the old nested
+mountpoint manually or delete runtime files and volumes.
+
 ## VM Private Files: Prepare SoC Credentials
 
 Working directory: any directory on the VM.

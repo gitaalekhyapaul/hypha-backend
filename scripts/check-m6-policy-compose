@@ -108,12 +108,19 @@ function check(config, port) {
   assert.equal(console.environment.RAZIEL_ACCESS_GRAPH_SOCKET_PATH, undefined);
   assert.equal(console.environment.RAZIEL_RAZIELD_ENDPOINT, undefined);
   assert.equal(console.environment.RAZIEL_CAPABILITY_MODE, "live");
+  for (const name of ["demo-console-policy-tools", "demo-console-init", "demo-console", "demo-gateway"]) {
+    mount(services[name], "/var/lib/raziel/m6", resolve(root, ".raziel/m6"));
+    assert.equal(services[name].volumes.some((entry) => entry.target === "/workspace/.raziel/m6"), false);
+  }
+  for (const name of ["demo-console-policy-tools", "demo-console-init"]) {
+    mount(services[name], "/workspace", root, true);
+  }
   assert.equal(console.environment.RAZIEL_POLICY_CANDIDATE_ROOT,
-    "/workspace/.raziel/m6/policy-candidates");
+    "/var/lib/raziel/m6/policy-candidates");
   assert.equal(console.environment.RAZIEL_POLICY_VERSION_ROOT,
-    "/workspace/.raziel/m6/policy-versions");
+    "/var/lib/raziel/m6/policy-versions");
   assert.equal(console.environment.RAZIEL_OPERATOR_SECRET_PATH,
-    "/workspace/.raziel/m6/operator-secret.json");
+    "/var/lib/raziel/m6/operator-secret.json");
   assert.equal(console.environment.RAZIEL_OPERATOR_SECRET_PATH,
     services["demo-console-init"].environment.RAZIEL_OPERATOR_SECRET_PATH);
   assert.equal(console.environment.RAZIEL_OPERATOR_EXPECTED_ORIGIN, `http://127.0.0.1:${port}`);
@@ -124,7 +131,10 @@ function check(config, port) {
   mount(console, "/workspace/apps/demo-console/.next", "m6-console-next");
   mount(services["demo-gateway"], "/workspace/apps/demo-gateway/.next", "m6-gateway-next");
   assert.equal(services["demo-gateway"].environment.RAZIEL_TRANSACTION_STORE_PATH,
-    "/workspace/.raziel/m6/transactions.json");
+    "/var/lib/raziel/m6/transactions.json");
+  assert.equal(console.environment.RAZIEL_RECEIPT_STORE_PATH, "/var/lib/raziel/m6/receipts.jsonl");
+  assert.equal(console.environment.RAZIEL_RECEIPT_STORE_PATH,
+    services["demo-gateway"].environment.RAZIEL_RECEIPT_STORE_PATH);
   assert.equal(services["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, undefined);
   assert.equal(services["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");
   assert.equal(services["demo-gateway"].environment.RAZIEL_DATASET_BINDING_ROOT, "/var/lib/raziel/dataset-bindings");

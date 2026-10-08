@@ -34,7 +34,7 @@ key_file() {
 prepare() {
   source=/opt/raziel/prebuilt-tools
   tools=/opt/raziel/m6/policy-tools
-  runtime=/workspace/.raziel/m6
+  runtime=/var/lib/raziel/m6
   secrets=/var/lib/raziel/m5-secrets
   token_directory=/run/secrets/spicedb
 
