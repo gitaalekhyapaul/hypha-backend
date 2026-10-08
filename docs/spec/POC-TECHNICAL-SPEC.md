@@ -112,8 +112,10 @@ protected-query facade. The SDK signs and submits retained attempts, polls with
 bounded waits, and reuses capabilities with fresh protected-query signatures.
 The packaged consumer passes cold/cache and revoked-token checks with a controlled
 proof verifier. The separate live M6 Compose stack and VM runbook are implemented.
-ADR-0021 adds dedicated persistent SpiceDB storage. Connected VM proof validation
-and public npm publication remain pending. Existing proof contracts are unchanged.
+ADR-0021 adds dedicated persistent SpiceDB storage. SDK `0.1.0` was publicly
+published on 2026-10-01. Registry metadata, `latest`, and archive integrity are
+verified. Connected VM proof validation remains pending. Existing proof contracts
+are unchanged.
 
 ## Actors and entities
 
@@ -296,7 +298,9 @@ near proof dispatch. See the [new user flows](M6-M7-AGENT-DEMO-PLAN.md#user-flow
 This tree describes the backend repository. ADR-0019 moves SDK source ownership into
 the sibling `raziel-sdk-ts` repository and adds `raziel-demo-agents` for the two agent
 applications. `packages/sdk-ts` now re-exports a pinned local release candidate from
-the sibling SDK. Public npm publication remains pending. There is one SDK implementation.
+the sibling SDK. `0.1.0` is publicly published, with registry metadata and archive
+integrity verified. Demo agents now pin the public `0.1.0` release and lockfile
+integrity. The backend compatibility-shim pin remains unchanged. There is one SDK implementation.
 
 ```text
 apps/

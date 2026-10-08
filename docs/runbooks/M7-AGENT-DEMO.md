@@ -3,9 +3,15 @@
 Status: B-0067 local feature checkpoint. The connected VM proof and complete recording
 remain pending. This runbook describes the deployment to validate, not a passed M7 gate.
 
-Agent source checkpoint: `54aa8090d1b2ff20d4bb545a71b7745fc9025efd`.
-SDK source: `e7f1cd6b354f236f0323d9d19aa4a431c5dfa470`. Packaged candidate SHA-256:
-`556abe87978429a1542bfbbe8d81edd48a8be92ceeb07b1731eb18e8233ce572`.
+Agent feature checkpoint: `54aa8090d1b2ff20d4bb545a71b7745fc9025efd`.
+Public-SDK agent checkpoint with archive cleanup, committed and pushed:
+`84f9eb135532cc52b89bbfbf20d77c1f85b12b7d`.
+SDK release documentation checkpoint, committed and pushed:
+`6239fad9d02b1047806b3c449eb593ea7cd9f119`.
+SDK runtime source: `e7f1cd6b354f236f0323d9d19aa4a431c5dfa470`. Agent source now
+pins public npm package `@gitaalekhyapaul/raziel-sdk-ts@0.1.0`. The lockfile records
+the verified registry integrity. See the
+[migration evidence](../agent/history/2026-10-01-agent-public-sdk-consumption.md).
 
 ## Components
 
@@ -39,8 +45,11 @@ flowchart LR
 
 Use sibling checkouts `hypha-backend` and `raziel-demo-agents`. The separate
 `raziel-sdk-ts` checkout holds SDK source but is not needed to start the containers.
-The agent repository includes its exact SDK candidate tarball and lockfile. No
-public npm release is required for this run. Pull the pushed feature checkpoint:
+The agent Docker build installs the exact public SDK release from its lockfile.
+It needs registry access during build, not an npm login or publishing token. The
+obsolete candidate archive is removed from the agent checkout. Local installs can
+reuse pnpm's store with the same manifest and lockfile. The checked dependency
+migration is committed and pushed. Pull committed source:
 
 ```bash
 cd ~/hypha-backend
@@ -217,8 +226,9 @@ summary and settlement result are business output, not ZK proof of transaction t
 This checkpoint is ready for provisional deployment, not a completed demo claim.
 First validate Agent A's registration, inbox approval, real proof, and protected
 query. Then run B's separate capability and the full shared reconciliation flow.
-Keep npm publication deferred. No dummy capability or recorded verifier response
-is used by these containers.
+Keep the exact public SDK dependency and lockfile for this deployment. `0.1.0` was publicly published
+on 2026-10-01, with registry metadata and archive integrity verified. No dummy capability
+or recorded verifier response is used by these containers.
 
 Retain source commits, image/SDK versions, dataset revisions/checksums, both real
 proof durations, public capability sizes, verifier/cache receipt sources, and bounded

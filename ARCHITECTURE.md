@@ -2,7 +2,7 @@
 
 Status: M0 through M5 validated; M6 services and M7 agent features implemented locally
 
-Last updated: 2026-10-01
+Last updated: 2026-10-08
 
 ## Human-readable overview
 
@@ -42,7 +42,7 @@ a third dashboard. Real-data acceptance is deferred under
 | M3 | Complete | Real local Plonk proof, independent verification, mutation checks, and public benchmark |
 | M4 | Complete | Signed API request, BullMQ job, private witness assembly, local Plonk proof, terminal capability, independent verification, mutation rejection, and public service-flow report |
 | M5 | Complete | Live synthetic desktop flow from dataset and visual policy authoring through Plonk capability issuance, verifier and cache queries, denial controls, and receipt export |
-| M6 | In progress | Registration, inbox, policy publication, snapshot preparation, serial dispatch, signature acceptance, and terminal retention pass local checks. Packaged SDK signing, polling, and cold/cache query delivery pass. Live VM proof validation and public npm publication remain pending |
+| M6 | In progress | Registration, inbox, policy publication, snapshot preparation, serial dispatch, signature acceptance, and terminal retention pass local checks. Packaged SDK signing, polling, and cold/cache query delivery pass. SDK 0.1.0 is publicly published with verified registry metadata, latest tag, and archive integrity. Live VM proof validation remains pending |
 | M7 | In progress | Two agent dashboards, persistent identities, SDK task flows, bounded messages, LLM tools, and synthetic ledger seeding are implemented. The connected two-proof VM demonstration remains pending |
 
 The previous M6 real-data and M7 scenario-extension objectives are deferred. Dated
@@ -431,7 +431,14 @@ The PolicyIR schema, SP1 guest, public values, verifier, Protobuf contracts, and
 canonical vectors remain one backend compatibility unit. ADR-0019 moves the SDK into
 its sibling release repository and puts both agent applications in another repository.
 The workspace SDK now re-exports a pinned tarball from that sibling package. It no
-longer contains a second implementation. The candidate is not published on npm.
+longer contains a second implementation. `0.1.0` was published on 2026-10-01. Its
+public registry metadata, `latest` tag, and archive integrity are verified.
+The demo agents now pin the public npm release and its lockfile integrity. Their
+checkout no longer vendors the obsolete candidate archive. Local and VM builds
+use the same dependency and lockfile. The backend compatibility shim keeps its
+checked candidate pin. See the
+[publication record](docs/agent/history/2026-10-01-sdk-publication-attempt.md) and
+[agent migration](docs/agent/history/2026-10-01-agent-public-sdk-consumption.md).
 Public releases pin their backend protocol revision and canonical vectors. They do
 not import backend source files or require private workspace packages.
 

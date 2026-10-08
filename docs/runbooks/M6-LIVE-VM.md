@@ -111,9 +111,15 @@ second application server. A public tunnel needs its actual browser origin in
 
 The SDK README contains the exact typed calls and response handling. The backend
 vendors `gitaalekhyapaul-raziel-sdk-ts-0.1.0-b0066.tgz`. This is a local release
-candidate, not a claim that npm publication occurred. Another repository can
-install that exact tarball provisionally. Public npm publication requires the
-maintainer's npm authentication and release authorization.
+candidate. The authorized `0.1.0` publication completed on 2026-10-01. Public
+registry metadata, `latest`, and archive integrity are verified. The backend shim
+still uses its exact candidate pin. Demo-agent source now pins public `0.1.0`, with
+its frozen install and production build verified. The migration is committed and
+pushed, with obsolete archive cleanup at
+`84f9eb135532cc52b89bbfbf20d77c1f85b12b7d`. Pull that checkpoint or a
+later compatible commit before rebuilding the agents on the VM.
+The [publication record](../agent/history/2026-10-01-sdk-publication-attempt.md)
+separates upload acceptance from normal registry availability.
 
 ## Logs And Restart
 

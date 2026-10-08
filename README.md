@@ -144,7 +144,9 @@ signed identity lookup, and a standalone SDK candidate. B-0065 adds durable agen
 requests and an operator inbox with detail, approve, reject, and cancel actions.
 Private snapshot preparation passes locally against real SpiceDB with exact retry
 reuse. B-0066 adds serial preparation, final signature acceptance, proof-service
-handoff, and retained public results. Public release remains deferred. B-0067 adds
+handoff, and retained public results. The SDK `0.1.0` was published on 2026-10-01.
+Its public registry metadata, `latest` tag, and archive integrity are verified.
+B-0067 adds
 both agent dashboards, persistent separate keys, bounded LLM tools, an authenticated
 message channel, and editable synthetic processor/bank seed drafts. Local checks and
 Docker desktop startup pass. The two-agent proof-backed VM flow remains pending.
@@ -156,7 +158,11 @@ locally. Approval writes the immutable dataset mapping checked by the gateway.
 B-0066 adds packaged SDK signing, bounded polling, and protected-query reuse.
 Cold/cache delivery passes with a controlled verifier. The new live M6 overlay
 connects the production roles and uses dedicated PostgreSQL-backed SpiceDB.
-Public npm publication and live VM proof validation remain pending.
+Live VM proof validation remains pending. Agent source now pins the public SDK
+`0.1.0` and passes frozen-install, agent-check, and production-build gates. The VM
+has not received this dependency migration. The backend shim keeps its candidate
+pin. See the
+[publication record](docs/agent/history/2026-10-01-sdk-publication-attempt.md).
 No new M6 proof-backed demonstration is claimed. See the
 [feature and user-flow plan](docs/spec/M6-M7-AGENT-DEMO-PLAN.md). The former real-data
 and second-scenario gates are deferred. Existing runbooks describe the completed M5
