@@ -139,6 +139,18 @@ It forwards directly to the console container. A host ngrok process and a Mac AP
 tunnel are not needed. The image is pinned for native Mac arm64 and VM amd64.
 Cold setup needs the explicit image pull above. Startup never downloads images.
 
+If an older checkout reports `invalid mount path: 'mode=0700'` or
+`invalid mount path: 'size=268435456'`, pull the dispatcher tmpfs repair before
+retrying. Its YAML mount must be one quoted entry, not six separate list items.
+No image rebuild, proof rerun, or volume deletion is needed for this repair:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/check-m6-live-compose
+./scripts/start-m6-demo --ngrok
+```
+
 ## VM Private Files: Prepare SoC Credentials
 
 Working directory: any directory on the VM.

@@ -110,7 +110,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    tmpfs: [/tmp:rw,exec,nosuid,nodev,mode=0700,size=268435456]
+    tmpfs: ["/tmp:rw,exec,nosuid,nodev,mode=0700,size=268435456"]
     volumes:
       - m6-policy-tools:/opt/raziel/m6/policy-tools:ro
       - m6-access-intents:/var/lib/raziel/access-intents

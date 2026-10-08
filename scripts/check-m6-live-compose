@@ -19,6 +19,9 @@ for (const [name, role] of Object.entries(s)) {
   assert.equal(role.build, undefined);
   assert.equal(role.pull_policy, "never");
   assert.equal(role.privileged ?? false, false);
+  for (const mount of role.tmpfs ?? []) {
+    assert.ok(mount.startsWith("/"), `${name}: tmpfs options must stay in one absolute mount entry`);
+  }
   if (name !== "demo-console") assert.equal((role.ports ?? []).length, 0, name);
   for (const mount of role.volumes ?? []) {
     assert.notEqual(mount.source, "/var/run/docker.sock");
@@ -40,6 +43,7 @@ assert.equal(s.spicedb.depends_on["m6-spicedb-migrate"].condition, "service_comp
 assert.equal(s["m6-database"].image,
   "postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f");
 const dispatcher = s["m6-dispatcher"];
+assert.deepEqual(dispatcher.tmpfs, ["/tmp:rw,exec,nosuid,nodev,mode=0700,size=268435456"]);
 assert.equal(dispatcher.environment.RAZIEL_ACCESS_PREFIX, s["demo-access-api"].environment.RAZIEL_ACCESS_PREFIX);
 for (const name of ["m6-proof-worker", "m6-capability-api"]) {
   assert.equal(s[name].environment.RAZIEL_QUEUE_PREFIX, dispatcher.environment.RAZIEL_QUEUE_PREFIX);

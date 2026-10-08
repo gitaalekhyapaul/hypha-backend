@@ -46,6 +46,9 @@ for (const mount of tunnel.volumes) {
 }
 for (const [name, service] of Object.entries(config.services)) {
   if (name !== "raziel-ngrok") assert.equal(service.environment?.NGROK_AUTHTOKEN, undefined, name);
+  for (const mount of service.tmpfs ?? []) {
+    assert.ok(mount.startsWith("/"), `${name}: tmpfs options must stay in one absolute mount entry`);
+  }
 }
 if (mode) {
   assert.deepEqual(Object.keys(tunnel.networks).sort(), ["ngrok-egress", "ngrok-upstream"]);

@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-08T07:32:08Z
+- Last updated UTC: 2026-10-08T08:36:17Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,11 @@
 
 ## Objective
 
-Next bounded objective: configure the private ngrok token and validate the signed
-Agent A approval-to-data path on the VM. The fixed-domain Compose ingress and both
-agent origin defaults are implemented. Preserve authentication, SDK TLS checks, and
-private owner networks. One host serves the domain at a time. No SDK release or proof
-change belongs to this deployment checkpoint.
+Next bounded objective: have the maintainer pull the dispatcher tmpfs repair and
+retry `./scripts/start-m6-demo --ngrok` on the VM. The malformed mount is fixed and
+verified with real networkless container creation. Then validate signed Agent A
+approval-to-data access. No app, dependency, private state, or proof change belongs
+to this deployment repair.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -65,6 +65,9 @@ This release follow-up did not complete the live B-0067 acceptance gate.
   configuration and route policy, one deployment ADR, focused checks, architecture
   and runbook docs. Agents: configuration, default-origin presentation, Compose,
   env example, README, and focused tests. SDK remains read-only.
+- Startup mount repair: `docker-compose.m6-live.yml`, `scripts/check-m6-live-compose`,
+  `scripts/check-ngrok-compose`, M7 runbook, and dated baton evidence. Both siblings
+  remain read-only. Reproduce with an isolated, networkless container, not the stack.
 
 ## Out Of Scope
 
@@ -130,8 +133,8 @@ Docker/browser and SoC completion checks remain dated evidence, not current VM c
 
 Public SDK release docs: `6239fad9d02b1047806b3c449eb593ea7cd9f119`.
 Public-package agent migration: `bb66ee3c2e9ea546661fd9e1134a5c956dedec24`.
-Agent archive cleanup and current head: `84f9eb135532cc52b89bbfbf20d77c1f85b12b7d`.
-Both commits are pushed and match GitHub `origin/main`.
+Agent archive cleanup checkpoint: `84f9eb135532cc52b89bbfbf20d77c1f85b12b7d`.
+These dated release commits were pushed. The later fixed-origin agent head is below.
 The backend checkpoint is the commit containing this baton and the updated runbooks.
 
 The SDK ignores macOS metadata. Next's existing declaration generator restored the
@@ -151,6 +154,13 @@ connections. The runbook now documents separate browser origins and API destinat
 The SDK and its exact public package dependency are unchanged.
 Agent fixed-origin checkpoint: `71d238ecca44fe5a98c50193fc028c1b2208da6e`.
 The backend ingress checkpoint is the commit containing this updated baton.
+
+The reported startup mount error was reproduced against Docker. An unquoted flow
+list split the dispatcher's `/tmp` options into six mount entries. Quoting it keeps
+one valid mount with the original 0700 mode and 256 MiB size. Both Compose check
+scripts now reject relative tmpfs entries. A real isolated container passes with
+the rendered mount. The runbook documents a pull and startup retry without deletion
+or rebuilding. No VM or sibling source changed in this repair.
 
 ## Validation Plan
 
@@ -197,6 +207,10 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Initial networkless image build | FAIL, resolved | Different build cache key missed package cache; normal cache-backed build passes with no dependency edits |
 | Ingress documentation | PASS | Relative links and shell examples parse; private settings are ignored |
 | Public endpoint and real proofs | SKIP | No token, live tunnel, remote runtime, or proof was used in this follow-up |
+| Reported mount failure | PASS | Reproduced Docker invalid-path error from the six-entry rendered dispatcher tmpfs |
+| Repaired mount runtime | PASS | Real networkless container starts from rendered tmpfs; 0700 mode and 256 MiB size verified |
+| Repair Compose checks | PASS | Baseline and ngrok-integrated M6 layouts, all tmpfs targets absolute, dispatcher exactly one mount |
+| VM repair retry | SKIP | Maintainer must pull and retry startup; no remote action taken |
 
 ## Risks And Private-Data Notes
 
@@ -207,7 +221,8 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull both deployment checkpoints on the VM. Add the private
+Have the maintainer pull the backend mount repair and retry startup. Retain the
+existing `.env.m6`, volumes, and agent checkout. For first setup, add the private
 ngrok token and supplied domain to `.env.m6`, and the matching API default to
 `.env.agents`. Follow the updated runbook and start the backend with `--ngrok`.
 Keep browser access on SSH forwarding. Configure the two repo-local settings
@@ -224,3 +239,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Preserved pre-release state](history/2026-10-08-b0067-pre-release-state.md)
 - [VM guide and secret-loading correction](history/2026-10-08-vm-runbook-and-secret-loading.md)
 - [Fixed-domain ingress checkpoint](history/2026-10-08-fixed-domain-ngrok-ingress.md)
+- [Dispatcher tmpfs startup repair](history/2026-10-08-m6-dispatcher-tmpfs-repair.md)
