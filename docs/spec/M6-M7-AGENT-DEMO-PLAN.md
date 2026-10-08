@@ -282,9 +282,12 @@ synthetic data revision, and redacted public receipts in the final evidence bund
   still requires scoped sibling write approval.
 - The supplied private SoC configuration passed a bounded API completion check.
   VM secret placement and the business tool journey remain deployment checks.
-- Containers need a reachable trusted HTTPS operator endpoint. A free ngrok assigned
-  domain can serve both agents. No paid account or separate agent tunnel is required.
-- Public npm release needs package ownership, authentication, and license metadata.
+- Containers need a reachable trusted HTTPS operator endpoint. SSH forwarding supplies
+  Mac browser access, not a backend listener inside an agent container. Ngrok is one
+  optional API route. A private VM TLS frontend is another deployment choice and is
+  not provisioned by current Compose files. See the M7 deployment runbook.
+- Public SDK `0.1.0` is published. Agents pin that exact npm version and lockfile.
+  No SDK source checkout or publishing token is needed on the VM.
 - ADR-0020 approves compatible shared-schema provisioning and exact agent-request
   signatures. Authentication and schema provisioning pass local live tests.
   Neither decision changes
@@ -296,9 +299,10 @@ synthetic data revision, and redacted public receipts in the final evidence bund
 
 ## Exact Next Action
 
-Finish the B-0067 local checkpoint, reconcile the baton, then commit/push the backend
-and agent changes through the approved Git workflow. Use the M6 live VM and M7 agent
-runbooks for the connected deployment. The maintainer deferred npm publication.
-The packaged candidate is enough for provisional VM testing.
-Local component checks do not constitute a public npm release or a new proof-backed
+The B-0067 local feature and public-package checkpoints are committed and pushed.
+Resolve agent API HTTPS ingress, then follow the [M6 backend](../runbooks/M6-LIVE-VM.md)
+and [M7 three-dashboard](../runbooks/M7-AGENT-DEMO.md) runbooks for connected deployment.
+Keep VM backend settings, VM agent settings, and private SoC credentials separate.
+Start with Agent A's approval-to-data flow, then Agent B and reconciliation.
+Local component checks and SDK publication do not establish a completed proof-backed
 VM demonstration.

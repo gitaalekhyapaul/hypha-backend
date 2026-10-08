@@ -5,12 +5,13 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-08T01:58:58Z
+- Last updated UTC: 2026-10-08T02:25:24Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
-- Execution: the authorized three-repository release checkpoint is complete.
-  VM deployment and the broader M6/M7 demo stay paused until maintainer resumption.
+- Execution: the three-repository release checkpoint and local deployment-guide
+  correction are complete. Guided VM setup is requested. Agent API ingress needs
+  a deployment choice before the connected flow can run.
 
 ## Objective
 
@@ -52,6 +53,8 @@ This release follow-up did not complete the live B-0067 acceptance gate.
   compatibility metadata, and the macOS ignore rule, not runtime or dependency pins.
 - Sibling writes and Git metadata use scoped sandbox approval.
 - Recheck writable roots, current files, and runtime availability on the next resume.
+- The October 8 guide correction touches only the M6/M7 runbooks, agent demo plan,
+  current baton, and its dated documentation evidence.
 
 ## Out Of Scope
 
@@ -77,16 +80,23 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - Pause stops new task actions, not admitted proof work. Cancellation keeps polling.
   Exact intents and signing attempts persist for uncertain retries and restart.
 - A changed query window can reuse a capability within its task/dataset binding.
-- Use the existing Mac ngrok client with an SSH-forwarded VM console for HTTPS API
-  ingress. Keep dashboard ports SSH-forwarded. No paid subscription is required.
+- SSH forwarding supplies Mac browser access to all three dashboards. It does not
+  supply an API listener inside the VM agent containers.
+- Ngrok is an optional HTTPS API route, not a Raziel dependency. A private VM HTTPS
+  frontend can replace it. The current Compose files do not provision that frontend.
+  No TLS bypass, new dependency, public exposure, or remote edit is authorized by
+  the documentation correction.
 - Ask for Docker or SSH ControlMaster if unavailable. Never modify VM source directly.
 
 ## Open Questions And Blockers
 
 - No feature or dependency decision is pending.
+- Agent API ingress is a deployment choice: supply a trusted VM-reachable HTTPS
+  endpoint, add a private VM TLS frontend, or approve the existing public tunnel route.
 - Live VM release build, API reachability, and real M6/M7 proof validation are unrun.
-- The last VM readiness check on October 1 found a refused SSH ControlMaster.
-  Its current availability was not tested by this local release checkpoint.
+- The October 8 read-only check found a working SSH ControlMaster and reachable VM.
+  The backend was clean at `7710e9a`; the agent checkout was absent at that check.
+  Those are dated observations, not a claim about later maintainer changes.
 - On resume, check the master first. If unavailable, pause and ask the maintainer
   to restore the interactive connection. Do not recreate MFA sessions.
 - VM updates still require maintainer pulls through the server's PAT flow.
@@ -115,6 +125,11 @@ production route import without a handwritten generated-file edit.
 The earlier advisor-report outputs are absent at this inspection. This checkpoint
 did not delete or move them. Private runtime storage and ignored caches stay intact.
 
+The deployment guides now separate VM backend, VM agents, private SoC files, and
+Mac forwarding. They distinguish Compose settings, LLM credentials, generated
+identity keys, and UI-provisioned Raziel tokens. The stale plan statement about
+deferred npm publication is corrected. No app, SDK, VM, or credential changed.
+
 ## Validation Plan
 
 On resume, follow [M6 Live VM](../runbooks/M6-LIVE-VM.md) and
@@ -142,6 +157,8 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Backend checkpoint | PASS | Release docs reviewed; final clean-tree and remote-head checks follow commit |
 | SDK runtime rebuild/tests | SKIP | No runtime changes; existing 249-test B-0066 gate and public artifact audit retained |
 | Connected VM proofs/deployment | SKIP | No remote source, runtime, proof, or recording action ran |
+| Deployment guide static checks | PASS | Relative links, shell example syntax, ignored settings paths, and diff whitespace |
+| Guide correction runtime tests | SKIP | Documentation only; no services, credentials, or VM configuration changed |
 
 ## Risks And Private-Data Notes
 
@@ -152,10 +169,12 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Wait for maintainer resumption. Check Docker and SSH ControlMaster, then have the
-maintainer pull the pushed backend and agent commits on the VM. Follow the M6/M7
-runbooks for HTTPS ingress, startup, Agent A registration, inbox approval, exact
-signing, real proof, and protected query. Continue to Agent B and reconciliation.
+Resolve the agent API HTTPS route with the maintainer. Keep browser access on SSH
+forwarding. Have the maintainer pull the backend guide correction and clone/update
+the public-package agent checkpoint on the VM. Configure the two repo-local settings
+files and private SoC credentials path as documented. Check Docker and the existing
+SSH ControlMaster before runtime work. Validate Agent A's registration, inbox
+approval, exact signing, real proof, and protected query, then Agent B and reconciliation.
 B-0068 retains the two-proof recording, negative controls, screenshots, and evidence.
 
 ## Dated Evidence
@@ -164,3 +183,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [SDK publication and October 8 follow-up](history/2026-10-01-sdk-publication-attempt.md)
 - [Agent migration and October 8 follow-up](history/2026-10-01-agent-public-sdk-consumption.md)
 - [Preserved pre-release state](history/2026-10-08-b0067-pre-release-state.md)
+- [VM guide and secret-loading correction](history/2026-10-08-vm-runbook-and-secret-loading.md)

@@ -4,6 +4,19 @@ This is the provisional SDK and operator deployment. Agent dashboards, the LLM
 adapter, and the shared message channel are B-0067 work. The local SDK tests use
 controlled proof responses. This runbook does not claim a completed live M6 proof.
 
+## Scope And Locations
+
+This runbook covers the backend only. All VM commands run in `~/hypha-backend`.
+Its private settings file is `~/hypha-backend/.env.m6`. The agent repository uses
+its own `.env.agents` and separate Docker Compose project. Do not run backend
+scripts from the agent repository or use agent settings to start the backend.
+
+For the full three-dashboard deployment, follow
+[M7 Agent Demo](M7-AGENT-DEMO.md). It separates VM backend, VM agents, private LLM
+files, and Mac forwarding. Its browser example uses Mac ports 13000-13002. The
+standalone backend example below uses Mac port 3000. Pick one browser mapping and
+match `RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN` to it.
+
 ## Runtime
 
 ```mermaid
@@ -34,7 +47,7 @@ The Compose project is `raziel-m6-live`. Its named volumes and `.raziel/m6-live`
 files are separate from M5 and the memory-backed `raziel-m6` preview. No state is
 imported. Create new datasets, agents, and policy versions in this deployment.
 
-## Prepare The VM
+## VM Backend: Prepare
 
 Use the same Linux x86_64, 64 GB VM and pinned Docker toolchain from M5.
 Docker Compose must support `!override` and `!reset`. Host Node is needed only for
@@ -43,7 +56,8 @@ The existing verified Plonk setup remains at `.sp1/circuits/plonk/v6.1.0`.
 Stop the old M5 proof workload before starting M6 on this one VM.
 
 Pull the pushed backend commit on the VM. Do not run `git reset` or delete volumes.
-Create the ignored repository-root `.env.m6` with these values:
+Run commands from `~/hypha-backend`. Create the ignored repository-root `.env.m6`
+with these values. Keep an existing settings file and retained credentials on later starts:
 
 ```dotenv
 RAZIEL_M5_OPERATOR_ID=operator-local
@@ -58,8 +72,15 @@ RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN=http://127.0.0.1:3000
 Keep the PostgreSQL password alphanumeric. It is inserted into an internal database
 URI. Keep these settings stable across restarts. The `M5` operator variable names
 are retained for compatibility, but the operator record lives in M6 storage.
+The `compose-m6` wrapper passes this file to Docker Compose as `--env-file`.
+Compose injects only the settings declared for each service. You do not need to
+source the file or export every value manually.
+Initializers generate policy/snapshot signing keys and the operator password
+verifier in private runtime storage. Do not put those private keys in `.env.m6`.
+Changing the configured password alone does not reset a retained operator record.
 
 ```bash
+cd ~/hypha-backend
 chmod 0600 .env.m6
 docker pull postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
 ./scripts/check-m6-live-compose
@@ -74,7 +95,7 @@ It can take longer on the first build. It never installs host language toolchain
 No automatic image pull occurs during startup. Existing pinned toolchain, Redis,
 and SpiceDB images must already be present from the prior VM setup.
 
-## View From The Mac
+## Mac: View Backend
 
 Reuse the SSH ControlMaster connection and forward the VM's port 3000:
 
@@ -83,8 +104,10 @@ ssh -N -L 3000:127.0.0.1:3000 gapaul-vm-i
 ```
 
 Open `http://127.0.0.1:3000` on the Mac. This is local forwarding through SSH, not a
-second application server. A public tunnel needs its actual browser origin in
-`RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN`. Do not expose internal service ports.
+second application server. SSH alone is enough for this browser connection.
+The operator's browser URL must match `RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN`.
+Agent containers need a separate reachable HTTPS API origin. The full M7 runbook
+explains private HTTPS and optional ngrok routes. Do not expose internal service ports.
 
 ## Testable Flow
 
@@ -121,9 +144,10 @@ later compatible commit before rebuilding the agents on the VM.
 The [publication record](../agent/history/2026-10-01-sdk-publication-attempt.md)
 separates upload acceptance from normal registry availability.
 
-## Logs And Restart
+## VM Backend: Restart
 
 ```bash
+cd ~/hypha-backend
 ./scripts/compose-m6 --profile apps logs --tail 80 m6-dispatcher m6-capability-api m6-proof-worker
 ./scripts/compose-m6 --profile apps logs --tail 80 m6-proof-sandbox m6-verifierd
 ./scripts/compose-m6 --profile apps stop

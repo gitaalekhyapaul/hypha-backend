@@ -41,145 +41,270 @@ flowchart LR
   C --> A
 ```
 
-## Deployment Prerequisites
+## Where To Work
 
-Use sibling checkouts `hypha-backend` and `raziel-demo-agents`. The separate
-`raziel-sdk-ts` checkout holds SDK source but is not needed to start the containers.
-The agent Docker build installs the exact public SDK release from its lockfile.
-It needs registry access during build, not an npm login or publishing token. The
-obsolete candidate archive is removed from the agent checkout. Local installs can
-reuse pnpm's store with the same manifest and lockfile. The checked dependency
-migration is committed and pushed. Pull committed source:
+Every command below names its machine and working directory.
+
+| Location | Working directory | Responsibility | Private settings |
+| --- | --- | --- | --- |
+| VM backend | `~/hypha-backend` | Operator, API, database, queue, prover, verifier | `.env.m6` |
+| VM agents | `~/raziel-demo-agents` | Agent A, Agent B, shared channel | `.env.agents` |
+| VM private files | `~/raziel-secrets` | Supplied SoC credentials, outside both repos | `soclaas.env` |
+| Mac | Any directory | SSH dashboard forwarding and optional HTTPS tunnel | Existing SSH/tunnel account configuration |
+
+The SDK source checkout is not needed on the VM. Agent builds install exact public
+SDK `0.1.0` from the lockfile. Installation needs registry access on a cold cache,
+not an npm publishing token. Keep Git/PAT authentication under maintainer control.
+
+## VM Backend: Configure
+
+Working directory: `~/hypha-backend`.
 
 ```bash
 cd ~/hypha-backend
 git pull --ff-only origin main
-cd ~/raziel-demo-agents
-git pull --ff-only origin main
+git status --short
 ```
 
-If the agent checkout does not exist on the VM, create it first from the separate
-repository. This does not change backend source or copy secrets:
+Create `~/hypha-backend/.env.m6` with private values. Edit the existing file on
+later starts rather than replacing retained credentials.
 
-```bash
-cd ~
-git clone https://github.com/gitaalekhyapaul/raziel-demo-agents.git
+```dotenv
+RAZIEL_M5_OPERATOR_ID=operator-local
+RAZIEL_M5_OPERATOR_PASSWORD=replace-with-at-least-12-characters
+RAZIEL_M6_POSTGRES_PASSWORD=replace-with-a-long-alphanumeric-password
+RAZIEL_M6_SPICEDB_TOKEN=replace-with-a-long-random-token
+RAZIEL_M6_TRUST_DOMAIN_ID=raziel-m6-nus
+RAZIEL_M6_CONSOLE_PORT=3000
+RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN=http://127.0.0.1:13000
 ```
 
-Do not deploy unpushed local files or pull directly through an unresolved PAT prompt.
+```bash
+cd ~/hypha-backend
+chmod 0600 .env.m6
+```
 
-Prepare and start the backend using [M6 Live VM](M6-LIVE-VM.md). It uses fresh
-`raziel-m6-live` state, not the old M5 or partial preview state. Retain the pinned
-Docker toolchain and verified local Plonk setup. No host language-toolchain install
-is required for the agent containers.
+The `M5` operator variable names are compatibility names. This deployment stores
+its operator record in separate M6 runtime storage. The PostgreSQL password must
+be alphanumeric for its database URI. Keep the database password and SpiceDB token
+stable across restarts. The retained token initializer rejects a changed token.
+Changing the operator password in this file does not reset an existing operator
+record. An explicit operator reset is separate from normal startup.
 
-For the Mac-ngrok route below, set the backend's ignored `.env.m6` browser origin
-to `http://127.0.0.1:13000` before backend startup. Keep its VM console port `3000`.
-Stop the old M5 proof stack before starting this fresh deployment on the same VM.
-Then run from `~/hypha-backend`:
+`./scripts/compose-m6` reads this repo's `.env.m6` through Compose `--env-file`.
+Compose passes declared settings to their service environments. The operator
+initializer stores a salted password verifier, not a plain-text login password.
+The policy and snapshot signing keys are generated on first initialization and
+retained in owner-only runtime volumes. Do not create those keys in an env file.
+
+## VM Backend: Prepare And Start
+
+Working directory: `~/hypha-backend`.
+
+Use the existing pinned Docker toolchain and approved Plonk setup. Host Node is
+needed for the render check. Rust, Go, pnpm, Buf, and SP1 stay in the toolchain.
+The [M6 backend runbook](M6-LIVE-VM.md) lists image and setup prerequisites.
+
+Finish or cancel an active M5 proof through its existing controls first. Stop the
+old stack before starting M6 on the same VM. Stopping preserves its volumes.
 
 ```bash
+cd ~/hypha-backend
+./scripts/compose --profile apps --profile m5-live stop
+docker pull postgres@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
 ./scripts/check-m6-live-compose
 ./scripts/prepare-m6-demo
 ./scripts/start-m6-demo
 ./scripts/compose-m6 --profile apps ps
 ```
 
-The linked M6 runbook specifies `.env.m6`, the pinned PostgreSQL image, existing
-Redis/SpiceDB/toolchain images, and Plonk setup prerequisites. Preparation builds
-dependencies and binaries. It does not generate a proof. Startup waits for health.
+Preparation builds dependencies and binaries. It generates no authorization proof.
+Startup waits for service health. The project is `raziel-m6-live`, with separate
+volumes and runtime files. It imports no M5 or preview state. Never use
+`down --volumes` as a startup repair.
 
-In the agent checkout, create the ignored settings file:
+## VM Private Files: Prepare SoC Credentials
+
+Working directory: any directory on the VM.
 
 ```bash
+install -d -m 0700 ~/raziel-secrets
+```
+
+Transfer the previously supplied file from the Mac through the existing SSH alias.
+The following command runs on the Mac, not the VM:
+
+```bash
+scp /Users/gitaalekhyapaul/Downloads/soclaas.env gapaul-vm-i:raziel-secrets/soclaas.env
+```
+
+Return to the VM:
+
+```bash
+chmod 0600 ~/raziel-secrets/soclaas.env
+```
+
+The file contains `SOCLAAS_BASE_URL`, `SOCLAAS_MODEL`, and `SOCLAAS_API_KEY`.
+Do not paste its contents into chat, Git, terminal diagnostics, or a dashboard.
+Do not transfer it over an unresolved or untrusted SSH connection.
+
+## VM Agents: Clone Or Update
+
+Working directory: the VM home directory, then `~/raziel-demo-agents`.
+
+First setup only:
+
+```bash
+cd ~
+git clone https://github.com/gitaalekhyapaul/raziel-demo-agents.git
+```
+
+For an existing checkout:
+
+```bash
+cd ~/raziel-demo-agents
+git pull --ff-only origin main
+```
+
+For either path, inspect the checkout:
+
+```bash
+cd ~/raziel-demo-agents
+git log -1 --oneline
+git status --short
+```
+
+Use the public-package checkpoint listed at the top or a later compatible commit.
+The obsolete SDK archive is not a dependency.
+
+## VM Agents: Configure
+
+Working directory: `~/raziel-demo-agents`.
+
+First setup only, with no existing `.env.agents`:
+
+```bash
+cd ~/raziel-demo-agents
 cp .env.example .env.agents
 chmod 0600 .env.agents
 ```
 
-Set `AGENT_DASHBOARD_PASSWORD` to at least 12 characters. Set distinct
-`CHANNEL_TOKEN_A` and `CHANNEL_TOKEN_B`, each at least 32 characters. Set
-`SOCLAAS_ENV_PATH` to the private SoC file on the VM. The file uses
-`SOCLAAS_BASE_URL`, `SOCLAAS_MODEL`, and `SOCLAAS_API_KEY`. It stays outside Git and
-the image build context. No LLM credentials are entered in a dashboard. Keep that
-file at mode `0600`. A Mac path is not a VM path. Transfer the private file to the
-VM through the existing SSH connection and set its VM path in `.env.agents`.
-
-For the Mac browser ports below, set these two values before agent startup:
+Edit this file with private values and the absolute VM path to the SoC file:
 
 ```dotenv
+AGENT_DASHBOARD_PASSWORD=replace-with-at-least-12-characters
+CHANNEL_TOKEN_A=replace-with-a-random-token-at-least-32-characters
+CHANNEL_TOKEN_B=replace-with-a-different-token-at-least-32-characters
+SOCLAAS_ENV_PATH=/home/sadm/raziel-secrets/soclaas.env
 AGENT_A_ORIGINS=http://127.0.0.1:13001
 AGENT_B_ORIGINS=http://127.0.0.1:13002
 ```
 
-Run from the agent checkout:
+Use two distinct channel tokens. They authenticate the internal agent message
+service, not Raziel data access. The dashboard password is an agent-console login,
+not the backend operator password.
+
+`docker compose --env-file .env.agents` loads startup values for interpolation.
+The agent services then load the separate SoC file through Compose `env_file`.
+Its credentials reach only Agent A and Agent B's runtime environments, not the
+shared channel or backend. They are not copied into the Docker image.
+`src/config.ts` reads those environment values for the OpenAI-compatible client.
+`LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` override the matching SoC values.
+Do not set `LLM_ENV_FILE` for this Compose route. That setting is for a native
+process reading a file directly. Without LLM configuration, manual controls remain.
+
+An env file is private local configuration, not a production secret vault.
+VM administrators and users with Docker access can inspect container environments.
+Do not share `docker compose config`, `docker inspect`, or `printenv` output that
+contains interpolated credentials.
+
+## VM Agents: Build And Start
+
+Working directory: `~/raziel-demo-agents`.
 
 ```bash
+cd ~/raziel-demo-agents
 docker compose --env-file .env.agents build --pull=false agent-a
 docker compose --env-file .env.agents up -d --wait
 docker compose --env-file .env.agents ps
 ```
 
-Default private volume ownership is UID/GID `1000`. Set `AGENT_UID` and `AGENT_GID`
-before the first build for a different runtime user. Do not change existing volume
-ownership or delete volumes as a startup repair.
+Default volume ownership is UID/GID `1000`. Set `AGENT_UID` and `AGENT_GID`
+before the first build for another runtime user. Keep existing volume ownership.
+Each agent generates its separate Ed25519 key on first start and retains it in its
+private volume. Private key and state files use owner-only permissions.
+No agent private key belongs in `.env.agents`.
 
-## API Reachability
+## Mac: Open The Dashboards
 
-The SDK requires HTTPS outside loopback. A Docker service name and
-`host.docker.internal` are not loopback. Agents must not join backend owner networks.
-SSH browser forwarding does not create an API endpoint inside each container.
-
-One free ngrok assigned HTTPS domain can serve the operator/API for both agents.
-No custom domain or Premium subscription is required. The Mac already has ngrok
-`3.39.11`; the VM SSH session currently has no ngrok command on its path. The tunnel
-can run on the Mac through an SSH-forwarded VM port, with no new VM installation.
-
-For that option, use a free Mac port, such as `13000`, and set the backend's
-`RAZIEL_M6_OPERATOR_EXPECTED_ORIGIN=http://127.0.0.1:13000` in `.env.m6` before startup.
-The VM console port remains `3000`. Run on the Mac and retain the SSH session:
+Working directory: any directory on the Mac. Keep this terminal running.
 
 ```bash
-ssh -N -L 13000:127.0.0.1:3000 -L 13001:127.0.0.1:3001 -L 13002:127.0.0.1:3002 gapaul-vm-i
+ssh -N -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:13000:127.0.0.1:3000 \
+  -L 127.0.0.1:13001:127.0.0.1:3001 \
+  -L 127.0.0.1:13002:127.0.0.1:3002 \
+  gapaul-vm-i
 ```
 
-For these browser ports, set `AGENT_A_ORIGINS=http://127.0.0.1:13001` and
-`AGENT_B_ORIGINS=http://127.0.0.1:13002` in the VM agent settings before startup.
-Open the three dashboards at local ports `13000`, `13001`, and `13002`. In another
-Mac terminal, with its ngrok account configured, run:
+Open the operator at `http://127.0.0.1:13000`, Agent A at
+`http://127.0.0.1:13001`, and Agent B at `http://127.0.0.1:13002`.
+SSH alone supplies this browser access. No ngrok process is needed to open or
+control the dashboards. Only these three ports need browser forwarding.
+
+## Choose The Agent API Route
+
+This is separate from browser forwarding. The SDK runs inside the agent
+containers on the VM. Their `127.0.0.1` addresses belong to those containers,
+not the VM host or Mac. SSH `-L` creates Mac listeners; it does not create a
+backend listener inside either agent container.
+
+The current SDK accepts HTTP for loopback development and requires HTTPS for
+other hosts. The current agent Compose stack has no direct backend connection
+or private TLS frontend. Do not put a Mac browser URL into the agent API field.
+Do not join agents to backend owner networks or disable TLS checks.
+
+Ngrok is not a Raziel dependency. There are two deployment choices:
+
+| Choice | Browser route | Agent-to-backend route | Current status |
+| --- | --- | --- | --- |
+| Private VM HTTPS endpoint | SSH | VM-reachable HTTPS frontend | Requires a supplied endpoint or a private TLS deployment addition |
+| Existing Mac ngrok route | SSH | HTTPS tunnel to forwarded VM console | Documented demo option; requires explicit public-exposure approval |
+
+For an existing trusted VM HTTPS endpoint, use its origin as both agents' API
+base URL. No ngrok command is needed. A private TLS frontend needs correct DNS,
+certificate trust, and a reachable frontend network. The current Compose files
+do not provision it. Select this deployment work before promising an SSH-only
+full agent data flow.
+
+For the existing Mac ngrok option, keep the dashboard SSH tunnel above running.
+In a second Mac terminal, using the configured tunnel account:
 
 ```bash
 ngrok http 13000
 ```
 
-Only the console/API port is exposed through ngrok. The agent containers use its
-HTTPS URL. The SSH session and Mac tunnel must remain running for their API calls.
-This route passes through the Mac; it is not an autonomous VM ingress deployment.
-Do not start public exposure without the maintainer's deployment approval.
+Use the reported HTTPS origin as the agent API base URL. This exposes the
+console/API endpoint, not Redis, databases, verifier RPC, or private prover services.
+The Mac and both tunnels must remain running. No ngrok installation on the VM
+belongs to this option. Do not start public exposure without deployment approval.
 
-An already configured VM ngrok client can instead expose the VM console directly:
+## Dashboards: Register Agent Credentials
 
-```bash
-ngrok http 3000
-```
+This step happens in the browser, not in either env file.
 
-Use its reported HTTPS URL as both agents' **API base URL**. Keep their **Audience**
-equal to the exact value supplied during agent registration, not a guessed URL.
-Follow the [ngrok free-plan limits](https://ngrok.com/docs/pricing-limits/free-plan-limits/).
-Free HTML browsing has an interstitial. The dashboards can remain SSH-forwarded.
-Check SDK API reachability during deployment. Do not claim this path passed locally.
-An absent ngrok client requires a pinned installation approval before installation.
-A deployment-provided trusted HTTPS endpoint can replace the tunnel.
+1. Each agent's **Identity** panel displays its public key. Keep its private key
+   in the agent volume.
+2. In the operator's **Agents** page, register that public key and issue a separate
+   API token for that agent.
+3. In that agent's **Identity** panel, enter the reachable HTTPS API origin,
+   exact registration audience, and issued token, then connect.
+4. Repeat for the second agent with its own key and token.
 
-For the default browser ports rather than the Mac-ngrok example above, forward:
-
-```bash
-ssh -N -L 3000:127.0.0.1:3000 -L 3001:127.0.0.1:3001 -L 3002:127.0.0.1:3002 gapaul-vm-i
-```
-
-Open `http://127.0.0.1:3000`, `http://127.0.0.1:3001`, and
-`http://127.0.0.1:3002`. Nondefault browser ports need matching agent origins.
-The operator's expected browser origin remains the SSH URL for this flow. The agent
-API uses token/key authentication, not the operator's browser session.
+The runtime stores the connection token in its owner-only `state.json` volume
+record and supplies it through the SDK token provider. It is not returned in the
+public connection view or passed to the model. The supplied SoC API key is an LLM
+credential. It cannot replace a Raziel-issued agent API token.
 
 ## Recording Flow
 
