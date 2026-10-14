@@ -168,6 +168,12 @@ If `m6-proof-build` reports missing `gecko_profile` during offline Cargo metadat
 follow the [targeted SP1 build-cache repair](M6-LIVE-VM.md#offline-sp1-build-cache).
 The fix prefetches both published SP1 runner lockfiles, then rebuilds the failed
 runtime. It changes no proof features, package versions, private data, or images.
+
+For a missing finalized Go modfile or the pinned Go module's upstream 404, use the
+[public Go cache recovery](M6-LIVE-VM.md#recover-the-existing-public-go-cache).
+The recovery uses the legacy VM dependency cache, not private M5 state. The console
+HTTP health check now supplies the readiness prerequisite used by ngrok.
+
 An access-API health check can recover after a failed startup. Check its current
 health rather than treating an earlier unhealthy summary as a persistent fault.
 

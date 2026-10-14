@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+test "$#" -eq 1 || { echo "usage: $0 SOURCE_VOLUME" >&2; exit 1; }
+source_cache=$1
+target_cache=raziel-m6-live_razield-proof-go-mod-cache
+cargo_cache=raziel-m6-live_cargo-registry
+case "$source_cache" in
+  ""|*[!a-zA-Z0-9_.-]*) echo "invalid public cache volume name" >&2; exit 1 ;;
+  *_razield-proof-go-mod-cache) ;;
+  *) echo "expected a dedicated public proof Go cache volume" >&2; exit 1 ;;
+esac
+test "$source_cache" != "$target_cache" || {
+  echo "source and target public caches must differ" >&2; exit 1;
+}
+# Inspect first: a typo must not create an empty source volume.
+docker volume inspect "$source_cache" "$cargo_cache" >/dev/null
+docker image inspect raziel-toolchain:m0 >/dev/null
+docker volume create \
+  --label com.docker.compose.project=raziel-m6-live \
+  --label com.docker.compose.volume=razield-proof-go-mod-cache \
+  "$target_cache" >/dev/null
+. ./tools/toolchain-versions.env
+
+docker run --rm --pull=never --network none --read-only --user 0:0 \
+  --cap-drop ALL --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777,size=268435456 \
+  --env CARGO_HOME=/usr/local/cargo --env GOCACHE=/tmp/raziel-go-build \
+  --env GOPROXY=off --env GOSUMDB=off --env GOTOOLCHAIN=local \
+  --env HOME=/tmp/raziel-home --env "RAZIEL_SP1_CRATE_VERSION=$SP1_VERSION" \
+  --mount "type=volume,source=$source_cache,target=/cache-source,readonly" \
+  --mount "type=volume,source=$target_cache,target=/cache-target" \
+  --mount "type=volume,source=$cargo_cache,target=/usr/local/cargo/registry,readonly" \
+  --mount "type=bind,source=$repo_root/scripts/prepare-proof-sandbox-dependencies,target=/usr/local/bin/check-sp1-go-cache,readonly" \
+  raziel-toolchain:m0 /bin/sh -ec '
+    test -z "$(find /cache-source /cache-target -type l -print -quit)" || {
+      echo "public Go cache contains a symlink" >&2; exit 1;
+    }
+    GOMODCACHE=/cache-source /usr/local/bin/check-sp1-go-cache --check
+    # Keep existing destination entries. A conflicting cache fails verification.
+    # Do not preserve ownership or read-only modes from the old host cache.
+    cp -R -n --no-preserve=ownership,mode /cache-source/. /cache-target/
+    chmod -R a+rX /cache-target
+    GOMODCACHE=/cache-target /usr/local/bin/check-sp1-go-cache --check
+    chmod 0444 /cache-target/raziel-sp1-gnark.mod /cache-target/raziel-sp1-gnark.sum
+  '
+printf 'm6_go_cache_recovery=pass source=%s private_state=not-mounted\n' "$source_cache"

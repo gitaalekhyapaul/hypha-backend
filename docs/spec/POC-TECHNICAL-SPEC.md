@@ -1234,6 +1234,10 @@ The proof-runtime build prefetches and verifies SP1's pinned Gnark Go modules in
 build-only container with no repository or private-state mounts. The runtime build
 stays networkless, mounts that module cache and its finalized manifest read-only, and
 disables Go proxy access. The fetch step never writes to the immutable Cargo source.
+M6 preparation can recover the same pinned public Go modules from an existing
+read-only cache. It validates the exact module manifest, pinned source checksums,
+offline completeness, and module integrity before the networkless build. It copies
+no private state and changes no dependency pin.
 The Compose proof profile applies the accepted 60,129,542,144-byte cap, zero swap,
 eight CPUs, no network, read-only root, fixed trusted mounts, owner-only socket, and
 bounded tmpfs. The supervisor deletes the private envelope before direct Plonk and

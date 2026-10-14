@@ -62,6 +62,10 @@ if (mode) {
   assert.equal(config.networks["ngrok-upstream"].internal, true);
   assert.equal(tunnel.command[1], "http://demo-console:3000");
   assert.equal(tunnel.depends_on["demo-console"].condition, "service_healthy");
+  const healthcheck = config.services["demo-console"].healthcheck;
+  assert.ok(healthcheck && !healthcheck.disable, "ngrok's console dependency needs a health check");
+  assert.deepEqual(healthcheck.test.slice(0, 3), ["CMD", "node", "-e"]);
+  assert.ok(healthcheck.test[3].includes("http://127.0.0.1:3000/"));
   const members = Object.entries(config.services).filter(([, service]) =>
     Object.hasOwn(service.networks ?? {}, "ngrok-upstream"));
   assert.deepEqual(members.map(([name]) => name).sort(), ["demo-console", "raziel-ngrok"]);

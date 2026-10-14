@@ -62,6 +62,10 @@ function check(config, port) {
   const console = services["demo-console"];
   const publisher = services["demo-policy-activation"];
   const initializer = services["demo-console-policy-tools"];
+  assert.deepEqual(console.healthcheck.test.slice(0, 3), ["CMD", "node", "-e"]);
+  assert.ok(console.healthcheck.test[3].includes("http://127.0.0.1:3000/"));
+  assert.ok(console.healthcheck.test[3].includes("AbortSignal.timeout(4000)"));
+  assert.notEqual(console.healthcheck.disable, true);
 
   for (const [name, service] of Object.entries(services)) {
     assert.equal(service.build, undefined, `${name} must reuse the pinned image`);

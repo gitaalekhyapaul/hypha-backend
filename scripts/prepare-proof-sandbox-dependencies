@@ -2,6 +2,12 @@
 set -eu
 umask 022
 
+case "$#:${1:-}" in
+  0:) mode=fetch ;;
+  1:--check) mode=check ;;
+  *) echo "expected no argument or --check" >&2; exit 1 ;;
+esac
+
 crate_version=${RAZIEL_SP1_CRATE_VERSION:?RAZIEL_SP1_CRATE_VERSION is required}
 cargo_home=${CARGO_HOME:-"$HOME/.cargo"}
 go_mod_cache=${GOMODCACHE:?GOMODCACHE is required}
@@ -15,7 +21,6 @@ crate_count=0
 cleanup() {
   rm -f "$temporary_modfile" "$temporary_sumfile"
 }
-trap cleanup EXIT HUP INT TERM
 
 for candidate in \
   "$cargo_home"/registry/src/*/"sp1-recursion-gnark-ffi-$crate_version"
@@ -37,6 +42,49 @@ then
   exit 1
 fi
 
+if [ "$mode" = check ]; then
+  if [ ! -f "$cached_modfile" ] || [ ! -s "$cached_modfile" ] || [ -L "$cached_modfile" ] ||
+    [ ! -f "$cached_sumfile" ] || [ ! -s "$cached_sumfile" ] || [ -L "$cached_sumfile" ]
+  then
+    echo "the finalized SP1 Go cache manifests are missing or unsafe" >&2
+    exit 1
+  fi
+  cmp "$crate_root/go/go.mod" "$cached_modfile" >/dev/null || {
+    echo "the cached Go module manifest differs from pinned SP1 $crate_version" >&2
+    exit 1
+  }
+  # Download may add sums, but it must retain every checksum from the pinned source.
+  awk '
+    NF != 3 { invalid = 1; next }
+    FNR == NR { expected[$1 SUBSEP $2] = $3; next }
+    {
+      key = $1 SUBSEP $2
+      if (key in expected) {
+        if (expected[key] != $3) invalid = 1
+        else found[key] = 1
+      }
+    }
+    END {
+      for (key in expected) if (!(key in found)) invalid = 1
+      exit invalid ? 1 : 0
+    }
+  ' "$crate_root/go/go.sum" "$cached_sumfile" || {
+    echo "the cached Go checksums differ from pinned SP1 $crate_version" >&2
+    exit 1
+  }
+  (
+    cd "$crate_root/go"
+    export GOFLAGS="-mod=readonly -modfile=$cached_modfile"
+    export GOPROXY=off GOTOOLCHAIN=local
+    # Check completeness too: verify alone can skip modules that were never cached.
+    go mod download all
+    go mod verify
+  )
+  printf 'sp1_go_dependencies=pass mode=check version=%s\n' "$crate_version"
+  exit 0
+fi
+
+trap cleanup EXIT HUP INT TERM
 install -d -m 0755 "$go_mod_cache"
 install -m 0600 "$crate_root/go/go.mod" "$temporary_modfile"
 install -m 0600 "$crate_root/go/go.sum" "$temporary_sumfile"
@@ -49,3 +97,4 @@ chmod 0444 "$temporary_modfile" "$temporary_sumfile"
 mv -f "$temporary_sumfile" "$cached_sumfile"
 mv -f "$temporary_modfile" "$cached_modfile"
 chmod -R a+rX "$go_mod_cache"
+printf 'sp1_go_dependencies=pass mode=fetch version=%s\n' "$crate_version"

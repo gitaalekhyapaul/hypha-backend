@@ -285,6 +285,10 @@ Raziel creates private run state. That fetch container can read only the public 
 registry and its dedicated Go module cache. It finalizes a cached manifest and
 checksum pair without modifying the immutable Cargo source. The networkless runtime
 build mounts the verified cache read-only and disables Go proxy access.
+An explicit M6 recovery can copy an existing public Go cache into the separate M6
+cache after exact pinned-manifest, checksum, completeness, and offline integrity
+checks. The source is read-only. No private volume or Docker socket is mounted.
+This recovery does not substitute dependency versions or change proof semantics.
 
 Generated Snapshot, Capability, and Verification clients and servers compile through
 the opt-in `raziel-proto` `services` feature. Both Rust service crates select that

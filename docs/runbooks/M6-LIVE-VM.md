@@ -176,27 +176,48 @@ Pull the repair, then run this targeted preparation in the VM backend checkout:
 ```bash
 cd ~/hypha-backend
 git pull --ff-only origin main
-./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-sp1-native-dependencies
-./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build
+./scripts/prepare-m6-proof-runtime
 ./scripts/start-m6-demo --ngrok
 ./scripts/compose-m6 --ngrok --profile apps ps
 ```
 
 The helper uses SP1 6.3.1's checksum-pinned published lockfiles, including optional
 profiling packages. It does not turn profiling on or change Raziel's dependency
-lockfile. The subsequent build checks dependency resolution offline with a
-read-only cache. The prover keeps its network isolation. Normal bootstrap and
-`./scripts/prepare-m6-demo` now perform this prefetch automatically.
+lockfile. The preparation command fetches the workspace Rust graph, both native
+runner graphs, and the pinned Gnark Go modules before the offline proof build.
+It starts no runtime service or proof job. The subsequent build checks dependency
+resolution offline with a read-only cache. The prover keeps its network isolation.
+Normal bootstrap and `./scripts/prepare-m6-demo` now perform this prefetch automatically.
 
-If the helper reports a missing runner manifest, run the existing locked fetch in
-the same cache first:
+### Recover The Existing Public Go Cache
+
+On October 14, a fresh local fetch of SP1's pinned `gnark-ignition-verifier` module
+returned HTTP 404 upstream. The VM's earlier successful proof runs left the public
+cache `raziel_razield-proof-go-mod-cache`. Use this explicit recovery for that VM:
 
 ```bash
-./scripts/compose-m6 run --rm --no-deps m6-toolchain cargo fetch --locked
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/prepare-m6-proof-runtime --reuse-go-cache raziel_razield-proof-go-mod-cache
+./scripts/start-m6-demo --ngrok
+./scripts/compose-m6 --ngrok --profile apps ps
 ```
 
-Then repeat the targeted preparation above. No volume deletion, private-file
-change, image rebuild, package upgrade, or proof regeneration is needed.
+Recovery mounts the legacy public cache read-only. It checks the exact SP1 module
+manifest, the pinned source checksums, offline module completeness, and Go's module
+integrity checks. It copies only public dependencies into the separate M6 cache.
+Existing destination entries are not overwritten. A conflicting or incomplete
+cache fails the checks. The source stays unchanged. No private volume or Docker
+socket enters the recovery container. No dependency version or fork changes.
+
+The proof build still has no network access. Recovery does not generate a proof,
+delete a volume, or rebuild the toolchain image. A missing or invalid legacy cache
+needs investigation. Do not clear it or upgrade cryptographic dependencies to pass.
+
+The console now has a bounded HTTP readiness check on its internal port 3000.
+Ngrok waits for this check. Preparation without the ngrok overlay can report the
+existing tunnel as an orphan. This warning does not require removing the tunnel.
+Do not add `--remove-orphans` for that warning.
 
 ### Normal Restart
 

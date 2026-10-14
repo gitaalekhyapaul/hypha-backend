@@ -1,5 +1,6 @@
 # Apply after docker-compose.yml and docker-compose.m6.yml through compose-m6.
-# Separate from the memory-backed preview. No M5 state or volumes are imported.
+# Separate from the memory-backed preview. No M5 private state is imported.
+# Recovery of the pinned public Go dependency cache is an explicit preparation step.
 name: raziel-m6-live
 
 services:

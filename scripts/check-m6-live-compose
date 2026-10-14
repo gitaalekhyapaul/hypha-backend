@@ -19,6 +19,14 @@ for (const [name, role] of Object.entries(s)) {
   assert.equal(role.build, undefined);
   assert.equal(role.pull_policy, "never");
   assert.equal(role.privileged ?? false, false);
+  for (const [dependency, settings] of Object.entries(role.depends_on ?? {})) {
+    if (settings.condition === "service_healthy") {
+      const healthcheck = s[dependency]?.healthcheck;
+      assert.ok(healthcheck && !healthcheck.disable &&
+        healthcheck.test?.length > 0 && healthcheck.test[0] !== "NONE",
+        `${name}: healthy dependency ${dependency} needs a health check`);
+    }
+  }
   for (const mount of role.tmpfs ?? []) {
     assert.ok(mount.startsWith("/"), `${name}: tmpfs options must stay in one absolute mount entry`);
   }
@@ -89,5 +97,7 @@ assert.equal(s["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, "http://m6
 assert.equal(s["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");
 assert.equal(s["demo-console"].ports[0].published, "3000");
 assert.equal(s["demo-console"].ports[0].host_ip, "127.0.0.1");
+assert.deepEqual(s["demo-console"].healthcheck.test.slice(0, 3), ["CMD", "node", "-e"]);
+assert.ok(s["demo-console"].healthcheck.test[3].includes("http://127.0.0.1:3000/"));
 process.stdout.write("m6_live_compose=pass proof=56GiB,8CPU,no-swap verifier=2GiB,no-network runtime=not-started\n");
 NODE

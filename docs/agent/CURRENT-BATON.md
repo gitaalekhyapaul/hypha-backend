@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T07:46:11Z
+- Last updated UTC: 2026-10-14T09:32:44Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,11 @@
 
 ## Objective
 
-The SP1 native-runner cache repair is implemented and locally validated. The next
-bounded objective is the maintainer's targeted VM prefetch and proof-runtime rebuild,
-then full stack startup and Agent A's connected approval-to-data path. Both SP1 6.3.1
-published runner lockfiles are prepared explicitly and checked offline. Raziel's
-lockfile, proof features, source permissions, and private VM state stay unchanged.
+Next bounded objective: validate the completed preparation/readiness repair on the
+VM. Recover the same pinned public Go modules from the legacy cache through an
+explicit read-only source mount, then run the networkless proof build and check
+stack health. The local repair checks pass. Actual VM cache contents and startup
+remain unverified. No dependency pin, proof feature, API, SDK, or private-state change.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -75,6 +75,15 @@ This release follow-up did not complete the live B-0067 acceptance gate.
   `scripts/prepare-m6-demo`, `scripts/bootstrap`, `scripts/prepare-proof-sandbox-runtime`,
   build-boundary architecture/spec notes, M6/M7 runbooks, focused checks, current
   baton, and dated evidence. Both siblings remain read-only.
+- Preparation/readiness follow-up: `scripts/prepare-m6-proof-runtime`,
+  `scripts/prepare-m6-demo`, `docker-compose.m6.yml`, the policy/live/ngrok Compose
+  checks, M6/M7 runbooks, current baton, and dated evidence. Reuse existing approved
+  dependencies. No remote source edit, runtime restart, or proof generation.
+- Public-cache recovery: `scripts/restore-m6-proof-go-cache`,
+  `scripts/prepare-proof-sandbox-dependencies`, `scripts/check-m6-proof-preparation.mjs`,
+  the M6 live overlay's public-cache comment, focused preparation checks, and
+  build-boundary documentation. Source cache stays read-only. No private volume
+  or credentials are mounted by the recovery container.
 
 ## Out Of Scope
 
@@ -114,6 +123,9 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - On October 14, the maintainer approved prefetching dependencies from SP1 6.3.1's
   two published runner lockfiles, including optional `gecko_profile` 0.4.0. This is
   cache preparation, not a new direct dependency or approval to enable profiling.
+- The maintainer approved recovery of the existing public Go cache. Validate exact
+  SP1 module pins and source checksums, then verify module completeness and integrity
+  offline before use. The M6 destination stays separate from the legacy source.
 
 ## Open Questions And Blockers
 
@@ -121,16 +133,22 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   configuration, not a working public endpoint. No token was shared or inspected.
   Local repair probes use synthetic settings and never start a tunnel. Keep the
   real token in ignored backend settings, never chat or Git.
-- The October 14 VM retry passed the repaired runtime mounts and initializers.
-  The proof build failed during SP1's nested offline Cargo metadata resolution,
-  with missing `gecko_profile`. The later supplied access-API health report is
-  healthy with five successful probes. Its earlier unhealthy state is no longer
-  a confirmed blocker. Full stack and real M6/M7 acceptance remain unverified.
+- The October 14 native-runner repair now passes on the VM. The supplied access-API
+  health report is healthy with five successful probes. Neither missing
+  `gecko_profile` nor the earlier access-API health failure is a current blocker.
 - Docker was initially unavailable locally. The maintainer started it and approved
   the pinned SP1 prefetch. No VM source, restart, or private-state action has run.
-- The October 8 read-only check found a working SSH ControlMaster and reachable VM.
-  The backend was clean at `7710e9a`; the agent checkout was absent at that check.
-  Those are dated observations, not a claim about later maintainer changes.
+- The later VM retry lacks the finalized Go modfile in the M6 cache. The earlier
+  targeted instructions omitted Go preparation. The new ordered preparation helper
+  corrects that omission. The console HTTP health check corrects ngrok's missing
+  readiness dependency. Both repairs pass focused local checks, not live VM acceptance.
+- A fresh local Go fetch fails: SP1's pinned gnark-ignition-verifier pseudo-version
+  returns HTTP 404 upstream. The maintainer confirmed both public Go cache volumes
+  exist on the VM, including `raziel_razield-proof-go-mod-cache` from earlier runs.
+  Their contents still need the offline recovery validation. No pin change is approved.
+  A new host without a complete matching cache cannot bypass the upstream failure.
+- The latest local SSH ControlMaster check found no socket. VM work still needs the
+  maintainer's interactive connection and pull. No remote source or runtime change ran.
 - On resume, check the master first. If unavailable, pause and ask the maintainer
   to restore the interactive connection. Do not recreate MFA sessions.
 - VM updates still require maintainer pulls through the server's PAT flow.
@@ -197,6 +215,17 @@ approved prefetch passes, and both actual metadata graphs resolve in a networkle
 read-only container. No direct dependency, profiling feature, SDK, API, or proof
 semantics changed. The access-API report now shows healthy with five successful probes.
 
+The follow-up provides one ordered proof-preparation command and an explicit legacy
+public Go cache recovery option. The source cache stays read-only. Recovery checks
+the exact SP1 module manifest, pinned source checksums, complete offline downloads,
+and module integrity, then copies without overwriting destination entries. It
+verifies the destination before the networkless proof build. No private volumes,
+keys, credentials, Docker socket, or new dependency versions enter that role.
+The console now has a bounded internal HTTP readiness check required by ngrok.
+Local real-Go probes accept an intact read-only cache and reject changed or missing
+modules. The recovery command preserves its source and rejects a conflicting
+destination. These probes use a small controlled cache, not the VM's full SP1 cache.
+
 ## Validation Plan
 
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
@@ -261,6 +290,18 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Helper focused cases | PASS | Fetch/check modes, no check-mode fetch, changed/missing/duplicate inputs, lock mutation, and unknown option rejection |
 | SP1 feature boundaries | PASS | Existing check retains blocking/native-gnark, excludes hosted/CUDA/experimental proving, and preserves verifier/RPC graph isolation |
 | Native-repair full VM build | SKIP | No remote edit, rebuild, service start, or proof generation executed locally |
+| VM native-runner repair | PASS | Maintainer output confirms prefetch and offline native metadata now pass |
+| Fresh local Gnark fetch | FAIL | Approved SP1 module pseudo-version returns HTTP 404 upstream; no version or fork substituted |
+| Preparation focused checks | PASS | Ordered fetch/build stages, opt-in recovery, malformed arguments, fail-fast behavior, pinned-manifest/checksum rejection, and mount isolation |
+| Actual Go read-only cache | PASS | Small real-module probe verifies offline with read-only source/cache mounts; modified and absent modules reject |
+| Actual recovery command | PASS | Controlled cache copy with no network leaves source unchanged and keeps existing destination entries; conflicting destination rejects |
+| Probe harness corrections | PASS | Source go.sum holds only the xid go.mod checksum; probe adds its cached zip checksum. Conflict probe creates the conflict before recovery finalizes read-only files |
+| Console HTTP probe | PASS | Real pinned Node probe accepts HTTP 200 and rejects HTTP 503 or a closed port; actual Next.js startup not claimed |
+| Preparation/readiness Compose checks | PASS | Live M6, policy preview, integrated ngrok, and existing proof sandbox checks pass; resource and network limits unchanged |
+| Preparation script format/lint | PASS | Existing pinned Linux Biome checks the new focused script; no package installed. Host Darwin Biome binary is absent |
+| Shell/runbook/diff checks | PASS | Edited shell scripts and runbook commands parse, relative document links resolve, diff whitespace is clean, and scoped credential/private-artifact scan passes |
+| Sibling worktrees | PASS | SDK and agents remain clean and unchanged in this backend-only repair |
+| VM legacy cache recovery/full stack | SKIP | Maintainer must pull, run recovery, and report health; no remote action or proof ran |
 
 ## Risks And Private-Data Notes
 
@@ -271,15 +312,14 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull the SP1 native-cache repair. Run
-`./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-sp1-native-dependencies`,
-then `./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build`.
-After that build passes, run `./scripts/start-m6-demo --ngrok` and inspect service
-health. This targeted preparation creates no proof and deletes no state. No image
-rebuild or package upgrade is required. Retain the existing `.env.m6`, volumes, and
-agent checkout. For first setup, add the private
-ngrok token and supplied domain to `.env.m6`, and the matching API default to
-`.env.agents`. Follow the updated runbook and start the backend with `--ngrok`.
+Have the maintainer pull the preparation/readiness repair in the VM backend checkout.
+Run `./scripts/prepare-m6-proof-runtime --reuse-go-cache raziel_razield-proof-go-mod-cache`.
+After that command passes, run `./scripts/start-m6-demo --ngrok`, then
+`./scripts/compose-m6 --ngrok --profile apps ps`. A cache validation failure needs
+its error output, not a volume reset or dependency upgrade. This preparation creates
+no proof and deletes no state. Retain `.env.m6`, existing volumes, and the agent
+checkout. Preparation without the ngrok overlay can report the existing tunnel as
+an orphan. Do not remove the tunnel for that warning.
 Keep browser access on SSH forwarding. Configure the two repo-local settings
 files and private SoC credentials path as documented. Check Docker and the existing
 SSH ControlMaster before runtime work. Validate Agent A's registration, inbox
@@ -297,3 +337,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Dispatcher tmpfs startup repair](history/2026-10-08-m6-dispatcher-tmpfs-repair.md)
 - [Runtime bind-mount startup repair](history/2026-10-08-m6-runtime-bind-mount-repair.md)
 - [SP1 native-runner cache repair](history/2026-10-14-sp1-native-dependency-cache-repair.md)
+- [Public Go cache and console readiness repair](history/2026-10-14-m6-go-cache-and-console-readiness.md)

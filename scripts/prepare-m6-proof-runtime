@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+source_cache=
+case "$#:${1:-}" in
+  0:) ;;
+  2:--reuse-go-cache)
+    test -n "$2" || { echo "source cache volume is required" >&2; exit 1; }
+    source_cache=$2 ;;
+  *) echo "usage: $0 [--reuse-go-cache SOURCE_VOLUME]" >&2; exit 1 ;;
+esac
+
+# Explicit preparation only. Fetch public dependencies before the networkless build.
+# No runtime services, authority keys, snapshots, or proof jobs are started here.
+./scripts/compose-m6 run --rm --no-deps m6-toolchain cargo fetch --locked
+./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-sp1-native-dependencies
+if [ -n "$source_cache" ]; then
+  ./scripts/restore-m6-proof-go-cache "$source_cache"
+else
+  ./scripts/compose-m6 run --rm --no-deps m6-proof-dependency-fetch
+fi
+./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build
+printf 'm6_proof_runtime_preparation=pass proof_execution=not-started\n'
