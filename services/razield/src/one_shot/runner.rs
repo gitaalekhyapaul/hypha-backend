@@ -6,8 +6,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use raziel_prover::{
-    ProverError, Sp1Executor, Sp1Prover, prepare_guest_input, require_local_plonk_artifacts,
-    require_safe_sp1_environment,
+    ProverError, Sp1Executor, Sp1Prover, Sp1Verifier, TrustedProgramKey, prepare_guest_input,
+    require_local_plonk_artifacts, require_safe_sp1_environment,
 };
 use raziel_verifier::{LocalRegistry, RegistryLoader, default_registry_config};
 
@@ -29,6 +29,7 @@ pub fn run_child_from_env() -> Result<(), OneShotProtocolError> {
     require_safe_sp1_environment().map_err(|_| OneShotProtocolError::ResourceProfile)?;
     require_local_plonk_artifacts().map_err(|_| OneShotProtocolError::ResourceProfile)?;
     let guest_elf = read_guest_elf(config.guest_elf_path())?;
+    validate_program_key(&guest_elf, config.expected_program_key())?;
 
     let mut stream =
         UnixStream::connect(config.socket_path()).map_err(|_| OneShotProtocolError::FrameRead)?;
@@ -44,6 +45,32 @@ pub fn run_child_from_env() -> Result<(), OneShotProtocolError> {
     };
     let result_bytes = encode_result(&result)?;
     write_frame(&mut stream, &result_bytes, MAX_ONE_SHOT_RESULT_BYTES)
+}
+
+/// Checks only public program material. Does not open private storage or IPC.
+pub fn check_program_key_from_env() -> Result<(), OneShotProtocolError> {
+    let mut lookup = |name: &str| std::env::var(name).ok();
+    let path = super::config::required_absolute_path(
+        &mut lookup,
+        super::config::GUEST_ELF_PATH_ENV,
+        true,
+    )?;
+    let expected = super::config::required_program_key(&mut lookup)?;
+    validate_program_key(&read_guest_elf(&path)?, &expected)
+}
+
+fn validate_program_key(
+    guest_elf: &[u8],
+    expected: &TrustedProgramKey,
+) -> Result<(), OneShotProtocolError> {
+    let actual = Sp1Verifier::from_trusted_elf(guest_elf)
+        .map_err(|_| OneShotProtocolError::ProgramKeyMismatch)?;
+    if actual.verification_key_id() != expected.verification_key_id()
+        || actual.sp1_vkey_hash() != expected.sp1_vkey_hash()
+    {
+        return Err(OneShotProtocolError::ProgramKeyMismatch);
+    }
+    Ok(())
 }
 
 fn execute_request(
@@ -275,6 +302,36 @@ fn read_cgroup_number(cgroup_root: &Path, file_name: &str) -> Result<u64, OneSho
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn approved_guest_matches_both_public_key_identifiers_and_rejects_drift() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let guest =
+            read_guest_elf(&root.join("tools/authorization-guest/approved-v1.elf")).unwrap();
+        let key_root = root.join("services/verifierd/tests/fixtures/retained-plonk-v1");
+        let key_id = std::fs::read_to_string(key_root.join("verification-key-id.txt")).unwrap();
+        let key_hash = std::fs::read_to_string(key_root.join("sp1-vkey-hash.txt")).unwrap();
+        let expected =
+            TrustedProgramKey::from_registry_record(key_id.trim(), key_hash.trim()).unwrap();
+        assert_eq!(validate_program_key(&guest, &expected), Ok(()));
+
+        let wrong_id = TrustedProgramKey::from_registry_record(
+            &format!("sp1-vk-v1:{}", "ab".repeat(32)),
+            expected.sp1_vkey_hash(),
+        )
+        .unwrap();
+        let wrong_hash = TrustedProgramKey::from_registry_record(
+            expected.verification_key_id(),
+            "0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        )
+        .unwrap();
+        for invalid in [wrong_id, wrong_hash] {
+            assert_eq!(
+                validate_program_key(&guest, &invalid),
+                Err(OneShotProtocolError::ProgramKeyMismatch)
+            );
+        }
+    }
 
     #[test]
     fn cgroup_profile_requires_the_exact_memory_limit_and_zero_swap() {

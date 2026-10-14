@@ -276,6 +276,49 @@ docker inspect --format '{{json .State.Health}}' raziel-m6-live-m6-verifier-sand
 Do not remove the child's no-swap check or replace it with a Docker-inspect-only
 check. Readiness does not establish proof success or the full M7 acceptance gate.
 
+### Guest Identity And Grant Form Repair
+
+A separate 16-minute attempt failed without an OOM. Public-only inspection found
+that its freshly rebuilt guest had a different program key from the verifier's
+approved c809 identity. The old comparison ran after the expensive proof call.
+The discarded child error does not establish the exact last internal failure.
+
+Preparation now installs the pinned approved public guest and checks its checksum
+and both key identifiers. The child repeats the key check before private input.
+The approved verifier key stays unchanged. `--check-program-key` checks only public
+program material. It does not generate a proof, load a snapshot, or contact Redis.
+
+The approval form now derives required input names from the exact approved policy.
+Direct and dual-direct policies show no private grant controls. Team policies show
+Team ID. Organization policies show Organization ID. Caveats show their referenced
+stored inputs. ANY/ALL show the union. Hidden fields retain valid internal defaults
+for the existing complete grant payload. Changing selection resets edited values.
+The catalogue remains operator-only. No policy or grant recipe reaches an agent.
+
+Apply both fixes after every admitted proof finishes or reaches terminal cancellation.
+This offline rebuild uses the VM's existing caches and preserves every volume:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/check-m6-live-compose
+./scripts/compose-m6 --ngrok --profile apps stop
+./scripts/compose-m6 run --rm --no-deps \
+  -e CARGO_NET_OFFLINE=true -e GOPROXY=off \
+  m6-toolchain ./scripts/prepare-m6-tools
+./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --force-recreate --wait --wait-timeout 900
+./scripts/compose-m6 --ngrok --profile apps exec -T \
+  m6-proof-sandbox /opt/raziel-runtime/razield-prover --check-program-key
+```
+
+Both preparation and the last command must report `approved_program_key=pass`.
+Reload the operator browser. Request a new capability from the agent. A failed
+request remains failed. Do not replace the expected key with a newly derived key,
+clear Redis, delete volumes, or recreate agent identities for this repair.
+Deployment readiness is not a completed real-proof acceptance result.
+
 ### Normal Restart
 
 ```bash

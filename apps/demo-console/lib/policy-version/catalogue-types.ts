@@ -1,5 +1,16 @@
 import type { PolicyVersionIdentity } from "../policy-draft/types.ts";
 
+const GRANT_INPUT_FIELDS = [
+  "teamId",
+  "organizationId",
+  "approvedAmount",
+  "isApproved",
+  "isSuspended",
+  "isOverride",
+] as const;
+
+export type GrantInputField = (typeof GRANT_INPUT_FIELDS)[number];
+
 export interface ApprovedPolicyCatalogueEntry {
   readonly identity: PolicyVersionIdentity;
   readonly recordId: string;
@@ -11,6 +22,7 @@ export interface ApprovedPolicyCatalogueEntry {
   readonly approvalEpoch: string;
   readonly validFromUnixSeconds: string;
   readonly validUntilUnixSeconds: string;
+  readonly requiredGrantFields: readonly GrantInputField[];
 }
 
 export interface ApprovedPolicyCatalogue {
@@ -47,6 +59,7 @@ function policy(input: unknown): ApprovedPolicyCatalogueEntry {
     "approvalEpoch",
     "validFromUnixSeconds",
     "validUntilUnixSeconds",
+    "requiredGrantFields",
   ]);
   const identity = object(value.identity, ["familyId", "versionId", "version"]);
   const familyId = hexadecimal(identity.familyId, 32);
@@ -77,7 +90,19 @@ function policy(input: unknown): ApprovedPolicyCatalogueEntry {
     approvalEpoch: decimal(value.approvalEpoch, 18_446_744_073_709_551_615n),
     validFromUnixSeconds,
     validUntilUnixSeconds,
+    requiredGrantFields: requiredGrantFields(value.requiredGrantFields),
   };
+}
+
+function requiredGrantFields(input: unknown): readonly GrantInputField[] {
+  if (!Array.isArray(input) || input.length > GRANT_INPUT_FIELDS.length) throw invalid();
+  const fields = Array.from(input, (field: unknown) => {
+    if (typeof field !== "string" || !GRANT_INPUT_FIELDS.includes(field as GrantInputField))
+      throw invalid();
+    return field as GrantInputField;
+  });
+  if (new Set(fields).size !== fields.length) throw invalid();
+  return fields;
 }
 
 function object(input: unknown, keys: readonly string[]): Record<string, unknown> {

@@ -1,9 +1,10 @@
 use std::fmt::{self, Debug, Formatter};
 use std::path::{Path, PathBuf};
 
+use raziel_prover::TrustedProgramKey;
 use raziel_verifier::default_registry_config;
 
-use super::{OneShotProtocolError, valid_verification_key_id};
+use super::OneShotProtocolError;
 
 pub(super) const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 pub(super) const MAX_GUEST_ELF_BYTES: u64 = 4 * 1024 * 1024;
@@ -11,8 +12,9 @@ pub(super) const MAX_GUEST_ELF_BYTES: u64 = 4 * 1024 * 1024;
 const SOCKET_PATH_ENV: &str = "RAZIEL_ONE_SHOT_SOCKET_PATH";
 const REGISTRY_PATH_ENV: &str = "RAZIEL_REGISTRY_PATH";
 const PRIVATE_SNAPSHOT_ROOT_ENV: &str = "RAZIEL_PRIVATE_SNAPSHOT_ROOT";
-const GUEST_ELF_PATH_ENV: &str = "RAZIEL_GUEST_ELF_PATH";
+pub(super) const GUEST_ELF_PATH_ENV: &str = "RAZIEL_GUEST_ELF_PATH";
 const EXPECTED_VERIFICATION_KEY_ID_ENV: &str = "RAZIEL_EXPECTED_VERIFICATION_KEY_ID";
+const EXPECTED_SP1_VKEY_HASH_ENV: &str = "RAZIEL_EXPECTED_SP1_VKEY_HASH";
 const TRUST_DOMAIN_ID_ENV: &str = "RAZIEL_TRUST_DOMAIN_ID";
 const PLONK_SETUP_PATH_ENV: &str = "SP1_PLONK_CIRCUIT_PATH";
 
@@ -23,7 +25,7 @@ pub struct OneShotProverConfig {
     private_snapshot_root: PathBuf,
     guest_elf_path: PathBuf,
     plonk_setup_path: PathBuf,
-    expected_verification_key_id: String,
+    expected_program_key: TrustedProgramKey,
     trust_domain_id: String,
 }
 
@@ -44,9 +46,7 @@ impl OneShotProverConfig {
             required_absolute_path(&mut lookup, PRIVATE_SNAPSHOT_ROOT_ENV, true)?;
         let guest_elf_path = required_absolute_path(&mut lookup, GUEST_ELF_PATH_ENV, true)?;
         let plonk_setup_path = required_absolute_path(&mut lookup, PLONK_SETUP_PATH_ENV, true)?;
-        let expected_verification_key_id = lookup(EXPECTED_VERIFICATION_KEY_ID_ENV)
-            .filter(|value| valid_verification_key_id(value))
-            .ok_or(OneShotProtocolError::Configuration)?;
+        let expected_program_key = required_program_key(&mut lookup)?;
         let trust_domain_id = lookup(TRUST_DOMAIN_ID_ENV)
             .filter(|value| default_registry_config(value).is_ok())
             .ok_or(OneShotProtocolError::Configuration)?;
@@ -57,7 +57,7 @@ impl OneShotProverConfig {
             private_snapshot_root,
             guest_elf_path,
             plonk_setup_path,
-            expected_verification_key_id,
+            expected_program_key,
             trust_domain_id,
         })
     }
@@ -82,8 +82,12 @@ impl OneShotProverConfig {
         self.plonk_setup_path.as_path()
     }
 
-    pub const fn expected_verification_key_id(&self) -> &str {
-        self.expected_verification_key_id.as_str()
+    pub fn expected_verification_key_id(&self) -> &str {
+        self.expected_program_key.verification_key_id()
+    }
+
+    pub(super) fn expected_program_key(&self) -> &TrustedProgramKey {
+        &self.expected_program_key
     }
 
     pub const fn trust_domain_id(&self) -> &str {
@@ -100,7 +104,17 @@ impl Debug for OneShotProverConfig {
     }
 }
 
-fn required_absolute_path(
+pub(super) fn required_program_key(
+    lookup: &mut impl FnMut(&str) -> Option<String>,
+) -> Result<TrustedProgramKey, OneShotProtocolError> {
+    let key_id =
+        lookup(EXPECTED_VERIFICATION_KEY_ID_ENV).ok_or(OneShotProtocolError::Configuration)?;
+    let key_hash = lookup(EXPECTED_SP1_VKEY_HASH_ENV).ok_or(OneShotProtocolError::Configuration)?;
+    TrustedProgramKey::from_registry_record(&key_id, &key_hash)
+        .map_err(|_| OneShotProtocolError::Configuration)
+}
+
+pub(super) fn required_absolute_path(
     lookup: &mut impl FnMut(&str) -> Option<String>,
     name: &str,
     must_exist: bool,
@@ -150,6 +164,18 @@ mod tests {
         assert_eq!(config.trust_domain_id(), "raziel-test");
         assert!(!format!("{config:?}").contains(root.to_str().unwrap()));
 
+        for hash in [None, Some("0x00"), Some("0xINVALID")] {
+            let mut invalid = values.clone();
+            invalid.retain(|(name, _)| *name != EXPECTED_SP1_VKEY_HASH_ENV);
+            if let Some(hash) = hash {
+                invalid.push((EXPECTED_SP1_VKEY_HASH_ENV, hash.into()));
+            }
+            assert!(matches!(
+                config_from_pairs(&invalid),
+                Err(OneShotProtocolError::Configuration)
+            ));
+        }
+
         let mut missing = values.clone();
         missing.retain(|(name, _)| *name != REGISTRY_PATH_ENV);
         assert!(matches!(
@@ -180,6 +206,10 @@ mod tests {
             (
                 EXPECTED_VERIFICATION_KEY_ID_ENV,
                 format!("sp1-vk-v1:{}", "ab".repeat(32)),
+            ),
+            (
+                EXPECTED_SP1_VKEY_HASH_ENV,
+                "0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
             ),
             (TRUST_DOMAIN_ID_ENV, "raziel-test".into()),
             (

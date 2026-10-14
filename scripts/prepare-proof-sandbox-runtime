@@ -4,7 +4,10 @@ umask 022
 
 runtime_root=${RAZIEL_PROOF_RUNTIME_ROOT:-/opt/raziel-runtime}
 target_root=${CARGO_TARGET_DIR:-/var/cache/raziel-proof-build}
-guest_elf="$target_root/elf-compilation/riscv64im-succinct-zkvm-elf/release/raziel-authorization-guest"
+guest_root=tools/authorization-guest
+guest_elf="$PWD/$guest_root/approved-v1.elf"
+
+(cd "$guest_root" && sha256sum --check SHA256SUMS)
 
 ./scripts/prepare-sp1-native-dependencies --check
 
@@ -16,11 +19,15 @@ cargo build \
   --features one-shot-prover \
   --bin razield-proof-launcher \
   --bin razield-prover
-cargo prove build --locked --packages raziel-authorization-guest
 
 test -x "$target_root/release/razield-proof-launcher"
 test -x "$target_root/release/razield-prover"
 test -s "$guest_elf"
+
+RAZIEL_GUEST_ELF_PATH="$guest_elf" \
+RAZIEL_EXPECTED_VERIFICATION_KEY_ID="$(sed -n '1p' services/verifierd/tests/fixtures/retained-plonk-v1/verification-key-id.txt)" \
+RAZIEL_EXPECTED_SP1_VKEY_HASH="$(sed -n '1p' services/verifierd/tests/fixtures/retained-plonk-v1/sp1-vkey-hash.txt)" \
+  "$target_root/release/razield-prover" --check-program-key
 
 install -d -m 0755 "$runtime_root"
 install -m 0555 "$target_root/release/razield-proof-launcher" "$runtime_root/razield-proof-launcher"

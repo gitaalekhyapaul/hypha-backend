@@ -5,27 +5,33 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T22:58:35Z
+- Last updated UTC: 2026-10-14T23:46:00Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
 - Execution: maintainer selected a Compose-managed ngrok tunnel with the account's
-  fixed dev domain, portable between the Mac and VM. The bounded deployment follow-up
-  is implemented and checked. Zero-swap validation used disposable VM containers,
-  now removed. No remote source or production service was changed.
+  fixed dev domain, portable between the Mac and VM. The guest/key and policy-aware
+  grant repairs are implemented and checked. VM validation used disposable public-only
+  containers. No remote checkout or production service was changed.
 
 ## Objective
+
+Completed bounded objective: preserve the existing approved guest/key pair, reject
+identity drift before private input/proving, and derive operator grant controls
+from the exact approved policy. No trusted key, guest semantics, grant construction,
+SDK release, remote checkout, or production service changed. The checkpoint is ready
+for the maintainer's VM pull and rebuild, not a completed real-proof claim.
 
 Permanent M6 proof and verifier zero-swap enforcement is implemented and reviewed.
 Per-container systemd annotations and actual cgroup health checks pass focused
 validation. The maintainer confirmed the immediate runtime correction works and
 approved this permanent repair.
 
-Next bounded objective: deploy the repair after admitted proofs finish or reach
-terminal cancellation. Recreate only the two sandboxes, verify health and zero
-swap, then continue the real agent proof-to-data gate. The VM request now reaches
-a proof job. Public ingress health, complete proof success, independent queries,
-and the full two-agent gate are not established by the diagnostic output.
+Next bounded objective: deploy both repairs after admitted proofs finish or reach
+terminal cancellation. Rebuild owner/prover binaries, recreate the stopped backend
+roles, verify the public-only key check, then continue the real agent proof-to-data
+gate. Complete proof success, independent queries, and the full two-agent gate are
+not established by the diagnostic or isolated validation output.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -34,6 +40,10 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 
 ## Acceptance Criteria
 
+- [x] Approved public guest artifact is pinned and preparation cannot silently install a mismatched rebuild.
+- [x] Child checks both approved program-key representations before receiving private input and retains post-proof validation.
+- [x] Operator-only grant requirements come from the exact approved policy, with no agent-visible policy/recipe data.
+- [x] Approval form hides irrelevant fields and focused Rust/TypeScript/desktop checks pass.
 - [x] Separate agent identities, tokens, persisted task state, and desktop dashboards.
 - [x] Bounded authenticated messages and integer reconciliation checks.
 - [x] Editable, clearly labeled synthetic processor and bank seed drafts.
@@ -100,6 +110,13 @@ This release follow-up did not complete the live B-0067 acceptance gate.
   `scripts/check-m6-live-compose`, architecture and M6/M7 runbook notes, current
   baton, and dated evidence. SDK/agents remain read-only. Validate rendered
   annotations and health rejection with disposable, networkless containers only.
+- Guest/key repair: approved public guest artifact and provenance under tools,
+  `services/razield/src/one_shot`, prover startup/preparation scripts and their
+  focused checks, child program-key environment settings, architecture/runbook
+  docs, dated evidence. Preserve the approved c809 key pair.
+- Policy-aware grant form: owner catalogue and grant-requirement derivation in
+  `tools/raziel-admin`, console catalogue types/client/form and focused tests.
+  Only the owner-only projection changes. No Protobuf or public agent API change.
 
 ## Out Of Scope
 
@@ -158,13 +175,28 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 
 ## Open Questions And Blockers
 
+- The later VM job ran 966,922 ms and peaked at 48,544,919,552 bytes, with zero
+  swap/OOM/restarts, then returned generic SERVICE_UNAVAILABLE. Its detailed
+  internal error was not retained. A public-only LightProver probe confirms the
+  installed guest derives 925b...18d5, but deployment expects approved c809...08a1.
+  The repaired child checks both public identifiers before private input. The
+  recovered public c809 guest is checksum-pinned and verified. The running stack
+  still needs the maintainer's pull/rebuild. Do not claim the lost internal error
+  is known or the new proof has passed.
+- Security review item: operator grant-requirement field names are policy metadata.
+  Derive them only from the owner-approved package, keep them behind existing
+  operator auth, and do not add them to agent APIs. This does not change grant
+  materialization, proof/public-value semantics, or any trusted key. The internal
+  catalogue payload is now version 2 so pre-repair responses cannot hide required
+  controls. Independent review's mixed-version finding is fixed and retested.
 - October 15 proof attempt failed 35 ms after claim. VM cgroup swap was `max`,
   although Docker recorded equal memory/memory-swap limits. Systemd showed
   MemorySwapMax=infinity for both sandboxes. No OOM events occurred. The child
   rejects this resource profile before private input. The maintainer reports the
   scoped runtime systemd correction works. The permanent Compose repair passes
   disposable VM recreation and local health-positive/negative checks. Production
-  deployment and the next real proof remain pending.
+  deployment has since been observed with actual swap=0. The next successful real
+  proof remains pending.
 - The October 15 VM log confirms ngrok cannot create its auth file on the read-only
   root. The failure is reproduced locally, and the repair passes actual image
   entrypoint/config checks plus local health-API startup with no external network.
@@ -185,7 +217,8 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - A fresh local Go fetch fails: SP1's pinned gnark-ignition-verifier pseudo-version
   returns HTTP 404 upstream. The maintainer confirmed both public Go cache volumes
   exist on the VM, including `raziel_razield-proof-go-mod-cache` from earlier runs.
-  Their contents still need the offline recovery validation. No pin change is approved.
+  The M6 public cache now passes offline native/Go checks and the isolated build.
+  No pin change is approved.
   A new host without a complete matching cache cannot bypass the upstream failure.
 - Earlier SSH checks lacked a ControlMaster. The maintainer restored it on October
   15. Read-only inspection confirmed the applied swap mismatch in both sandboxes.
@@ -196,6 +229,20 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - VM updates still require maintainer pulls through the server's PAT flow.
 
 ## Work Completed
+
+The October 15 guest repair pins the recovered public interpreter at SHA-256
+817b8689719d2079756160e56fe779b96f8e8194b77f68b5cca1c82fcb664a41.
+Runtime preparation verifies its checksum and derives both approved key identifiers
+before installation. The child repeats key validation before private IPC. The
+post-proof journal/key checks remain. The public-only CLI accepts the approved
+guest and rejects the installed mismatched guest without private mounts or proving.
+
+The grant form uses a six-name, typed operator-only projection from the exact
+approved package. The owner socket preserves the metadata and rejects old payloads.
+Direct, team, organization, referenced caveat, and ANY/ALL requirements are covered.
+The form resets edits on policy changes and preserves exact uncertain retries.
+Grant materialization, complete payload defaults, and all agent responses stay fixed.
+The desktop fixture checks five policy shapes without issuing a grant or proof.
 
 The permanent M6 zero-swap repair adds the explicit systemd property to exactly
 the proof and verifier sandbox services. Each health check retains its launcher
@@ -293,6 +340,11 @@ and its liveness-only security scope. Existing operator-auth regression tests pa
 
 ## Validation Plan
 
+For this repair, validate the pinned artifact, actual key-pair derivation, negative
+drift cases, child guard ordering, exact-policy field derivation, strict owner
+transport, uncertain retries, desktop field visibility, and deployment syntax.
+Run no expensive proof or production restart as part of the isolated checkpoint.
+
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
 inspection/pooling, and credential scope. Validate the real CLI/config after image
 approval. Agent tests cover configured-origin defaults without replacing stored
@@ -388,6 +440,17 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Repair syntax/whitespace | PASS | Shell syntax and git diff --check |
 | Runbook and focused review | PASS | 27 documented shell blocks parse, relative links resolve; independent annotation/type/inheritance/cgroupfs review has no actionable findings |
 | Production permanent repair/proof | SKIP | Maintainer must pull and deploy after active proofs finish; no production sandbox recreation, daemon reload, or new proof |
+| Guest/public-key regression | PASS | Isolated x86_64 VM: 16 one-shot tests, one helper entry ignored by design; exact approved ID/hash plus both mismatch cases |
+| Owner-service regressions | PASS | Isolated VM: 125 passed, four existing live external-service tests ignored; includes request approval, catalogue, and owner wire version-2 tests |
+| Actual public-only preparation | PASS | Offline runtime preparation into container tmpfs, approved key check, installed checksum, no private volumes; corrupted checksum rejects before installation |
+| Installed mismatched guest | PASS | New public-only CLI rejects current 925b guest against approved c809 pair, no IPC, snapshot, network, or proof |
+| Grant console regressions | PASS | Pinned networkless toolchain: 220 tests in four files, tsc --noEmit, scoped Biome checks |
+| Desktop grant controls | PASS | Playwright at 1440x1000: direct/team/organization/caveated/combined fields and selection reset; synthetic API fixtures, no service writes |
+| Mixed-version review finding | PASS | Internal catalogue payload version 2 rejects pre-repair metadata-free response; framed regression added, browser JSON stays version 1 |
+| Initial isolated validation setup | FAIL, resolved | Source archive ownership metadata rejected by capability-dropped container; portable extraction fixed. Owner-mutation test needed CHOWN in disposable test container only |
+| Local prover validation | NOT AVAILABLE | Mac's offline cache lacks locked anstream 1.0.0; no download or dependency change. Complete VM cache used instead |
+| Final preparation/Compose/docs | PASS | Artifact/preparation checks, base proof, M6 preview/live, integrated ngrok, shell syntax, 28 runbook shell blocks, and diff whitespace |
+| Repaired-stack real proof | SKIP | Maintainer deployment and fresh agent request required. No production runtime changed and no proof generated in this checkpoint |
 
 ## Risks And Private-Data Notes
 
@@ -399,11 +462,13 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 ## Exact Next Action
 
 Have the maintainer pull the backend checkpoint and follow
-[Permanent Zero-Swap Repair](../runbooks/M6-LIVE-VM.md#permanent-zero-swap-repair)
-only after admitted proofs finish or reach terminal cancellation. Recreate the two
-sandboxes with --no-deps, expect healthy and swap=0, then continue the agent proof
-and protected-query gate. Do not interrupt a working proof or reset volumes.
-Keep the existing settings, proof worker, private data, and sibling checkouts.
+[Guest Identity And Grant Form Repair](../runbooks/M6-LIVE-VM.md#guest-identity-and-grant-form-repair)
+only after admitted proofs finish or reach terminal cancellation. Rebuild the
+owner/prover binaries offline, recreate the stopped backend roles, and expect
+approved_program_key=pass before a fresh agent request. Confirm policy-aware inputs
+in the browser, then continue the real proof and protected-query gate.
+Do not interrupt a working proof, rotate the trusted key, or reset volumes.
+Keep existing settings, identities, private data, and sibling checkouts.
 Use the public health and unsigned API probes only for any remaining ingress issue.
 Check Docker and the existing SSH ControlMaster before further runtime work.
 B-0068 retains the two-proof recording, negative controls, screenshots, and evidence.
@@ -423,3 +488,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Ngrok auth-file RAM-mount repair](history/2026-10-15-ngrok-auth-tmpfs-repair.md)
 - [Unauthenticated ingress health route](history/2026-10-15-public-ingress-health-route.md)
 - [Permanent M6 zero-swap enforcement](history/2026-10-15-m6-permanent-zero-swap.md)
+- [Approved guest and policy-aware grant repair](history/2026-10-15-m7-approved-guest-and-grant-controls.md)

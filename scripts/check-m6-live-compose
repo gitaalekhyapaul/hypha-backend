@@ -105,6 +105,11 @@ for (const [name, limit] of [["m6-proof-sandbox", 60129542144], ["m6-verifier-sa
 assert.equal(s["m6-proof-worker"].depends_on["m6-proof-sandbox"].condition, "service_healthy");
 assert.equal(s["m6-verifierd"].depends_on["m6-verifier-sandbox"].condition, "service_healthy");
 assert.equal(s["m6-proof-sandbox"].cpuset, "0-7");
+for (const field of ["RAZIEL_EXPECTED_VERIFICATION_KEY_ID", "RAZIEL_EXPECTED_SP1_VKEY_HASH"]) {
+  assert.equal(s["m6-proof-sandbox"].environment[field], s["m6-proof-worker"].environment[field]);
+  assert.equal(s["m6-proof-sandbox"].environment[field], s["m6-verifierd"].environment[field]);
+  assert.ok(s["m6-proof-sandbox"].environment[field]);
+}
 assert.equal(s["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, "http://m6-verifierd:50053");
 assert.equal(s["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");
 assert.equal(s["demo-console"].ports[0].published, "3000");

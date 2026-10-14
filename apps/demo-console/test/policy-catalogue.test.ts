@@ -19,6 +19,7 @@ const entry = {
   approvalEpoch: "1",
   validFromUnixSeconds: "1790500000",
   validUntilUnixSeconds: "1790586400",
+  requiredGrantFields: ["teamId", "isApproved"] as const,
 };
 const catalogue: ApprovedPolicyCatalogue = { formatVersion: 1, policies: [entry] };
 
@@ -31,6 +32,7 @@ describe("approved policy catalogue contract", () => {
     expect(result).not.toBe(catalogue);
     expect(result.policies[0]).not.toBe(entry);
     expect(result.policies[0]?.identity).not.toBe(entry.identity);
+    expect(result.policies[0]?.requiredGrantFields).not.toBe(entry.requiredGrantFields);
     expect(parseApprovedPolicyCatalogue({ formatVersion: 1, policies: [] })).toEqual({
       formatVersion: 1,
       policies: [],
@@ -134,6 +136,47 @@ describe("approved policy catalogue contract", () => {
     expect(() => parseApprovedPolicyCatalogue({ formatVersion: 1, policies: [partial] })).toThrow(
       InvalidPolicyCatalogueError,
     );
+  });
+
+  it.each(
+    [
+      [],
+      ["teamId"],
+      ["organizationId"],
+      ["approvedAmount", "isApproved", "isSuspended", "isOverride"],
+      ["teamId", "organizationId", "approvedAmount", "isApproved", "isSuspended", "isOverride"],
+    ].map((requiredGrantFields) => ({ requiredGrantFields })),
+  )("accepts bounded operator input names $requiredGrantFields", ({ requiredGrantFields }) => {
+    const result = parseApprovedPolicyCatalogue({
+      formatVersion: 1,
+      policies: [{ ...entry, requiredGrantFields }],
+    });
+    expect(result.policies[0]?.requiredGrantFields).toEqual(requiredGrantFields);
+  });
+
+  it.each(
+    [
+      undefined,
+      null,
+      "teamId",
+      {},
+      ["unknown"],
+      ["approved_amount"],
+      ["TeamId"],
+      ["teamId", "teamId"],
+      ["isApproved", "isApproved"],
+      ["teamId", 1],
+      [{ name: "teamId", value: "private" }],
+      Array(1),
+      Array(7).fill("teamId"),
+    ].map((requiredGrantFields) => ({ requiredGrantFields })),
+  )("rejects invalid required field projection $requiredGrantFields", ({ requiredGrantFields }) => {
+    expect(() =>
+      parseApprovedPolicyCatalogue({
+        formatVersion: 1,
+        policies: [{ ...entry, requiredGrantFields }],
+      }),
+    ).toThrow(InvalidPolicyCatalogueError);
   });
 });
 

@@ -16,6 +16,7 @@ use crate::policy_package::{
     ApprovedPolicyPackage, PackageError, PolicyPackageKey, PolicyPackageStore,
     RetainedPolicyPackage,
 };
+use crate::request_approval::{GrantInputField, required_grant_fields};
 
 use super::{files, installation};
 
@@ -54,6 +55,7 @@ pub struct CataloguePolicy {
     pub approval_epoch: String,
     pub valid_from_unix_seconds: String,
     pub valid_until_unix_seconds: String,
+    pub required_grant_fields: Vec<GrantInputField>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,7 +197,7 @@ pub fn list_approved(
         {
             return Err(Unavailable);
         }
-        projection.policies.push(project(&package, &current));
+        projection.policies.push(project(&package, &current)?);
     }
     Ok(projection)
 }
@@ -232,10 +234,13 @@ fn current_approval(
     Ok(Some(exact))
 }
 
-fn project(package: &RetainedPolicyPackage, record: &PolicyRegistryRecordV1) -> CataloguePolicy {
+fn project(
+    package: &RetainedPolicyPackage,
+    record: &PolicyRegistryRecordV1,
+) -> Result<CataloguePolicy, CatalogueError> {
     let identity = package.identity();
     let claims = record.claims.claims();
-    CataloguePolicy {
+    Ok(CataloguePolicy {
         identity: CatalogueIdentity {
             family_id: identity.family_id().into(),
             version_id: identity.version_id().into(),
@@ -250,7 +255,9 @@ fn project(package: &RetainedPolicyPackage, record: &PolicyRegistryRecordV1) -> 
         approval_epoch: claims.approval_epoch.to_string(),
         valid_from_unix_seconds: claims.valid_from_unix_seconds.to_string(),
         valid_until_unix_seconds: claims.valid_until_unix_seconds.to_string(),
-    }
+        required_grant_fields: required_grant_fields(package.policy(), identity.version_id())
+            .map_err(|_| CatalogueError::Unavailable)?,
+    })
 }
 
 #[cfg(test)]
@@ -300,6 +307,7 @@ pub(crate) mod tests {
             "approvalEpoch": "1",
             "validFromUnixSeconds": (NOW - 100).to_string(),
             "validUntilUnixSeconds": (NOW + 5_000).to_string(),
+            "requiredGrantFields": [],
         })).collect();
         assert_eq!(
             serde_json::to_value(result).unwrap(),
@@ -311,6 +319,34 @@ pub(crate) mod tests {
         );
         assert_eq!(fs::read_dir(&f.config.publication_root).unwrap().count(), 1);
         assert_eq!(fs::read_dir(&f.config.package_root).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn requirements_follow_the_exact_installed_package_and_current_epoch() {
+        let mut f = Fixture::new();
+        f.retain('b', 1, 1);
+        f.retain_rule('c', 2, 1, true);
+        f.install(&[('b', 1), ('c', 1)]);
+        let policies = list_approved(&f.config, NOW).unwrap().policies;
+        assert!(policies[0].required_grant_fields.is_empty());
+        assert_eq!(
+            policies[1].required_grant_fields,
+            vec![GrantInputField::TeamId]
+        );
+
+        // Reapproval keeps the immutable version contents. Its new epoch is not
+        // selectable until the exact approved package is installed.
+        f.retain_rule('c', 2, 2, true);
+        let policies = list_approved(&f.config, NOW).unwrap().policies;
+        assert_eq!(policies.len(), 1);
+        assert_eq!(policies[0].identity.version_id, "b".repeat(32));
+        f.install(&[('b', 1), ('c', 2)]);
+        let policies = list_approved(&f.config, NOW).unwrap().policies;
+        assert_eq!(policies[1].approval_epoch, "2");
+        assert_eq!(
+            policies[1].required_grant_fields,
+            vec![GrantInputField::TeamId]
+        );
     }
 
     #[test]
@@ -516,15 +552,26 @@ pub(crate) mod tests {
         }
 
         pub(crate) fn retain(&mut self, id: char, version: u32, epoch: u64) {
+            self.retain_rule(id, version, epoch, false);
+        }
+
+        fn retain_rule(&mut self, id: char, version: u32, epoch: u64, team: bool) {
             let identity =
                 PolicyVersionIdentity::new("a".repeat(32), id.to_string().repeat(32), version)
                     .unwrap();
             let resource = identity.resource_type();
-            let source = format!(
-                "definition agent {{}}\ndefinition {resource} {{ relation viewer: agent\npermission query = viewer\n}}\n"
-            );
+            let team_type = format!("team_{}", identity.version_id());
+            let source = if team {
+                format!(
+                    "definition agent {{}}\ndefinition {resource} {{ relation team_viewer: {team_type}#member\npermission query = team_viewer\n}}\ndefinition {team_type} {{ relation member: agent }}\n"
+                )
+            } else {
+                format!(
+                    "definition agent {{}}\ndefinition {resource} {{ relation viewer: agent\npermission query = viewer\n}}\n"
+                )
+            };
             let limits = TRUSTED_POLICY_CEILINGS.policy_limits;
-            let policy = proto::PolicyProgram {
+            let mut policy = proto::PolicyProgram {
                 ir_version: 1,
                 compiler_name: "authzed/spicedb".into(),
                 compiler_version: "1.54.0".into(),
@@ -569,6 +616,35 @@ pub(crate) mod tests {
                     max_total_private_input_bytes: limits.max_total_private_input_bytes,
                 }),
             };
+            if team {
+                policy.definitions[1].relations[0] = proto::RelationDefinition {
+                    name: "team_viewer".into(),
+                    allowed_subject_types: vec![proto::AllowedSubjectType {
+                        object_type: team_type.clone(),
+                        subject_relation: Some("member".into()),
+                        caveat_name: None,
+                    }],
+                };
+                policy.definitions.push(proto::ObjectDefinition {
+                    name: team_type,
+                    relations: vec![proto::RelationDefinition {
+                        name: "member".into(),
+                        allowed_subject_types: vec![proto::AllowedSubjectType {
+                            object_type: "agent".into(),
+                            subject_relation: None,
+                            caveat_name: None,
+                        }],
+                    }],
+                });
+                policy.permissions[0].expression = Some(proto::PermissionExpr {
+                    node: Some(proto::permission_expr::Node::SubjectRelationRef(
+                        proto::PermissionSubjectRelationRef {
+                            relation: "team_viewer".into(),
+                            subject_relation: "member".into(),
+                        },
+                    )),
+                });
+            }
             let validated = ValidatedPolicyProgram::from_trusted_proto(
                 policy.clone(),
                 &TRUSTED_POLICY_CEILINGS,

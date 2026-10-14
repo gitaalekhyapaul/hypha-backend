@@ -20,6 +20,8 @@ use crate::policy_publication::catalogue::{
 };
 
 pub use grant::build_grant;
+pub use recipe::GrantInputField;
+pub(crate) use recipe::required_grant_fields;
 pub use validation::validate_command;
 
 #[derive(Clone)]

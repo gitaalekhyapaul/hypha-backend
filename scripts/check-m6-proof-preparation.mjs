@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -36,6 +37,13 @@ const run = (script, args = [], extra = {}, success = true) => {
 };
 
 try {
+  const guest = readFileSync(resolve(root, "tools/authorization-guest/approved-v1.elf"));
+  const guestDigest = createHash("sha256").update(guest).digest("hex");
+  assert.equal(guest.length, 386088);
+  assert.equal(
+    readFileSync(resolve(root, "tools/authorization-guest/SHA256SUMS"), "utf8"),
+    `${guestDigest}  approved-v1.elf\n`,
+  );
   put(`${fixture}/bin/go`, mock, 0o755);
   put(`${fixture}/bin/docker`, mock, 0o755);
   const crate = `${fixture}/cargo/registry/src/test/sp1-recursion-gnark-ffi-6.3.1/go`;

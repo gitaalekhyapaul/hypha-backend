@@ -72,6 +72,7 @@ for exact_setting in \
   'cpuset: 0-7' \
   'GOMAXPROCS: "8"' \
   'RAYON_NUM_THREADS: "8"' \
+  'RAZIEL_EXPECTED_SP1_VKEY_HASH: 0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff' \
   'mem_limit: "60129542144"' \
   'memswap_limit: "60129542144"' \
   'network_mode: none' \

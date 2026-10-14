@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import type { ApprovedPolicyCatalogueEntry } from "../lib/policy-version/catalogue-types.ts";
+import type {
+  ApprovedPolicyCatalogueEntry,
+  GrantInputField,
+} from "../lib/policy-version/catalogue-types.ts";
 import {
   type AccessRequest,
   type AccessRequestGrant,
@@ -52,8 +55,21 @@ export function AccessRequestApproval({
   const alive = useRef(false);
   const pending = useRef(false);
   const retry = useRef<ApprovalBody | null>(null);
+  const previousPolicy = useRef("");
   const selected = policies.find((policy) => policyKey(policy) === selection);
   const selectedIsCurrent = selected !== undefined && policyIsCurrent(selected);
+  const selectedPolicy = selected
+    ? `${policyKey(selected)}:${selected.policyHash}:${selected.requiredGrantFields.join(",")}`
+    : "";
+
+  useEffect(() => {
+    setError(null);
+    setNotice(null);
+    if (!selectedPolicy || previousPolicy.current === selectedPolicy) return;
+    previousPolicy.current = selectedPolicy;
+    retry.current = null;
+    setGrant({ ...DEFAULT_GRANT });
+  }, [selectedPolicy]);
 
   useEffect(() => {
     alive.current = true;
@@ -204,6 +220,7 @@ export function AccessRequestApproval({
                 retry.current = null;
                 setError(null);
                 setNotice(null);
+                setGrant({ ...DEFAULT_GRANT });
                 setSelection(event.target.value);
               }}
             >
@@ -226,7 +243,12 @@ export function AccessRequestApproval({
             </select>
             {selected ? <PolicySelection policy={selected} /> : null}
           </div>
-          <PrivateGrantFields id={id} grant={grant} onChange={changeGrant} />
+          <PrivateGrantFields
+            id={id}
+            grant={grant}
+            requiredFields={selectedIsCurrent ? selected.requiredGrantFields : []}
+            onChange={changeGrant}
+          />
           {error ? (
             <p className="form-error" role="alert">
               {error}
@@ -283,12 +305,16 @@ function PolicySelection({ policy }: { readonly policy: ApprovedPolicyCatalogueE
 function PrivateGrantFields({
   id,
   grant,
+  requiredFields,
   onChange,
 }: {
   readonly id: string;
   readonly grant: AccessRequestGrant;
+  readonly requiredFields: readonly GrantInputField[];
   readonly onChange: (grant: AccessRequestGrant) => void;
 }) {
+  if (requiredFields.length === 0) return null;
+  const fields = new Set(requiredFields);
   return (
     <details className="access-request-grant" open>
       <summary>Private grant options</summary>
@@ -298,53 +324,63 @@ function PrivateGrantFields({
             { key: "teamId", label: "Team ID" },
             { key: "organizationId", label: "Organization ID" },
           ] as const
-        ).map(({ key, label }) => (
-          <div key={key}>
-            <label htmlFor={`${id}-${key}`}>{label}</label>
-            <input
-              id={`${id}-${key}`}
-              value={grant[key]}
-              required
-              maxLength={128}
-              pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,127}"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => onChange({ ...grant, [key]: event.target.value })}
-            />
-          </div>
-        ))}
-        <div>
-          <label htmlFor={`${id}-amount`}>Approved amount</label>
-          <input
-            id={`${id}-amount`}
-            type="number"
-            min="1"
-            max="9007199254740991"
-            step="1"
-            required
-            value={grant.approvedAmount}
-            onChange={(event) => onChange({ ...grant, approvedAmount: event.target.value })}
-          />
-        </div>
-        <div className="access-request-grant-checks">
-          {(
-            [
-              { key: "isApproved", label: "Approved" },
-              { key: "isSuspended", label: "Suspended" },
-              { key: "isOverride", label: "Override" },
-            ] as const
-          ).map(({ key, label }) => (
-            <label key={key} htmlFor={`${id}-${key}`}>
+        )
+          .filter(({ key }) => fields.has(key))
+          .map(({ key, label }) => (
+            <div key={key}>
+              <label htmlFor={`${id}-${key}`}>{label}</label>
               <input
                 id={`${id}-${key}`}
-                type="checkbox"
-                checked={grant[key]}
-                onChange={(event) => onChange({ ...grant, [key]: event.target.checked })}
+                value={grant[key]}
+                required
+                maxLength={128}
+                pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,127}"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => onChange({ ...grant, [key]: event.target.value })}
               />
-              {label}
-            </label>
+            </div>
           ))}
-        </div>
+        {fields.has("approvedAmount") ? (
+          <div>
+            <label htmlFor={`${id}-amount`}>Approved amount</label>
+            <input
+              id={`${id}-amount`}
+              type="number"
+              min="1"
+              max="9007199254740991"
+              step="1"
+              required
+              value={grant.approvedAmount}
+              onChange={(event) => onChange({ ...grant, approvedAmount: event.target.value })}
+            />
+          </div>
+        ) : null}
+        {requiredFields.some(
+          (field) => field === "isApproved" || field === "isSuspended" || field === "isOverride",
+        ) ? (
+          <div className="access-request-grant-checks">
+            {(
+              [
+                { key: "isApproved", label: "Approved" },
+                { key: "isSuspended", label: "Suspended" },
+                { key: "isOverride", label: "Override" },
+              ] as const
+            )
+              .filter(({ key }) => fields.has(key))
+              .map(({ key, label }) => (
+                <label key={key} htmlFor={`${id}-${key}`}>
+                  <input
+                    id={`${id}-${key}`}
+                    type="checkbox"
+                    checked={grant[key]}
+                    onChange={(event) => onChange({ ...grant, [key]: event.target.checked })}
+                  />
+                  {label}
+                </label>
+              ))}
+          </div>
+        ) : null}
       </div>
     </details>
   );

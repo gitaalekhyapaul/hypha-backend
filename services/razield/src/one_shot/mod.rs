@@ -32,7 +32,7 @@ pub use launcher::{
     ProofSandboxLauncherConfig, ProofSandboxLauncherError, run_launcher_from_env,
 };
 #[cfg(feature = "one-shot-prover")]
-pub use runner::run_child_from_env;
+pub use runner::{check_program_key_from_env, run_child_from_env};
 
 /// Version of the one-request, one-result local child protocol.
 pub const ONE_SHOT_PROTOCOL_VERSION: u32 = 1;
@@ -238,6 +238,7 @@ pub enum OneShotProtocolError {
     FrameWrite,
     TrailingFrameData,
     Configuration,
+    ProgramKeyMismatch,
     ResourceProfile,
     TrustedState,
     Execution,
@@ -257,6 +258,7 @@ impl fmt::Display for OneShotProtocolError {
             Self::FrameWrite => "one-shot frame write failed",
             Self::TrailingFrameData => "one-shot channel contains trailing data",
             Self::Configuration => "one-shot prover configuration is invalid",
+            Self::ProgramKeyMismatch => "guest does not match the approved program key",
             Self::ResourceProfile => "one-shot prover resource profile is invalid",
             Self::TrustedState => "one-shot trusted state is invalid",
             Self::Execution => "one-shot proof execution failed",

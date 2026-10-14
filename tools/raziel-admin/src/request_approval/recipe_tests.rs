@@ -59,19 +59,42 @@ fn caveated(source: CaveatInputSource, name: &str, value_type: CaveatValueType) 
 
 #[test]
 fn direct_and_all_supported_stored_inputs_are_representable_without_evaluation() {
-    validate_program(&base(), &"b".repeat(32)).unwrap();
-    for (name, kind) in [
-        ("approved_amount", CaveatValueType::Int),
-        ("is_approved", CaveatValueType::Bool),
-        ("is_suspended", CaveatValueType::Bool),
-        ("is_override", CaveatValueType::Bool),
+    assert!(
+        validate_program(&base(), &"b".repeat(32))
+            .unwrap()
+            .is_empty()
+    );
+    for (name, kind, field) in [
+        (
+            "approved_amount",
+            CaveatValueType::Int,
+            GrantInputField::ApprovedAmount,
+        ),
+        (
+            "is_approved",
+            CaveatValueType::Bool,
+            GrantInputField::IsApproved,
+        ),
+        (
+            "is_suspended",
+            CaveatValueType::Bool,
+            GrantInputField::IsSuspended,
+        ),
+        (
+            "is_override",
+            CaveatValueType::Bool,
+            GrantInputField::IsOverride,
+        ),
     ] {
         // Constant false is intentional: recipe validation never claims ALLOW.
-        validate_program(
-            &caveated(CaveatInputSource::RelationshipContext, name, kind),
-            &"b".repeat(32),
-        )
-        .unwrap();
+        assert_eq!(
+            validate_program(
+                &caveated(CaveatInputSource::RelationshipContext, name, kind),
+                &"b".repeat(32),
+            )
+            .unwrap(),
+            vec![field]
+        );
     }
 }
 
@@ -171,9 +194,158 @@ fn team_arrow_and_boolean_combinations_fit_the_private_recipe() {
             name: "auditor".into(),
         },
     });
-    validate_program(&policy, &id).unwrap();
+    assert_eq!(
+        validate_program(&policy, &id).unwrap(),
+        vec![GrantInputField::TeamId, GrantInputField::OrganizationId]
+    );
+    let mut any = policy.clone();
+    if let PermissionExpr::AllOf(children) = any.permissions[0].expression.clone() {
+        any.permissions[0].expression = PermissionExpr::AnyOf(children);
+    }
+    assert_eq!(
+        validate_program(&any, &id).unwrap(),
+        vec![GrantInputField::TeamId, GrantInputField::OrganizationId]
+    );
+    for (expression, relation, field) in [
+        (
+            PermissionExpr::SubjectRelationRef {
+                relation: "team_viewer".into(),
+                subject_relation: "member".into(),
+            },
+            "team_viewer",
+            GrantInputField::TeamId,
+        ),
+        (
+            PermissionExpr::Arrow {
+                source_relation: "organization".into(),
+                target_permission: "audit".into(),
+            },
+            "organization",
+            GrantInputField::OrganizationId,
+        ),
+    ] {
+        let mut single = policy.clone();
+        single.permissions[0].expression = expression;
+        single.definitions[1]
+            .relations
+            .retain(|r| r.name == relation);
+        assert_eq!(validate_program(&single, &id).unwrap(), vec![field]);
+    }
     policy.definitions[2].relations[0].name = "admin".into();
     assert_eq!(validate_program(&policy, &id), Err(ApprovalError::Invalid));
+}
+
+#[test]
+fn direct_boolean_leaves_need_no_private_fields() {
+    for all in [false, true] {
+        let mut policy = base();
+        policy.definitions[1].relations.push(RelationDefinition {
+            name: "owner".into(),
+            allowed_subject_types: vec![direct_subject(None)],
+        });
+        let children = vec![
+            PermissionExpr::RelationRef {
+                name: "viewer".into(),
+            },
+            PermissionExpr::RelationRef {
+                name: "owner".into(),
+            },
+        ];
+        policy.permissions[0].expression = if all {
+            PermissionExpr::AllOf(children)
+        } else {
+            PermissionExpr::AnyOf(children)
+        };
+        assert!(
+            validate_program(&policy, &"b".repeat(32))
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn only_referenced_caveats_supply_fields_and_sources_are_not_operator_inputs() {
+    let mut policy = caveated(
+        CaveatInputSource::RelationshipContext,
+        "is_approved",
+        CaveatValueType::Bool,
+    );
+    policy.caveats[0].parameters.extend([
+        CaveatParameter {
+            name: "requested_amount".into(),
+            source: CaveatInputSource::RequestContext,
+            value_type: CaveatValueType::Int,
+        },
+        CaveatParameter {
+            name: "task_id".into(),
+            source: CaveatInputSource::CapabilityClaim,
+            value_type: CaveatValueType::String,
+        },
+    ]);
+    let mut unused = policy.caveats[0].clone();
+    unused.name = "unused".into();
+    unused.parameters = vec![CaveatParameter {
+        name: "is_override".into(),
+        source: CaveatInputSource::RelationshipContext,
+        value_type: CaveatValueType::Bool,
+    }];
+    policy.caveats.push(unused);
+    assert_eq!(
+        validate_program(&policy, &"b".repeat(32)).unwrap(),
+        vec![GrantInputField::IsApproved]
+    );
+    policy.permissions[0].expression = PermissionExpr::RelationRef {
+        name: "viewer".into(),
+    };
+    policy.definitions[1].relations[0].allowed_subject_types = vec![direct_subject(None)];
+    assert!(
+        validate_program(&policy, &"b".repeat(32))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn caveat_field_union_is_deduplicated_and_uses_only_the_fixed_names() {
+    let mut policy = caveated(
+        CaveatInputSource::RelationshipContext,
+        "is_approved",
+        CaveatValueType::Bool,
+    );
+    policy.caveats[0].parameters.push(CaveatParameter {
+        name: "approved_amount".into(),
+        source: CaveatInputSource::RelationshipContext,
+        value_type: CaveatValueType::Int,
+    });
+    let first = policy.permissions[0].expression.clone();
+    let mut other = policy.caveats[0].clone();
+    other.name = "other".into();
+    other.parameters.push(CaveatParameter {
+        name: "is_override".into(),
+        source: CaveatInputSource::RelationshipContext,
+        value_type: CaveatValueType::Bool,
+    });
+    policy.definitions[1].relations.push(RelationDefinition {
+        name: "owner".into(),
+        allowed_subject_types: vec![direct_subject(Some(other.name.clone()))],
+    });
+    let second = PermissionExpr::CaveatedRelation {
+        relation: "owner".into(),
+        caveat_name: other.name.clone(),
+    };
+    policy.caveats.push(other);
+    for expression in [
+        PermissionExpr::AnyOf(vec![first.clone(), second.clone()]),
+        PermissionExpr::AllOf(vec![first, second]),
+    ] {
+        policy.permissions[0].expression = expression;
+        let fields = validate_program(&policy, &"b".repeat(32)).unwrap();
+        assert_eq!(
+            serde_json::to_value(fields).unwrap(),
+            serde_json::json!(["approvedAmount", "isApproved", "isOverride"])
+        );
+    }
 }
 
 #[test]

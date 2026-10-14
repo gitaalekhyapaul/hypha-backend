@@ -87,6 +87,12 @@ pub(super) struct PolicyCatalogueEntryWire {
     pub valid_from_unix_seconds: i64,
     #[prost(int64, tag = "12")]
     pub valid_until_unix_seconds: i64,
+    #[prost(
+        enumeration = "crate::request_approval::GrantInputField",
+        repeated,
+        tag = "13"
+    )]
+    pub required_grant_fields: Vec<i32>,
 }
 
 #[derive(Clone, PartialEq, Message)]

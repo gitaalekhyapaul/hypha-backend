@@ -17,6 +17,7 @@ use crate::policy_package::PolicyVersionIdentity;
 use crate::policy_publication::catalogue::{
     CatalogueIdentity, CataloguePolicy, CatalogueProjection,
 };
+use crate::request_approval::GrantInputField;
 
 #[cfg(test)]
 #[path = "codec_tests.rs"]
@@ -197,6 +198,9 @@ fn response_failure(
 pub(super) fn catalogue_wire(
     projection: CatalogueProjection,
 ) -> Result<PolicyCatalogueWire, PolicyActivationClientError> {
+    if projection.format_version != 1 {
+        return Err(PolicyActivationClientError::Protocol);
+    }
     let policies = projection
         .policies
         .into_iter()
@@ -223,11 +227,16 @@ pub(super) fn catalogue_wire(
                     .valid_until_unix_seconds
                     .parse()
                     .map_err(|_| PolicyActivationClientError::Protocol)?,
+                required_grant_fields: policy
+                    .required_grant_fields
+                    .into_iter()
+                    .map(|field| field as i32)
+                    .collect(),
             })
         })
         .collect::<Result<Vec<_>, PolicyActivationClientError>>()?;
     let value = PolicyCatalogueWire {
-        format_version: projection.format_version,
+        format_version: 2,
         policies,
     };
     catalogue_projection(value.clone())?;
@@ -239,7 +248,8 @@ fn catalogue_projection(
 ) -> Result<CatalogueProjection, PolicyActivationClientError> {
     use PolicyActivationClientError::Protocol;
 
-    if value.format_version != 1
+    // Version 1 omits requirements and cannot distinguish absence from no inputs.
+    if value.format_version != 2
         || value.policies.len() > 32
         || value
             .policies
@@ -252,6 +262,22 @@ fn catalogue_projection(
     let mut records = std::collections::BTreeSet::new();
     let mut policies = Vec::with_capacity(value.policies.len());
     for policy in value.policies {
+        if policy.required_grant_fields.len() > 6
+            || policy
+                .required_grant_fields
+                .iter()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != policy.required_grant_fields.len()
+        {
+            return Err(Protocol);
+        }
+        let required_grant_fields = policy
+            .required_grant_fields
+            .into_iter()
+            .map(|field| GrantInputField::try_from(field).map_err(|_| Protocol))
+            .collect::<Result<Vec<_>, _>>()?;
         let identity =
             PolicyVersionIdentity::new(policy.family_id, policy.version_id, policy.version)
                 .map_err(|_| Protocol)?;
@@ -291,6 +317,7 @@ fn catalogue_projection(
             approval_epoch: policy.approval_epoch.to_string(),
             valid_from_unix_seconds: policy.valid_from_unix_seconds.to_string(),
             valid_until_unix_seconds: policy.valid_until_unix_seconds.to_string(),
+            required_grant_fields,
         });
     }
     let projection = CatalogueProjection {

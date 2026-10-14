@@ -83,10 +83,17 @@ versions and an exact retry. The opt-in `docker-compose.m6.yml` runtime connects
 visual builder to that exclusive writer. Browser publication of two versions passed
 locally. It uses a separate project and private state, not an implicit M5 migration.
 Its operator catalogue now lists installed, currently approved versions through the
-owner socket. It contains no PolicyIR or schema. The M6 gateway checks exact immutable
+owner socket. It contains no PolicyIR or schema. Its bounded `requiredGrantFields`
+list comes from the exact approved package and controls only operator form inputs.
+Direct rules need no extra fields. Team and organization rules request their own
+identifiers. Referenced caveats request only their stored relationship inputs.
+ANY/ALL collect the required field union. Grant construction remains unchanged.
+This metadata never enters agent APIs. The M6 gateway checks exact immutable
 policy/type/scope dataset bindings on cold and cached requests, including revision and
 checksum in the data read. Approval persists its private command, exact public policy
 binding, and immutable dataset mapping. It does not start a proof.
+The internal catalogue payload uses version 2. Clients reject a pre-repair
+daemon's metadata-free version 1 response. The browser JSON envelope stays version 1.
 M5 remains the default. Mode guards prevent legacy writes in the M6 runtime. Snapshot
 registry mutations now retry stale generations without rebuilding the private tree,
 then confirm the exact root and current policy in a validated newer generation.
@@ -389,9 +396,14 @@ typed caveat values, exact snapshot identity, and a rebuilt Merkle root. The
 feature-gated `razield-prover` binary reads one strict 32 KiB request from a `0600`
 Unix socket. Request data cannot select paths, proof mode, limits, or keys. Fixed
 owner configuration selects `current.pb`, the snapshot store, guest ELF, Plonk setup,
-expected key ID, and trust domain. Startup checks the 60,129,542,144-byte cgroup,
+expected key ID and SP1 program-key hash, and trust domain. Startup checks the 60,129,542,144-byte cgroup,
 zero swap, eight visible CPUs, local proving environment, setup artifacts, and trusted
-file shapes before private input. The child calls B-0023, executes the guest, runs
+file shapes before private input. It derives the guest's key and checks both public
+identifiers before connecting to the private request socket. Runtime preparation
+checks and installs the pinned public `tools/authorization-guest/approved-v1.elf`,
+not an unchecked guest rebuild. Its checksum and derived key must match the
+already approved c809 program identity. A future guest repin requires explicit
+approval and real-proof validation. The child calls B-0023, executes the guest, runs
 local CPU Plonk proving, compares the complete public journal and key ID, and returns
 one bounded public result. The default API dependency graph excludes the SP1 SDK.
 

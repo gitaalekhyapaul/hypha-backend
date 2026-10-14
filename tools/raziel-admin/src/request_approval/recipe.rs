@@ -5,18 +5,42 @@ use std::collections::BTreeSet;
 
 use raziel_policy_ir::{
     AllowedSubjectType, CaveatInputSource, CaveatValueType, ObjectDefinition, PermissionExpr,
-    PolicyProgram,
+    PolicyProgram, ValidatedPolicyProgram,
 };
+use serde::Serialize;
 
 use crate::policy_package::ApprovedPolicyPackage;
 
 use super::ApprovalError;
 
-pub(super) fn validate_policy(package: &ApprovedPolicyPackage) -> Result<(), ApprovalError> {
-    validate_program(package.policy().program(), package.identity().version_id())
+/// Operator-only input names, never policy structure or stored context values.
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
+#[serde(rename_all = "camelCase")]
+#[repr(i32)]
+pub enum GrantInputField {
+    TeamId = 1,
+    OrganizationId = 2,
+    ApprovedAmount = 3,
+    IsApproved = 4,
+    IsSuspended = 5,
+    IsOverride = 6,
 }
 
-fn validate_program(policy: &PolicyProgram, version: &str) -> Result<(), ApprovalError> {
+pub(crate) fn required_grant_fields(
+    policy: &ValidatedPolicyProgram,
+    version: &str,
+) -> Result<Vec<GrantInputField>, ApprovalError> {
+    validate_program(policy.program(), version)
+}
+
+pub(super) fn validate_policy(package: &ApprovedPolicyPackage) -> Result<(), ApprovalError> {
+    required_grant_fields(package.policy(), package.identity().version_id()).map(|_| ())
+}
+
+fn validate_program(
+    policy: &PolicyProgram,
+    version: &str,
+) -> Result<Vec<GrantInputField>, ApprovalError> {
     let resource = format!("dataset_{version}");
     let team = format!("team_{version}");
     let organization = format!("organization_{version}");
@@ -65,12 +89,16 @@ fn validate_program(policy: &PolicyProgram, version: &str) -> Result<(), Approva
         }
     }
     let mut visited = BTreeSet::new();
+    let mut fields = BTreeSet::new();
+    let mut used_caveats = BTreeSet::new();
     check_expression(
         &permission.expression,
         root,
         &team,
         &organization,
         &mut visited,
+        &mut fields,
+        &mut used_caveats,
     )?;
     if visited.len() != root.relations.len() {
         return Err(ApprovalError::Invalid);
@@ -78,18 +106,29 @@ fn validate_program(policy: &PolicyProgram, version: &str) -> Result<(), Approva
     for caveat in &policy.caveats {
         for parameter in &caveat.parameters {
             if parameter.source == CaveatInputSource::RelationshipContext {
-                let expected = match parameter.name.as_str() {
-                    "approved_amount" => CaveatValueType::Int,
-                    "is_approved" | "is_suspended" | "is_override" => CaveatValueType::Bool,
+                let (field, expected) = match parameter.name.as_str() {
+                    "approved_amount" => (GrantInputField::ApprovedAmount, CaveatValueType::Int),
+                    "is_approved" => (GrantInputField::IsApproved, CaveatValueType::Bool),
+                    "is_suspended" => (GrantInputField::IsSuspended, CaveatValueType::Bool),
+                    "is_override" => (GrantInputField::IsOverride, CaveatValueType::Bool),
                     _ => return Err(ApprovalError::Invalid),
                 };
                 if parameter.value_type != expected {
                     return Err(ApprovalError::Invalid);
                 }
+                if used_caveats.contains(&caveat.name) {
+                    fields.insert(field);
+                }
             }
         }
     }
-    Ok(())
+    if used_caveats
+        .iter()
+        .any(|name| !policy.caveats.iter().any(|caveat| caveat.name == *name))
+    {
+        return Err(ApprovalError::Invalid);
+    }
+    Ok(fields.into_iter().collect())
 }
 
 fn check_expression(
@@ -98,11 +137,21 @@ fn check_expression(
     team: &str,
     organization: &str,
     visited: &mut BTreeSet<String>,
+    fields: &mut BTreeSet<GrantInputField>,
+    used_caveats: &mut BTreeSet<String>,
 ) -> Result<(), ApprovalError> {
     let (name, expected) = match expression {
         PermissionExpr::AnyOf(children) | PermissionExpr::AllOf(children) => {
             for child in children {
-                check_expression(child, root, team, organization, visited)?;
+                check_expression(
+                    child,
+                    root,
+                    team,
+                    organization,
+                    visited,
+                    fields,
+                    used_caveats,
+                )?;
             }
             return Ok(());
         }
@@ -110,29 +159,38 @@ fn check_expression(
         PermissionExpr::CaveatedRelation {
             relation,
             caveat_name,
-        } => (relation, direct_subject(Some(caveat_name.clone()))),
+        } => {
+            used_caveats.insert(caveat_name.clone());
+            (relation, direct_subject(Some(caveat_name.clone())))
+        }
         PermissionExpr::SubjectRelationRef {
             relation,
             subject_relation,
-        } if relation == "team_viewer" && subject_relation == "member" => (
-            relation,
-            AllowedSubjectType {
-                object_type: team.into(),
-                subject_relation: Some("member".into()),
-                caveat_name: None,
-            },
-        ),
+        } if relation == "team_viewer" && subject_relation == "member" => {
+            fields.insert(GrantInputField::TeamId);
+            (
+                relation,
+                AllowedSubjectType {
+                    object_type: team.into(),
+                    subject_relation: Some("member".into()),
+                    caveat_name: None,
+                },
+            )
+        }
         PermissionExpr::Arrow {
             source_relation,
             target_permission,
-        } if source_relation == "organization" && target_permission == "audit" => (
-            source_relation,
-            AllowedSubjectType {
-                object_type: organization.into(),
-                subject_relation: None,
-                caveat_name: None,
-            },
-        ),
+        } if source_relation == "organization" && target_permission == "audit" => {
+            fields.insert(GrantInputField::OrganizationId);
+            (
+                source_relation,
+                AllowedSubjectType {
+                    object_type: organization.into(),
+                    subject_relation: None,
+                    caveat_name: None,
+                },
+            )
+        }
         _ => return Err(ApprovalError::Invalid),
     };
     if expected.object_type == "agent"

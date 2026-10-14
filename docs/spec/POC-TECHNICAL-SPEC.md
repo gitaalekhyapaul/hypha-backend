@@ -117,6 +117,13 @@ published on 2026-10-01. Registry metadata, `latest`, and archive integrity are
 verified. Connected VM proof validation remains pending. Existing proof contracts
 are unchanged.
 
+The M7 approval form now derives private grant input names from the exact approved
+policy through the operator-only catalogue. Internal catalogue payload version 2
+rejects pre-repair metadata-free responses. The proof runtime pins the existing
+approved public guest and checks both program-key identifiers before private input.
+Neither repair changes grant construction, proof semantics, or agent responses.
+Isolated validation passes. A fresh real capability after VM deployment remains pending.
+
 [ADR-0022](../decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in
 Compose-managed fixed-domain HTTPS ingress for the synthetic demo. Agent APIs and
 protected queries use that route. Operator pages remain SSH-only. The approved

@@ -333,6 +333,7 @@ services:
       GOMEMLIMIT: "24GiB"
       HOME: /tmp
       RAYON_NUM_THREADS: "8"
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
       RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
       RAZIEL_GUEST_ELF_PATH: /opt/raziel-runtime/raziel-authorization-guest
       RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots
@@ -1178,6 +1179,7 @@ services:
       GOMEMLIMIT: "24GiB"
       HOME: /tmp
       RAYON_NUM_THREADS: "8"
+      RAZIEL_EXPECTED_SP1_VKEY_HASH: ${RAZIEL_EXPECTED_SP1_VKEY_HASH:-}
       RAZIEL_EXPECTED_VERIFICATION_KEY_ID: ${RAZIEL_EXPECTED_VERIFICATION_KEY_ID:-}
       RAZIEL_GUEST_ELF_PATH: /opt/raziel-runtime/raziel-authorization-guest
       RAZIEL_PRIVATE_SNAPSHOT_ROOT: /var/lib/raziel/private-snapshots

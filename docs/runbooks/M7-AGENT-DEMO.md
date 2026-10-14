@@ -130,6 +130,9 @@ docker pull ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1a
 ```
 
 Preparation builds dependencies and binaries. It generates no authorization proof.
+The proof runtime installs the checksum-pinned approved guest. Preparation and
+each proof child check both public program-key identifiers. It does not replace
+the trusted verifier key with a new build's key.
 Startup waits for service health. The project is `raziel-m6-live`, with separate
 volumes and runtime files. It imports no M5 or preview state. Never use
 `down --volumes` as a startup repair.
@@ -501,6 +504,9 @@ credential. It cannot replace a Raziel-issued agent API token.
 4. Agent A **Tasks / New task**: request `processor-demo-v1`, revision `1`, with UTC
    range `2026-10-01T00:00:00Z` through `2026-10-01T23:59:59Z`.
 5. Operator **Access requests**: select and approve A's exact request and policy.
+   Private grant controls follow that selected approved policy. Direct rules need
+   no extra fields. Team and organization rules show their own identifiers.
+   Caveats show only their used stored inputs. ANY/ALL collect those fields.
    A polls and signs the prepared proposal. Record waiting/proving/ready states.
    Keep the real proof running. Use a video time cut, not a replacement response.
 6. Agent A **Authorized rows**: query the dataset. Record its verifier receipt.
@@ -530,6 +536,11 @@ A full 100-row page requires a narrower query before evidence publication. A mod
 summary and settlement result are business output, not ZK proof of transaction truth.
 
 ## Remaining Acceptance
+
+For an existing deployment with the guest/key mismatch or the old static grant
+form, follow [Guest Identity And Grant Form Repair](M6-LIVE-VM.md#guest-identity-and-grant-form-repair).
+It rebuilds the affected binaries offline and recreates the stopped backend roles
+without clearing data. The public-only key check must pass before a new proof.
 
 This checkpoint is ready for provisional deployment, not a completed demo claim.
 First validate Agent A's registration, inbox approval, real proof, and protected
