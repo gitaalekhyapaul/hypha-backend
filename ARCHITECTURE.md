@@ -99,6 +99,14 @@ remain owner-only files, not database rows. The live project imports no preview 
 M5 state. The [VM runbook](docs/runbooks/M6-LIVE-VM.md) gives preparation, startup,
 SDK flows, and the remaining real-proof gate.
 
+The M6 proof and verifier sandboxes carry the per-container systemd annotation
+`org.systemd.property.MemorySwapMax: "uint64 0"`. It keeps the explicit no-swap
+property in each systemd scope across reloads and container recreation. Their
+health checks verify the actual cgroup RAM and swap limits plus launcher socket
+ownership. Docker's recorded limits alone do not establish runtime enforcement.
+The cgroupfs runtime still uses the existing equal memory/memory-swap limits.
+No host-wide swap policy, extra container privilege, or child-profile bypass is added.
+
 [ADR-0022](docs/decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in,
 Docker-managed ngrok ingress on the active backend host. Its fixed HTTPS domain
 serves the signed agent API and protected-query routes, not operator pages.

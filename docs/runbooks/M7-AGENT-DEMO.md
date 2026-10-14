@@ -177,6 +177,13 @@ HTTP health check now supplies the readiness prerequisite used by ngrok.
 An access-API health check can recover after a failed startup. Check its current
 health rather than treating an earlier unhealthy summary as a persistent fault.
 
+For an immediate `SERVICE_UNAVAILABLE` proof failure with `memory.swap.max=max`,
+follow the [permanent zero-swap repair](M6-LIVE-VM.md#permanent-zero-swap-repair).
+The update gives both M6 sandboxes a per-container systemd zero-swap property and
+actual-cgroup health checks. It needs no image or binary rebuild. Recreate only
+the two sandboxes after admitted proofs finish or reach terminal cancellation.
+Keep host swap, private volumes, and all child resource checks unchanged.
+
 ### Ngrok Auth-File Startup Repair
 
 The pinned image creates `/var/lib/ngrok/auth-config.yml` from `NGROK_AUTHTOKEN`

@@ -5,22 +5,27 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T22:17:23Z
+- Last updated UTC: 2026-10-14T22:58:35Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
 - Execution: maintainer selected a Compose-managed ngrok tunnel with the account's
   fixed dev domain, portable between the Mac and VM. The bounded deployment follow-up
-  is implemented and locally checked. No remote source or runtime edits.
+  is implemented and checked. Zero-swap validation used disposable VM containers,
+  now removed. No remote source or production service was changed.
 
 ## Objective
 
-Next bounded objective: have the maintainer pull both ingress checkpoints,
-recreate the console and ngrok without restarting proof workers, and GET the
-public `/api/health` endpoint. The minimal unauthenticated route and ngrok auth-file
-repair pass local checks. Continue with signed Agent A connection only after live
-ingress responds. Full VM stack, public Go cache recovery, and proof flows remain
-unverified gates.
+Permanent M6 proof and verifier zero-swap enforcement is implemented and reviewed.
+Per-container systemd annotations and actual cgroup health checks pass focused
+validation. The maintainer confirmed the immediate runtime correction works and
+approved this permanent repair.
+
+Next bounded objective: deploy the repair after admitted proofs finish or reach
+terminal cancellation. Recreate only the two sandboxes, verify health and zero
+swap, then continue the real agent proof-to-data gate. The VM request now reaches
+a proof job. Public ingress health, complete proof success, independent queries,
+and the full two-agent gate are not established by the diagnostic output.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -91,6 +96,10 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 - Public health route: demo-console health handler and focused test,
   `tools/ngrok/traffic-policy.json`, `scripts/test-ngrok-policy.mjs`, ADR-0022,
   architecture/spec ingress notes, M7 runbook, current baton, and dated evidence.
+- Permanent zero-swap repair: `docker-compose.m6-live.yml`,
+  `scripts/check-m6-live-compose`, architecture and M6/M7 runbook notes, current
+  baton, and dated evidence. SDK/agents remain read-only. Validate rendered
+  annotations and health rejection with disposable, networkless containers only.
 
 ## Out Of Scope
 
@@ -141,9 +150,21 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   Security review scope: public liveness only. No policy, identity, registry, queue,
   dataset, environment, version, or proof-state fields. Existing authenticated
   routes keep their guards. This endpoint makes no proof-stack readiness claim.
+- On October 15 the maintainer confirmed targeted runtime MemorySwapMax=0 works
+  and approved a permanent repair. The existing ADR-0015/ADR-0013 no-swap rule is
+  unchanged. The M6 sandbox annotations set an explicit per-unit systemd zero.
+  Health checks read the actual cgroup limits, not Docker's requested values.
+  No host-wide drop-in, swapoff, extra privilege, package change, or child bypass.
 
 ## Open Questions And Blockers
 
+- October 15 proof attempt failed 35 ms after claim. VM cgroup swap was `max`,
+  although Docker recorded equal memory/memory-swap limits. Systemd showed
+  MemorySwapMax=infinity for both sandboxes. No OOM events occurred. The child
+  rejects this resource profile before private input. The maintainer reports the
+  scoped runtime systemd correction works. The permanent Compose repair passes
+  disposable VM recreation and local health-positive/negative checks. Production
+  deployment and the next real proof remain pending.
 - The October 15 VM log confirms ngrok cannot create its auth file on the read-only
   root. The failure is reproduced locally, and the repair passes actual image
   entrypoint/config checks plus local health-API startup with no external network.
@@ -166,13 +187,24 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   exist on the VM, including `raziel_razield-proof-go-mod-cache` from earlier runs.
   Their contents still need the offline recovery validation. No pin change is approved.
   A new host without a complete matching cache cannot bypass the upstream failure.
-- The latest local SSH ControlMaster check found no socket. VM work still needs the
-  maintainer's interactive connection and pull. No remote source or runtime change ran.
+- Earlier SSH checks lacked a ControlMaster. The maintainer restored it on October
+  15. Read-only inspection confirmed the applied swap mismatch in both sandboxes.
+  Disposable annotated-container probes passed and were removed. No remote source,
+  production scope property, daemon reload, restart, or proof submission ran.
 - On resume, check the master first. If unavailable, pause and ask the maintainer
   to restore the interactive connection. Do not recreate MFA sessions.
 - VM updates still require maintainer pulls through the server's PAT flow.
 
 ## Work Completed
+
+The permanent M6 zero-swap repair adds the explicit systemd property to exactly
+the proof and verifier sandbox services. Each health check retains its launcher
+socket mode/owner guard and checks its actual RAM cap plus memory.swap.max=0.
+Existing worker/API healthy dependencies remain in place. Native Mac cgroupfs
+positive and negative health cases pass. Two fresh disposable Compose containers
+on the VM independently report systemd MemorySwapMax=0 and cgroup swap=0.
+No host-wide daemon reload was run against the active demo. The runbook explains
+safe two-sandbox recreation and confirms no proof, image, or binary rebuild.
 
 M0-M5 remain validated. B-0064 delivered registration and signed SDK authentication.
 B-0065 delivered inbox review, independent policy versions, and private preparation.
@@ -347,6 +379,15 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Console health-route typecheck | PASS | Pinned toolchain tsc --noEmit, no dependency change |
 | Health route formatting/lint | PASS | Existing pinned Biome checks route, test, and policy vectors |
 | Public health VM acceptance | SKIP | No live tunnel, private token, or VM action in this implementation |
+| VM failure diagnosis, October 15 | PASS | Retained job failed in 35 ms; PROVING precedes the executor; sandbox OOM counters zero; both actual swap limits max despite equal Docker requested limits |
+| Native VM annotation | PASS | Disposable networkless container registers systemd MemorySwapMax=0 and actual cgroup swap=0; container removed |
+| Actual VM Compose recreation | PASS | Two fresh containers from the rendered annotation each register systemd=0 and cgroup=0; isolated project removed after each run |
+| Local actual health commands | PASS | Proof/verifier commands each accept zero swap and reject unlimited swap with a fixed diagnostic; four cases, no private mounts |
+| Permanent repair Compose checks | PASS | M6 live, M6 policy preview, ngrok-integrated M6, baseline proof and baseline verifier render checks; annotation scope exactly two M6 sandboxes |
+| Initial ngrok render attempts | FAIL, resolved | Missing synthetic render password/URL; rerun with explicit dummy settings passes, no tunnel or real token used |
+| Repair syntax/whitespace | PASS | Shell syntax and git diff --check |
+| Runbook and focused review | PASS | 27 documented shell blocks parse, relative links resolve; independent annotation/type/inheritance/cgroupfs review has no actionable findings |
+| Production permanent repair/proof | SKIP | Maintainer must pull and deploy after active proofs finish; no production sandbox recreation, daemon reload, or new proof |
 
 ## Risks And Private-Data Notes
 
@@ -357,17 +398,14 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull both ingress checkpoints, recreate `demo-console` and
-`raziel-ngrok` with `--no-deps`, then GET
-`https://either-anymore-immunize.ngrok-free.dev/api/health` and expect HTTP 200 status=ok.
-Keep the existing `.env.m6`, volumes, proof workers, and agent checkout unchanged.
-Run the unsigned API probe from Agent A and expect Raziel's 401 NOT_AUTHORIZED JSON.
-Then retry signed Save connection and inspect its response code. Follow
-[Ngrok Auth-File Startup Repair](../runbooks/M7-AGENT-DEMO.md#ngrok-auth-file-startup-repair).
-Keep browser access on SSH forwarding. Configure the two repo-local settings
-files and private SoC credentials path as documented. Check Docker and the existing
-SSH ControlMaster before runtime work. Validate Agent A's registration, inbox
-approval, exact signing, real proof, and protected query, then Agent B and reconciliation.
+Have the maintainer pull the backend checkpoint and follow
+[Permanent Zero-Swap Repair](../runbooks/M6-LIVE-VM.md#permanent-zero-swap-repair)
+only after admitted proofs finish or reach terminal cancellation. Recreate the two
+sandboxes with --no-deps, expect healthy and swap=0, then continue the agent proof
+and protected-query gate. Do not interrupt a working proof or reset volumes.
+Keep the existing settings, proof worker, private data, and sibling checkouts.
+Use the public health and unsigned API probes only for any remaining ingress issue.
+Check Docker and the existing SSH ControlMaster before further runtime work.
 B-0068 retains the two-proof recording, negative controls, screenshots, and evidence.
 
 ## Dated Evidence
@@ -384,3 +422,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Public Go cache and console readiness repair](history/2026-10-14-m6-go-cache-and-console-readiness.md)
 - [Ngrok auth-file RAM-mount repair](history/2026-10-15-ngrok-auth-tmpfs-repair.md)
 - [Unauthenticated ingress health route](history/2026-10-15-public-ingress-health-route.md)
+- [Permanent M6 zero-swap enforcement](history/2026-10-15-m6-permanent-zero-swap.md)

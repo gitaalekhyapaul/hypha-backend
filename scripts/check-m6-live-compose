@@ -91,7 +91,19 @@ for (const [name, limit] of [["m6-proof-sandbox", 60129542144], ["m6-verifier-sa
   assert.equal(String(s[name].memswap_limit), String(limit));
   assert.equal(s[name].read_only, true);
   assert.deepEqual(s[name].cap_drop, ["ALL"]);
+  assert.equal(s[name].annotations["org.systemd.property.MemorySwapMax"], "uint64 0");
+  const health = s[name].healthcheck.test;
+  assert.equal(health[0], "CMD-SHELL");
+  assert.ok(health[1].includes(`cat /sys/fs/cgroup/memory.max)" = ${limit}`));
+  assert.ok(health[1].includes('cat /sys/fs/cgroup/memory.swap.max)" = 0'));
+  const socket = name === "m6-proof-sandbox" ? "/run/raziel-proof/launcher.sock" :
+    "/run/raziel-verifier/launcher.sock";
+  assert.ok(health[1].includes(`test -S ${socket}`));
+  assert.ok(health[1].includes(`stat --format=%a ${socket})" = 600`));
+  assert.ok(health[1].includes(`stat --format=%u ${socket})" = 0`));
 }
+assert.equal(s["m6-proof-worker"].depends_on["m6-proof-sandbox"].condition, "service_healthy");
+assert.equal(s["m6-verifierd"].depends_on["m6-verifier-sandbox"].condition, "service_healthy");
 assert.equal(s["m6-proof-sandbox"].cpuset, "0-7");
 assert.equal(s["demo-gateway"].environment.RAZIEL_VERIFIERD_ENDPOINT, "http://m6-verifierd:50053");
 assert.equal(s["demo-gateway"].environment.RAZIEL_DATASET_BINDING_MODE, "required");

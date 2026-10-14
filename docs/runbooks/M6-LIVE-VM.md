@@ -219,6 +219,63 @@ Ngrok waits for this check. Preparation without the ngrok overlay can report the
 existing tunnel as an orphan. This warning does not require removing the tunnel.
 Do not add `--remove-orphans` for that warning.
 
+### Permanent Zero-Swap Repair
+
+Symptom: a job records `PROVING`, then fails almost immediately with
+`SERVICE_UNAVAILABLE`. The sandbox reports `memory.swap.max=max`, but Docker
+inspect still records equal memory and memory-swap limits. The prover rejects
+that environment before receiving private input. This is not evidence of an OOM.
+
+The M6 Compose definitions now set the per-container OCI annotation
+`org.systemd.property.MemorySwapMax: "uint64 0"` on the proof and verifier
+sandboxes. Systemd retains an explicit zero for their scopes. New containers
+receive the same property without a manual `systemctl set-property` command.
+Health checks reject an incorrect actual RAM limit, nonzero/unlimited swap,
+or an invalid launcher socket. No additional privilege or host-wide swap change
+is required. This preserves ADR-0015's existing resource contract.
+
+The observed drift matches
+[opencontainers/cgroups issue 74](https://github.com/opencontainers/cgroups/issues/74).
+The annotation uses the documented
+[runc systemd auxiliary properties](https://github.com/opencontainers/runc/blob/main/docs/systemd.md#auxiliary-properties).
+With a cgroupfs driver, the systemd annotation is not applied. Docker's existing
+equal memory/memory-swap limits and the same actual-cgroup health checks remain.
+
+Apply this update only after every admitted proof has finished or cancellation
+has reached a terminal state. Do not interrupt a working proof for this repair.
+All commands below run in the VM backend checkout:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/check-m6-live-compose
+
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --no-deps --force-recreate --wait --wait-timeout 120 \
+  m6-proof-sandbox m6-verifier-sandbox
+
+./scripts/compose-m6 --ngrok --profile apps exec -T \
+  m6-proof-sandbox cat /sys/fs/cgroup/memory.swap.max
+./scripts/compose-m6 --ngrok --profile apps exec -T \
+  m6-verifier-sandbox cat /sys/fs/cgroup/memory.swap.max
+```
+
+Both outputs must be `0`, and both sandbox health checks must pass. This recreates
+only the two sandboxes. It preserves volumes, identities, policies, datasets, and
+the rest of the stack. No binary build, image download, sudo command, or proof
+submission belongs to this update. A previously failed request remains failed.
+Use a new access request for the next proof test after confirming health.
+
+If a later health check fails, inspect its fixed diagnostic message:
+
+```bash
+docker inspect --format '{{json .State.Health}}' raziel-m6-live-m6-proof-sandbox-1
+docker inspect --format '{{json .State.Health}}' raziel-m6-live-m6-verifier-sandbox-1
+```
+
+Do not remove the child's no-swap check or replace it with a Docker-inspect-only
+check. Readiness does not establish proof success or the full M7 acceptance gate.
+
 ### Normal Restart
 
 ```bash

@@ -169,8 +169,21 @@ services:
       service: demo-proof-sandbox
     build: !reset null
     pull_policy: never
+    # Keep the explicit zero owned by systemd across daemon-reload.
+    annotations:
+      org.systemd.property.MemorySwapMax: "uint64 0"
     environment:
       RAZIEL_TRUST_DOMAIN_ID: ${RAZIEL_M6_TRUST_DOMAIN_ID:-raziel-m6-dev}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test "$$(cat /sys/fs/cgroup/memory.max)" = 60129542144 &&
+          { test "$$(cat /sys/fs/cgroup/memory.swap.max)" = 0 ||
+          { echo 'proof sandbox requires memory.swap.max=0' >&2; exit 1; }; } &&
+          test -S /run/raziel-proof/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-proof/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-proof/launcher.sock)" = 0
     volumes:
       - m6-private-snapshots:/var/lib/raziel/private-snapshots:ro
     depends_on: !override
@@ -255,6 +268,18 @@ services:
       service: demo-verifier-sandbox
     build: !reset null
     pull_policy: never
+    annotations:
+      org.systemd.property.MemorySwapMax: "uint64 0"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test "$$(cat /sys/fs/cgroup/memory.max)" = 2147483648 &&
+          { test "$$(cat /sys/fs/cgroup/memory.swap.max)" = 0 ||
+          { echo 'verifier sandbox requires memory.swap.max=0' >&2; exit 1; }; } &&
+          test -S /run/raziel-verifier/launcher.sock &&
+          test "$$(stat --format=%a /run/raziel-verifier/launcher.sock)" = 600 &&
+          test "$$(stat --format=%u /run/raziel-verifier/launcher.sock)" = 0
     depends_on: !override
       m6-verifier-build:
         condition: service_completed_successfully
