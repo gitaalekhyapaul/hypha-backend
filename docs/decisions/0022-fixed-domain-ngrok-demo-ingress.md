@@ -27,11 +27,23 @@ These settings follow the [official CLI reference](https://ngrok.com/docs/gatewa
 
 ## Exposure Boundary
 
-The traffic policy accepts only the existing signed agent API methods and dataset
+The traffic policy accepts the existing signed agent API methods and dataset
 protected-query POST route. Other paths return a generic 404. It forwards permitted
 requests unchanged. The backend still checks tokens, signatures, scope, and proofs.
 The policy is not a substitute for authorization. The operator and agent dashboards
 remain local or SSH-forwarded. No owner RPC, database, Redis, or proof port is public.
+
+### Public Liveness Amendment, 2026-10-15
+
+The maintainer explicitly requested an unauthenticated deployment health route.
+Allow only GET `/api/health` through ingress. Return HTTP 200 with exactly
+`{"status":"ok"}` and `Cache-Control: no-store`. Set no cookie. Read no private
+configuration or downstream service state. Other methods and health subpaths remain
+outside the public allowlist.
+
+This exposes console-process liveness and public routing, not policy decisions,
+agent metadata, queue depth, datasets, credentials, or proof readiness. It does not
+relax any token, signature, scope, replay, or proof check on protected routes.
 
 In the integrated VM stack, ngrok joins its own egress network and an internal
 upstream network shared only with the console. It has no owner-network membership,

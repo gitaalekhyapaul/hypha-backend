@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T22:13:30Z
+- Last updated UTC: 2026-10-14T22:17:23Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,12 @@
 
 ## Objective
 
-Next bounded objective: have the maintainer pull the locally validated ngrok
-auth-file repair and recreate only the tunnel. Check the unsigned API route from
-Agent A, then retry its signed connection. Preserve the read-only root, non-root
-user, route policy, image pin, and proof/SDK boundaries. Full VM startup, the public
-Go cache recovery, and real agent capability flows remain unverified gates.
+Next bounded objective: have the maintainer pull both ingress checkpoints,
+recreate the console and ngrok without restarting proof workers, and GET the
+public `/api/health` endpoint. The minimal unauthenticated route and ngrok auth-file
+repair pass local checks. Continue with signed Agent A connection only after live
+ingress responds. Full VM stack, public Go cache recovery, and proof flows remain
+unverified gates.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -87,6 +88,9 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 - Ngrok auth-file repair: `docker-compose.ngrok.yml`, `scripts/check-ngrok-compose`,
   M7 runbook, current baton, and dated evidence. SDK and agents remain read-only.
   No remote edit, live tunnel, real token, package download, or proof generation.
+- Public health route: demo-console health handler and focused test,
+  `tools/ngrok/traffic-policy.json`, `scripts/test-ngrok-policy.mjs`, ADR-0022,
+  architecture/spec ingress notes, M7 runbook, current baton, and dated evidence.
 
 ## Out Of Scope
 
@@ -133,6 +137,10 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   directory is private bounded tmpfs, not a persistent volume. `NGROK_CONFIG`
   selects the existing read-only base config. This is an implementation repair,
   not a new provider, image, or exposure decision.
+- The maintainer explicitly requested unauthenticated deployment health on October 15.
+  Security review scope: public liveness only. No policy, identity, registry, queue,
+  dataset, environment, version, or proof-state fields. Existing authenticated
+  routes keep their guards. This endpoint makes no proof-stack readiness claim.
 
 ## Open Questions And Blockers
 
@@ -245,6 +253,12 @@ starts its local health API with no external network and no public tunnel.
 Standalone/integrated checks retain the image, user, read-only root, network, route,
 and credential-scope constraints. No SDK, agent source, real token, or VM changed.
 
+The requested GET `/api/health` route returns exactly status=ok without reading
+private configuration, setting a cookie, or querying any downstream service.
+The response is non-cacheable. The ingress permits only that exact GET path as
+an unauthenticated exception. ADR-0022 records the explicit maintainer approval
+and its liveness-only security scope. Existing operator-auth regression tests pass.
+
 ## Validation Plan
 
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
@@ -327,7 +341,12 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Ngrok repair Compose/policy checks | PASS | Standalone and M6 layouts pass; existing nine allowed and twelve denied route vectors still pass |
 | Ngrok auth guard negatives | PASS | Missing auth mount, missing base-config setting, and world-readable directory mode all reject |
 | Ngrok repair handoff checks | PASS | Shell/runbook syntax, relative links, diff whitespace, and scoped credential/private-artifact scan |
-| Ngrok live VM retry | SKIP | Maintainer must pull and recreate only the tunnel, then test unsigned API routing and signed Save connection |
+| Ngrok live VM retry | SKIP | Maintainer must pull and recreate console/tunnel, then test public health, unsigned API routing, and signed Save connection |
+| Public health and operator-auth tests | PASS | Eight focused tests in the pinned networkless toolchain; status-only response, no cookie/cache, existing auth guards unchanged |
+| Public route policy | PASS | Ten allowed and sixteen denied vectors, including health method/subpath rejections |
+| Console health-route typecheck | PASS | Pinned toolchain tsc --noEmit, no dependency change |
+| Health route formatting/lint | PASS | Existing pinned Biome checks route, test, and policy vectors |
+| Public health VM acceptance | SKIP | No live tunnel, private token, or VM action in this implementation |
 
 ## Risks And Private-Data Notes
 
@@ -338,8 +357,9 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull the auth-file repair, then run
-`./scripts/compose-m6 --ngrok --profile apps up --detach --no-deps --force-recreate --wait --wait-timeout 120 raziel-ngrok`.
+Have the maintainer pull both ingress checkpoints, recreate `demo-console` and
+`raziel-ngrok` with `--no-deps`, then GET
+`https://either-anymore-immunize.ngrok-free.dev/api/health` and expect HTTP 200 status=ok.
 Keep the existing `.env.m6`, volumes, proof workers, and agent checkout unchanged.
 Run the unsigned API probe from Agent A and expect Raziel's 401 NOT_AUTHORIZED JSON.
 Then retry signed Save connection and inspect its response code. Follow
@@ -363,3 +383,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [SP1 native-runner cache repair](history/2026-10-14-sp1-native-dependency-cache-repair.md)
 - [Public Go cache and console readiness repair](history/2026-10-14-m6-go-cache-and-console-readiness.md)
 - [Ngrok auth-file RAM-mount repair](history/2026-10-15-ngrok-auth-tmpfs-repair.md)
+- [Unauthenticated ingress health route](history/2026-10-15-public-ingress-health-route.md)

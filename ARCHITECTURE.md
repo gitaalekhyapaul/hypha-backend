@@ -102,6 +102,8 @@ SDK flows, and the remaining real-proof gate.
 [ADR-0022](docs/decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in,
 Docker-managed ngrok ingress on the active backend host. Its fixed HTTPS domain
 serves the signed agent API and protected-query routes, not operator pages.
+An explicitly approved GET `/api/health` exception returns only non-cacheable
+status=ok for public routing and console liveness, not proof-stack readiness.
 Browser dashboards stay on SSH forwarding. The ingress joins no owner networks
 and mounts no private state. Pooling and local inspection are disabled. Only one
 backend uses the domain at a time. Ngrok's cloud terminates HTTPS and can see

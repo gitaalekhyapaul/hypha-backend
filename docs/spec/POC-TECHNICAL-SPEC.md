@@ -119,8 +119,11 @@ are unchanged.
 
 [ADR-0022](../decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in
 Compose-managed fixed-domain HTTPS ingress for the synthetic demo. Agent APIs and
-protected queries use that route. Operator pages remain SSH-only. One backend serves
-the domain at a time, with pooling and local inspection disabled. Ngrok can see
+protected queries use that route. Operator pages remain SSH-only. The approved
+unauthenticated GET `/api/health` route returns
+only a non-cacheable status=ok response for ingress/console liveness, not proof
+readiness. Protected routes retain their authentication and proof checks. One
+backend serves the domain at a time, with pooling and local inspection disabled. Ngrok can see
 permitted API traffic at its HTTPS edge. The real cloud endpoint check still needs
 private token configuration. No SDK TLS or authorization check changes.
 

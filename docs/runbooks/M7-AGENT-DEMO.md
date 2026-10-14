@@ -189,13 +189,15 @@ directory at `/var/lib/ngrok`, owned by UID/GID 1000 with mode `0700`. The image
 `NGROK_CONFIG` setting points to our existing read-only base config. No auth file
 is persisted on the host or in a named volume. Keep your existing private token.
 
-With the operator console already running, pull and recreate only the tunnel in
-the VM backend repo:
+With the rest of the backend running, pull and recreate only the console and
+tunnel in the VM backend repo:
 
 ```bash
 cd ~/hypha-backend
 git pull --ff-only origin main
 ./scripts/check-ngrok-compose --m6
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --no-deps --force-recreate --wait --wait-timeout 300 demo-console
 ./scripts/compose-m6 --ngrok --profile apps up \
   --detach --no-deps --force-recreate --wait --wait-timeout 120 raziel-ngrok
 ./scripts/compose-m6 --ngrok --profile apps ps demo-console raziel-ngrok
@@ -220,6 +222,20 @@ or proof acceptance. Then retry **Save connection** with the exact audience and
 agent-specific token. Inspect the response error code for a continuing failure.
 Agent logs do not currently print caught request errors. Startup-only logs do not
 show whether a request arrived.
+
+### Public Ingress Health
+
+From the Mac or VM, run this GET request without credentials:
+
+```bash
+curl -i --max-time 15 https://either-anymore-immunize.ngrok-free.dev/api/health
+```
+
+Expected: HTTP `200`, `Cache-Control: no-store`, and `{"status":"ok"}`. This checks
+the public endpoint, tunnel forwarding, and console liveness. It does not check
+Redis, SpiceDB, the proof worker, capability validity, or private data. Use GET,
+not `curl -I`: HEAD and other methods are not public on this route. The root and
+operator paths remain blocked by the ingress policy.
 
 ## VM Private Files: Prepare SoC Credentials
 
