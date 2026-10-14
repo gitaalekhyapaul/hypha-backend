@@ -14,6 +14,7 @@ done
 
 pnpm install --frozen-lockfile
 cargo fetch --locked
+./scripts/prepare-sp1-native-dependencies
 if [ "$(id -u)" -eq 0 ]; then
   ./scripts/normalize-public-cargo-cache
 fi

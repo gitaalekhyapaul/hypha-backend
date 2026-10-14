@@ -1227,6 +1227,9 @@ Its feature build and focused protocol, configuration, cgroup, and privacy tests
 without running SP1. The default API graph excludes the SP1 SDK. The B-0025 fixed
 launcher accepts one bounded request and starts one fixed child at a time. It confirms
 child exit after cancellation, crash, malformed output, and closed typed failures.
+Explicit preparation prefetches the two checksum-pinned native-runner lockfiles
+published with SP1 6.3.1. The proof-runtime build checks both metadata graphs offline
+with a read-only Cargo cache, without enabling profiling or changing workspace pins.
 The proof-runtime build prefetches and verifies SP1's pinned Gnark Go modules in a
 build-only container with no repository or private-state mounts. The runtime build
 stays networkless, mounts that module cache and its finalized manifest read-only, and

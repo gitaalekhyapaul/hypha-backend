@@ -276,7 +276,10 @@ event. The verifier rejected an altered capability and a stolen key binding. The
 [service-flow report](docs/benchmarks/m4-service-flow/m4-service-20260826T090300Z-199729.md)
 records the final M4 gate.
 
-The local prover-runtime build keeps networking disabled. A separate build-only
+The local prover-runtime build keeps networking disabled. Explicit preparation
+prefetches SP1 6.3.1's two published native-runner lockfiles with checksum validation.
+The runtime build checks their metadata offline before compilation. This changes
+no proof feature or workspace dependency pin. A separate build-only
 container downloads the Go modules pinned by SP1's checked-in Gnark bridge before
 Raziel creates private run state. That fetch container can read only the public Cargo
 registry and its dedicated Go module cache. It finalizes a cached manifest and

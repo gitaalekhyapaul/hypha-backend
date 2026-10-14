@@ -164,6 +164,13 @@ permission change, dependency preparation, image rebuild, or proof rerun is need
 Let normal startup recreate the affected containers. Do not create the old nested
 mountpoint manually or delete runtime files and volumes.
 
+If `m6-proof-build` reports missing `gecko_profile` during offline Cargo metadata,
+follow the [targeted SP1 build-cache repair](M6-LIVE-VM.md#offline-sp1-build-cache).
+The fix prefetches both published SP1 runner lockfiles, then rebuilds the failed
+runtime. It changes no proof features, package versions, private data, or images.
+An access-API health check can recover after a failed startup. Check its current
+health rather than treating an earlier unhealthy summary as a persistent fault.
+
 ## VM Private Files: Prepare SoC Credentials
 
 Working directory: any directory on the VM.

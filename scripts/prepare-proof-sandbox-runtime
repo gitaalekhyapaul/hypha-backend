@@ -6,6 +6,8 @@ runtime_root=${RAZIEL_PROOF_RUNTIME_ROOT:-/opt/raziel-runtime}
 target_root=${CARGO_TARGET_DIR:-/var/cache/raziel-proof-build}
 guest_elf="$target_root/elf-compilation/riscv64im-succinct-zkvm-elf/release/raziel-authorization-guest"
 
+./scripts/prepare-sp1-native-dependencies --check
+
 cargo build \
   --locked \
   --offline \

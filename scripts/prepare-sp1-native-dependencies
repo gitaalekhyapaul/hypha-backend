@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+fail() {
+  printf 'sp1_native_dependencies: %s\n' "$1" >&2
+  exit 1
+}
+
+test "$#" -le 1 || fail "expected no argument or --check"
+case "${1:-}" in
+  "") mode=fetch ;;
+  --check) mode=check ;;
+  *) fail "expected no argument or --check" ;;
+esac
+cargo_home=${CARGO_HOME:-${HOME:?HOME or CARGO_HOME is required}/.cargo}
+
+prepare_package() {
+  package=$1
+  expected_lock_hash=$2
+  manifest=
+  for candidate in "$cargo_home"/registry/src/*/"$package"-6.3.1/Cargo.toml; do
+    test -f "$candidate" || continue
+    test -z "$manifest" || fail "duplicate cached $package 6.3.1 manifests"
+    manifest=$candidate
+  done
+  test -n "$manifest" || fail "missing $package 6.3.1; run cargo fetch --locked first"
+  lockfile="$(dirname -- "$manifest")/Cargo.lock"
+  test -f "$lockfile" || fail "missing published lockfile for $package"
+  test "$(sha256sum "$lockfile" | cut -d ' ' -f 1)" = "$expected_lock_hash" ||
+    fail "published lockfile checksum differs for $package"
+
+  if [ "$mode" = fetch ]; then
+    cargo fetch --locked --manifest-path "$manifest"
+  fi
+  # The upstream build script resolves metadata here, not from Raziel's workspace.
+  # Resolve every target and optional dependency before the cache becomes read-only.
+  if ! cargo metadata --locked --offline --manifest-path "$manifest" --format-version 1 >/dev/null; then
+    fail "offline cache incomplete for $package; run ./scripts/prepare-sp1-native-dependencies in the preparation toolchain"
+  fi
+  test "$(sha256sum "$lockfile" | cut -d ' ' -f 1)" = "$expected_lock_hash" ||
+    fail "published lockfile changed for $package"
+}
+
+prepare_package sp1-core-executor-runner \
+  2443cc90f9b258c097389d84361efff27fdf7ccf38043686f3337b4e97cdf24b
+prepare_package sp1-core-executor-runner-binary \
+  2e977fcb9f7801e7922c7d50ed9525a5ddc4138072c32e62ccc1c497013e7f86
+printf 'sp1_native_dependencies=pass mode=%s version=6.3.1\n' "$mode"

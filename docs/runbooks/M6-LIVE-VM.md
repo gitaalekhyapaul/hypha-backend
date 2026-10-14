@@ -164,6 +164,42 @@ separates upload acceptance from normal registry availability.
 
 ## VM Backend: Restart
 
+### Offline SP1 Build Cache
+
+An older preparation run can leave `m6-proof-build` unable to resolve
+`gecko_profile` during SP1's nested `cargo metadata` call. Fetching Raziel's
+`Cargo.lock` alone does not prepare the two published SP1 runner lockfiles.
+This is a build-cache failure, not an authorization proof failure.
+
+Pull the repair, then run this targeted preparation in the VM backend checkout:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-sp1-native-dependencies
+./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build
+./scripts/start-m6-demo --ngrok
+./scripts/compose-m6 --ngrok --profile apps ps
+```
+
+The helper uses SP1 6.3.1's checksum-pinned published lockfiles, including optional
+profiling packages. It does not turn profiling on or change Raziel's dependency
+lockfile. The subsequent build checks dependency resolution offline with a
+read-only cache. The prover keeps its network isolation. Normal bootstrap and
+`./scripts/prepare-m6-demo` now perform this prefetch automatically.
+
+If the helper reports a missing runner manifest, run the existing locked fetch in
+the same cache first:
+
+```bash
+./scripts/compose-m6 run --rm --no-deps m6-toolchain cargo fetch --locked
+```
+
+Then repeat the targeted preparation above. No volume deletion, private-file
+change, image rebuild, package upgrade, or proof regeneration is needed.
+
+### Normal Restart
+
 ```bash
 cd ~/hypha-backend
 ./scripts/compose-m6 --ngrok --profile apps logs --tail 80 m6-dispatcher m6-capability-api m6-proof-worker

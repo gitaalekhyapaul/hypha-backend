@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-08T08:49:12Z
+- Last updated UTC: 2026-10-14T07:46:11Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,11 @@
 
 ## Objective
 
-The nested runtime mount repair is implemented and passes local cold-start Docker
-checks. The next bounded objective is the maintainer's VM startup retry, then Agent A's
-connected approval-to-data path. All four roles map the same host runtime to
-`/var/lib/raziel/m6`. No host-state migration, permission relaxation, app protocol,
-dependency, SDK, or proof change belongs to this repair.
+The SP1 native-runner cache repair is implemented and locally validated. The next
+bounded objective is the maintainer's targeted VM prefetch and proof-runtime rebuild,
+then full stack startup and Agent A's connected approval-to-data path. Both SP1 6.3.1
+published runner lockfiles are prepared explicitly and checked offline. Raziel's
+lockfile, proof features, source permissions, and private VM state stay unchanged.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -71,6 +71,10 @@ This release follow-up did not complete the live B-0067 acceptance gate.
 - Nested runtime repair: `docker-compose.m6.yml`, `scripts/prepare-m6-policy-runtime`,
   the policy/live/ngrok Compose checks, M7 runbook, and dated baton evidence. Existing
   host data sources stay fixed. Test isolated cold-start mounts for all four roles.
+- Native-runner preparation repair: `scripts/prepare-sp1-native-dependencies`,
+  `scripts/prepare-m6-demo`, `scripts/bootstrap`, `scripts/prepare-proof-sandbox-runtime`,
+  build-boundary architecture/spec notes, M6/M7 runbooks, focused checks, current
+  baton, and dated evidence. Both siblings remain read-only.
 
 ## Out Of Scope
 
@@ -107,6 +111,9 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   completed. Agent dashboard origins protect their own browser actions, not SDK
   requests to the backend. This change adds no backend CORS or origin allowlist.
 - Ask for Docker or SSH ControlMaster if unavailable. Never modify VM source directly.
+- On October 14, the maintainer approved prefetching dependencies from SP1 6.3.1's
+  two published runner lockfiles, including optional `gecko_profile` 0.4.0. This is
+  cache preparation, not a new direct dependency or approval to enable profiling.
 
 ## Open Questions And Blockers
 
@@ -114,9 +121,13 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
   configuration, not a working public endpoint. No token was shared or inspected.
   Local repair probes use synthetic settings and never start a tunnel. Keep the
   real token in ignored backend settings, never chat or Git.
-- VM startup now passes dispatcher container creation but hit a separate nested
-  runtime mount failure. The local repair is ready for a VM retry. Public API
-  reachability and real M6/M7 proof validation remain unrun.
+- The October 14 VM retry passed the repaired runtime mounts and initializers.
+  The proof build failed during SP1's nested offline Cargo metadata resolution,
+  with missing `gecko_profile`. The later supplied access-API health report is
+  healthy with five successful probes. Its earlier unhealthy state is no longer
+  a confirmed blocker. Full stack and real M6/M7 acceptance remain unverified.
+- Docker was initially unavailable locally. The maintainer started it and approved
+  the pinned SP1 prefetch. No VM source, restart, or private-state action has run.
 - The October 8 read-only check found a working SSH ControlMaster and reachable VM.
   The backend was clean at `7710e9a`; the agent checkout was absent at that check.
   Those are dated observations, not a claim about later maintainer changes.
@@ -176,6 +187,16 @@ and existing state are unchanged. All four rendered role mounts pass real Docker
 probes. Actual operator provisioning creates a 0600 record and retains it unchanged
 on restart. Both initializers still reject writes to the source mount.
 
+The October 14 proof-build failure is reproduced exactly after fetching only the
+workspace lockfile in a fresh toolchain cache. SP1 runs Cargo metadata from its own
+published runner manifest, which includes optional dependencies absent from the
+workspace graph. The helper prefetches both checksum-pinned published lockfiles and
+resolves metadata offline before the cache becomes read-only. Standard bootstrap
+and M6 preparation invoke it. The proof build runs only its offline check. The
+approved prefetch passes, and both actual metadata graphs resolve in a networkless,
+read-only container. No direct dependency, profiling feature, SDK, API, or proof
+semantics changed. The access-API report now shows healthy with five successful probes.
+
 ## Validation Plan
 
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
@@ -231,6 +252,15 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Actual cold runtime mounts | PASS | Four networkless disposable containers start with a fresh workspace; shared runtime is writable and both initializer source mounts stay read-only |
 | Operator provisioning and restart | PASS | Actual initializer script creates a 0600 record at the configured path; second run leaves its contents unchanged |
 | Runtime repair VM acceptance | SKIP | No remote source, services, tunnel, or proof changed locally |
+| October 14 VM startup | FAIL | Native-runner metadata lacks gecko_profile; full stack did not complete |
+| Later access-API health | PASS | Maintainer-supplied health report: healthy, zero failing streak, five successful probes; functional API acceptance not established |
+| Native-runner error reproduction | PASS | Root locked fetch alone reproduces the exact gecko_profile error in a networkless, read-only cache |
+| Published-lock integrity | PASS | Both original crate archives match workspace checksums; their lockfiles match the two helper SHA-256 pins |
+| Approved native prefetch | PASS | Actual pinned Docker toolchain resolves both published lockfiles without rewriting workspace or package lockfiles |
+| Offline native metadata | PASS | Both graphs resolve with no network and a read-only Cargo cache |
+| Helper focused cases | PASS | Fetch/check modes, no check-mode fetch, changed/missing/duplicate inputs, lock mutation, and unknown option rejection |
+| SP1 feature boundaries | PASS | Existing check retains blocking/native-gnark, excludes hosted/CUDA/experimental proving, and preserves verifier/RPC graph isolation |
+| Native-repair full VM build | SKIP | No remote edit, rebuild, service start, or proof generation executed locally |
 
 ## Risks And Private-Data Notes
 
@@ -241,11 +271,13 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull the backend runtime bind-mount repair and retry startup.
-Run `./scripts/check-m6-live-compose`, then `./scripts/start-m6-demo --ngrok`.
-No repeated dependency preparation, image rebuild, or proof generation is required.
-Retain the
-existing `.env.m6`, volumes, and agent checkout. For first setup, add the private
+Have the maintainer pull the SP1 native-cache repair. Run
+`./scripts/compose-m6 run --rm --no-deps m6-toolchain ./scripts/prepare-sp1-native-dependencies`,
+then `./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build`.
+After that build passes, run `./scripts/start-m6-demo --ngrok` and inspect service
+health. This targeted preparation creates no proof and deletes no state. No image
+rebuild or package upgrade is required. Retain the existing `.env.m6`, volumes, and
+agent checkout. For first setup, add the private
 ngrok token and supplied domain to `.env.m6`, and the matching API default to
 `.env.agents`. Follow the updated runbook and start the backend with `--ngrok`.
 Keep browser access on SSH forwarding. Configure the two repo-local settings
@@ -264,3 +296,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Fixed-domain ingress checkpoint](history/2026-10-08-fixed-domain-ngrok-ingress.md)
 - [Dispatcher tmpfs startup repair](history/2026-10-08-m6-dispatcher-tmpfs-repair.md)
 - [Runtime bind-mount startup repair](history/2026-10-08-m6-runtime-bind-mount-repair.md)
+- [SP1 native-runner cache repair](history/2026-10-14-sp1-native-dependency-cache-repair.md)
