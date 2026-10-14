@@ -319,6 +319,33 @@ request remains failed. Do not replace the expected key with a newly derived key
 clear Redis, delete volumes, or recreate agent identities for this repair.
 Deployment readiness is not a completed real-proof acceptance result.
 
+#### Checkout File Modes
+
+An earlier repair build can report `approved-v1.elf: OK`, finish compilation,
+then fail with `Error: Configuration`. The VM checkout created the public ELF as
+mode `0664`. The public-only CLI rejects writable runtime inputs. Preparation now
+stages a `0444` copy in private temporary storage, validates it, and installs the
+same bytes. No checkout chmod, runtime-guard bypass, or key change is needed.
+
+If `m6_owner_tools=ready` already passed, do not rebuild those tools again. With
+all admitted proofs finished or terminally canceled, use this shorter retry:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/compose-m6 --ngrok --profile apps stop
+./scripts/compose-m6 --profile apps run --rm --no-deps m6-proof-build &&
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --force-recreate --wait --wait-timeout 900 &&
+./scripts/compose-m6 --ngrok --profile apps exec -T \
+  m6-proof-sandbox /opt/raziel-runtime/razield-prover --check-program-key
+```
+
+The chained commands stop at a failed build instead of starting dependent roles.
+Expect `approved_program_key=pass`. A warning about the existing ngrok container
+from a command without the ngrok overlay is harmless. Do not remove that container
+through `--remove-orphans`. This retry preserves volumes and generates no proof.
+
 ### Normal Restart
 
 ```bash

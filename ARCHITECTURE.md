@@ -401,7 +401,9 @@ zero swap, eight visible CPUs, local proving environment, setup artifacts, and t
 file shapes before private input. It derives the guest's key and checks both public
 identifiers before connecting to the private request socket. Runtime preparation
 checks and installs the pinned public `tools/authorization-guest/approved-v1.elf`,
-not an unchecked guest rebuild. Its checksum and derived key must match the
+not an unchecked guest rebuild. It stages an owner-controlled 0444 copy, validates
+that copy, and installs the same bytes without changing Git checkout permissions.
+Its checksum and derived key must match the
 already approved c809 program identity. A future guest repin requires explicit
 approval and real-proof validation. The child calls B-0023, executes the guest, runs
 local CPU Plonk proving, compares the complete public journal and key ID, and returns

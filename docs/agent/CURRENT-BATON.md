@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T23:46:00Z
+- Last updated UTC: 2026-10-14T23:58:00Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,6 +15,14 @@
   containers. No remote checkout or production service was changed.
 
 ## Objective
+
+Completed bounded follow-up: repair public guest preparation for a normal
+group-writable Git checkout. VM inspection confirmed the approved checksum and
+mode 0664. Preparation now stages an owner-controlled 0444 copy, validates its
+checksum and approved identity, and installs that same copy. Runtime guards and
+the trusted key stay fixed. The real VM-cache probe passes with a 0664 source and
+rejects corruption. No private data, dependency, SDK, remote checkout, or production
+service changed. The maintainer must pull and retry the proof build.
 
 Completed bounded objective: preserve the existing approved guest/key pair, reject
 identity drift before private input/proving, and derive operator grant controls
@@ -175,6 +183,11 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 
 ## Open Questions And Blockers
 
+- The maintainer's 8912377 deployment built owner tools but proof preparation
+  rejected a mode-0664 checkout ELF as Configuration. The checksum and binaries
+  were correct. Read-only VM metadata confirmed the cause. Staged-copy preparation
+  now passes isolated real-SP1 validation. Production deployment is still pending.
+  The shorter retry in the runbook skips the already successful owner-tools build.
 - The later VM job ran 966,922 ms and peaked at 48,544,919,552 bytes, with zero
   swap/OOM/restarts, then returned generic SERVICE_UNAVAILABLE. Its detailed
   internal error was not retained. A public-only LightProver probe confirms the
@@ -229,6 +242,13 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - VM updates still require maintainer pulls through the server's PAT flow.
 
 ## Work Completed
+
+The checkout-mode follow-up copies the public guest into private temporary storage
+as 0444 before checksum/key validation. Installation uses that same staged copy.
+Source permissions stay unchanged and staging is removed on success and failure.
+Portable preparation tests cover modes 0644/0664/0666, corruption, and symlinks.
+An isolated networkless VM container with only public caches confirms the real
+CLI and offline build pass with mode 0664. Corruption still prevents installation.
 
 The October 15 guest repair pins the recovered public interpreter at SHA-256
 817b8689719d2079756160e56fe779b96f8e8194b77f68b5cca1c82fcb664a41.
@@ -451,6 +471,9 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Local prover validation | NOT AVAILABLE | Mac's offline cache lacks locked anstream 1.0.0; no download or dependency change. Complete VM cache used instead |
 | Final preparation/Compose/docs | PASS | Artifact/preparation checks, base proof, M6 preview/live, integrated ngrok, shell syntax, 28 runbook shell blocks, and diff whitespace |
 | Repaired-stack real proof | SKIP | Maintainer deployment and fresh agent request required. No production runtime changed and no proof generated in this checkpoint |
+| Maintainer guest preparation, 8912377 | FAIL, diagnosed | Approved checksum and successful compilation, but checkout mode 0664 violates runtime input rules; owner-tools build already passed |
+| Checkout-mode preparation regressions | PASS | 0644/0664/0666 sources install as 0444 without source mutation; corrupt/symlink source rejects; private staging cleaned on success/failure |
+| Actual VM-cache preparation follow-up | PASS | Disposable networkless container, 0664 source, real approved key accepted, installed mode 0444, staging removed, changed checksum rejects before install |
 
 ## Risks And Private-Data Notes
 
@@ -462,9 +485,9 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 ## Exact Next Action
 
 Have the maintainer pull the backend checkpoint and follow
-[Guest Identity And Grant Form Repair](../runbooks/M6-LIVE-VM.md#guest-identity-and-grant-form-repair)
+[Checkout File Modes](../runbooks/M6-LIVE-VM.md#checkout-file-modes)
 only after admitted proofs finish or reach terminal cancellation. Rebuild the
-owner/prover binaries offline, recreate the stopped backend roles, and expect
+proof runtime, reuse the already rebuilt owner tools, recreate the stopped backend roles, and expect
 approved_program_key=pass before a fresh agent request. Confirm policy-aware inputs
 in the browser, then continue the real proof and protected-query gate.
 Do not interrupt a working proof, rotate the trusted key, or reset volumes.
@@ -489,3 +512,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Unauthenticated ingress health route](history/2026-10-15-public-ingress-health-route.md)
 - [Permanent M6 zero-swap enforcement](history/2026-10-15-m6-permanent-zero-swap.md)
 - [Approved guest and policy-aware grant repair](history/2026-10-15-m7-approved-guest-and-grant-controls.md)
+- [Checkout-mode preparation follow-up](history/2026-10-15-approved-guest-checkout-mode.md)

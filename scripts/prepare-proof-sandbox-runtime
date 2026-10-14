@@ -4,10 +4,20 @@ umask 022
 
 runtime_root=${RAZIEL_PROOF_RUNTIME_ROOT:-/opt/raziel-runtime}
 target_root=${CARGO_TARGET_DIR:-/var/cache/raziel-proof-build}
-guest_root=tools/authorization-guest
-guest_elf="$PWD/$guest_root/approved-v1.elf"
+guest_root="$PWD/tools/authorization-guest"
+guest_stage=$(mktemp -d "${TMPDIR:-/tmp}/raziel-approved-guest.XXXXXX")
+guest_elf="$guest_stage/approved-v1.elf"
 
-(cd "$guest_root" && sha256sum --check SHA256SUMS)
+cleanup() {
+  rm -f "$guest_elf"
+  rmdir "$guest_stage" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
+
+# Git preserves executable bits, not an exact mode. Validate the installed copy.
+test -f "$guest_root/approved-v1.elf" && test ! -L "$guest_root/approved-v1.elf"
+install -m 0444 "$guest_root/approved-v1.elf" "$guest_elf"
+(cd "$guest_stage" && sha256sum --check "$guest_root/SHA256SUMS")
 
 ./scripts/prepare-sp1-native-dependencies --check
 

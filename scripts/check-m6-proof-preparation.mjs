@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -139,6 +150,85 @@ try {
     run(restore, [invalid], {}, false);
     assert.deepEqual(calls(), []);
   }
+
+  const runtime = resolve(fixture, "runtime");
+  const stage = resolve(fixture, "staging");
+  const artifact = resolve(fixture, "tools/authorization-guest/approved-v1.elf");
+  mkdirSync(stage);
+  put(artifact, guest);
+  put(
+    resolve(fixture, "tools/authorization-guest/SHA256SUMS"),
+    `${guestDigest}  approved-v1.elf\n`,
+  );
+  for (const name of ["verification-key-id.txt", "sp1-vkey-hash.txt"]) {
+    put(
+      resolve(fixture, `services/verifierd/tests/fixtures/retained-plonk-v1/${name}`),
+      readFileSync(resolve(root, `services/verifierd/tests/fixtures/retained-plonk-v1/${name}`)),
+    );
+  }
+  put(resolve(fixture, "scripts/prepare-sp1-native-dependencies"), mock, 0o755);
+  put(resolve(fixture, "bin/cargo"), mock, 0o755);
+  put(resolve(fixture, "target/release/razield-proof-launcher"), mock, 0o755);
+  put(
+    resolve(fixture, "target/release/razield-prover"),
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = process.env.RAZIEL_GUEST_ELF_PATH;
+const metadata = fs.statSync(path);
+if (process.argv[2] !== '--check-program-key' || !path.startsWith(process.env.TMPDIR + '/') ||
+    (metadata.mode & 0o777) !== 0o444 || metadata.nlink !== 1 || metadata.uid !== process.getuid()) process.exit(42);
+`,
+    0o755,
+  );
+  // Portable checksum stand-in keeps this orchestration test runnable on macOS.
+  put(
+    resolve(fixture, "bin/sha256sum"),
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const hash = (path) => crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex');
+const args = process.argv.slice(2);
+if (args[0] === '--check') {
+  const match = /^([0-9a-f]{64})  (.+)\\n$/.exec(fs.readFileSync(args[1], 'utf8'));
+  if (!match || hash(match[2]) !== match[1]) process.exit(1);
+} else {
+  for (const path of args) console.log(hash(path) + '  ' + path);
+}
+`,
+    0o755,
+  );
+  const prepareRuntime = (success) => {
+    rmSync(runtime, { recursive: true, force: true });
+    const result = spawnSync(resolve(root, "scripts/prepare-proof-sandbox-runtime"), [], {
+      cwd: fixture,
+      encoding: "utf8",
+      env: {
+        ...env,
+        TMPDIR: stage,
+        CARGO_TARGET_DIR: resolve(fixture, "target"),
+        RAZIEL_PROOF_RUNTIME_ROOT: runtime,
+      },
+    });
+    assert.equal(result.status === 0, success, result.stderr);
+    assert.deepEqual(
+      readdirSync(stage),
+      [],
+      "staged artifact must be removed on success and failure",
+    );
+    if (!success) assert.equal(readdirSync(fixture).includes("runtime"), false);
+  };
+  for (const mode of [0o644, 0o664, 0o666]) {
+    chmodSync(artifact, mode);
+    prepareRuntime(true);
+    assert.equal(statSync(artifact).mode & 0o777, mode, "checkout permissions must stay unchanged");
+    assert.equal(statSync(resolve(runtime, "raziel-authorization-guest")).mode & 0o777, 0o444);
+    assert.deepEqual(readFileSync(resolve(runtime, "raziel-authorization-guest")), guest);
+  }
+  writeFileSync(artifact, "changed public artifact");
+  prepareRuntime(false);
+  rmSync(artifact);
+  symlinkSync(resolve(root, "tools/authorization-guest/approved-v1.elf"), artifact);
+  prepareRuntime(false);
   console.log("m6_proof_preparation_checks=pass runtime=not-started");
 } finally {
   rmSync(fixture, { recursive: true, force: true });

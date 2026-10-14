@@ -28,3 +28,9 @@ an explicit program-key approval, a new pinned artifact and checksum, matching
 verifier trust, and real-proof validation. Runtime preparation checks the
 checksum and derives both key identifiers before installing any runtime files.
 The child repeats the identity check before receiving private input.
+
+Git tracks the executable bit, not an exact file mode. A checkout can produce a
+group-writable public ELF. Preparation copies it into a private temporary directory
+with mode `0444`, checks that copy, and installs the same bytes. It leaves checkout
+permissions unchanged and removes the staged copy on success or failure. Runtime
+permission checks are not relaxed.
