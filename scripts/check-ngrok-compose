@@ -30,6 +30,11 @@ assert.equal(tunnel.platform, undefined);
 assert.equal(tunnel.pull_policy, "never");
 assert.equal(tunnel.read_only, true);
 assert.equal(tunnel.user, "1000:1000");
+assert.equal(tunnel.environment.NGROK_CONFIG, "/etc/raziel-ngrok/agent.yml");
+assert.equal(tunnel.tmpfs.length, 2);
+assert.ok(tunnel.tmpfs.includes(
+  "/var/lib/ngrok:rw,noexec,nosuid,nodev,size=1048576,mode=0700,uid=1000,gid=1000"),
+  "the image entrypoint needs a private RAM-backed auth directory");
 assert.equal(tunnel.privileged ?? false, false);
 assert.deepEqual(tunnel.cap_drop, ["ALL"]);
 assert.ok(tunnel.security_opt.includes("no-new-privileges:true"));

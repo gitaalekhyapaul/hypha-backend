@@ -5,7 +5,7 @@
 - Milestone: M7, two-agent reconciliation dashboards
 - Owner: unassigned
 - Started UTC: 2026-10-01T06:38:26Z
-- Last updated UTC: 2026-10-14T09:32:44Z
+- Last updated UTC: 2026-10-14T22:13:30Z
 - Branch: `main`
 - Worktree: release changes are checkpointed by the backend commit containing this
   file. SDK and agent commits below are already pushed and remote-verified.
@@ -15,11 +15,11 @@
 
 ## Objective
 
-Next bounded objective: validate the completed preparation/readiness repair on the
-VM. Recover the same pinned public Go modules from the legacy cache through an
-explicit read-only source mount, then run the networkless proof build and check
-stack health. The local repair checks pass. Actual VM cache contents and startup
-remain unverified. No dependency pin, proof feature, API, SDK, or private-state change.
+Next bounded objective: have the maintainer pull the locally validated ngrok
+auth-file repair and recreate only the tunnel. Check the unsigned API route from
+Agent A, then retry its signed connection. Preserve the read-only root, non-root
+user, route policy, image pin, and proof/SDK boundaries. Full VM startup, the public
+Go cache recovery, and real agent capability flows remain unverified gates.
 
 Complete the connected agent approval, real proof, protected-query, and
 reconciliation path using the packaged SDK and three dashboards.
@@ -84,6 +84,9 @@ This release follow-up did not complete the live B-0067 acceptance gate.
   the M6 live overlay's public-cache comment, focused preparation checks, and
   build-boundary documentation. Source cache stays read-only. No private volume
   or credentials are mounted by the recovery container.
+- Ngrok auth-file repair: `docker-compose.ngrok.yml`, `scripts/check-ngrok-compose`,
+  M7 runbook, current baton, and dated evidence. SDK and agents remain read-only.
+  No remote edit, live tunnel, real token, package download, or proof generation.
 
 ## Out Of Scope
 
@@ -126,9 +129,17 @@ No new SDK version or npm upload belongs to an unchanged release checkpoint.
 - The maintainer approved recovery of the existing public Go cache. Validate exact
   SP1 module pins and source checksums, then verify module completeness and integrity
   offline before use. The M6 destination stays separate from the legacy source.
+- Ngrok's image entrypoint keeps its standard token-file generation. Its auth
+  directory is private bounded tmpfs, not a persistent volume. `NGROK_CONFIG`
+  selects the existing read-only base config. This is an implementation repair,
+  not a new provider, image, or exposure decision.
 
 ## Open Questions And Blockers
 
+- The October 15 VM log confirms ngrok cannot create its auth file on the read-only
+  root. The failure is reproduced locally, and the repair passes actual image
+  entrypoint/config checks plus local health-API startup with no external network.
+  The real VM token, public endpoint, and signed agent connection still need validation.
 - The maintainer's October 8 VM ngrok render check passed. It confirms valid token
   configuration, not a working public endpoint. No token was shared or inspected.
   Local repair probes use synthetic settings and never start a tunnel. Keep the
@@ -226,6 +237,14 @@ Local real-Go probes accept an intact read-only cache and reject changed or miss
 modules. The recovery command preserves its source and rejects a conflicting
 destination. These probes use a small controlled cache, not the VM's full SP1 cache.
 
+The October 15 auth-file repair adds a private 1 MiB tmpfs owned by UID/GID 1000,
+mode 0700, at the image's fixed auth directory. An explicit base-config environment
+setting avoids the default config path hidden by that mount. The unmodified pinned
+image entrypoint generates and validates its synthetic auth file. The HTTP CLI
+starts its local health API with no external network and no public tunnel.
+Standalone/integrated checks retain the image, user, read-only root, network, route,
+and credential-scope constraints. No SDK, agent source, real token, or VM changed.
+
 ## Validation Plan
 
 For ingress, check rendered networks, image pin, fixed URL, route policy, disabled
@@ -302,6 +321,13 @@ Do not repeat broad test infrastructure work before the connected feature gate.
 | Shell/runbook/diff checks | PASS | Edited shell scripts and runbook commands parse, relative document links resolve, diff whitespace is clean, and scoped credential/private-artifact scan passes |
 | Sibling worktrees | PASS | SDK and agents remain clean and unchanged in this backend-only repair |
 | VM legacy cache recovery/full stack | SKIP | Maintainer must pull, run recovery, and report health; no remote action or proof ran |
+| Ngrok original HTTP startup | PASS | Pinned image reproduces the reported read-only auth-file error with a synthetic token and no network |
+| Ngrok auth RAM mount | PASS | Original entrypoint creates and validates auth config; parent mode 0700, UID/GID 1000, tmpfs backing, and read-only root verified |
+| Ngrok actual HTTP CLI | PASS | Local loopback health API responds with no external network and no public tunnel |
+| Ngrok repair Compose/policy checks | PASS | Standalone and M6 layouts pass; existing nine allowed and twelve denied route vectors still pass |
+| Ngrok auth guard negatives | PASS | Missing auth mount, missing base-config setting, and world-readable directory mode all reject |
+| Ngrok repair handoff checks | PASS | Shell/runbook syntax, relative links, diff whitespace, and scoped credential/private-artifact scan |
+| Ngrok live VM retry | SKIP | Maintainer must pull and recreate only the tunnel, then test unsigned API routing and signed Save connection |
 
 ## Risks And Private-Data Notes
 
@@ -312,14 +338,12 @@ Real-data acceptance and a second scenario remain deferred and unclaimed.
 
 ## Exact Next Action
 
-Have the maintainer pull the preparation/readiness repair in the VM backend checkout.
-Run `./scripts/prepare-m6-proof-runtime --reuse-go-cache raziel_razield-proof-go-mod-cache`.
-After that command passes, run `./scripts/start-m6-demo --ngrok`, then
-`./scripts/compose-m6 --ngrok --profile apps ps`. A cache validation failure needs
-its error output, not a volume reset or dependency upgrade. This preparation creates
-no proof and deletes no state. Retain `.env.m6`, existing volumes, and the agent
-checkout. Preparation without the ngrok overlay can report the existing tunnel as
-an orphan. Do not remove the tunnel for that warning.
+Have the maintainer pull the auth-file repair, then run
+`./scripts/compose-m6 --ngrok --profile apps up --detach --no-deps --force-recreate --wait --wait-timeout 120 raziel-ngrok`.
+Keep the existing `.env.m6`, volumes, proof workers, and agent checkout unchanged.
+Run the unsigned API probe from Agent A and expect Raziel's 401 NOT_AUTHORIZED JSON.
+Then retry signed Save connection and inspect its response code. Follow
+[Ngrok Auth-File Startup Repair](../runbooks/M7-AGENT-DEMO.md#ngrok-auth-file-startup-repair).
 Keep browser access on SSH forwarding. Configure the two repo-local settings
 files and private SoC credentials path as documented. Check Docker and the existing
 SSH ControlMaster before runtime work. Validate Agent A's registration, inbox
@@ -338,3 +362,4 @@ B-0068 retains the two-proof recording, negative controls, screenshots, and evid
 - [Runtime bind-mount startup repair](history/2026-10-08-m6-runtime-bind-mount-repair.md)
 - [SP1 native-runner cache repair](history/2026-10-14-sp1-native-dependency-cache-repair.md)
 - [Public Go cache and console readiness repair](history/2026-10-14-m6-go-cache-and-console-readiness.md)
+- [Ngrok auth-file RAM-mount repair](history/2026-10-15-ngrok-auth-tmpfs-repair.md)

@@ -177,6 +177,50 @@ HTTP health check now supplies the readiness prerequisite used by ngrok.
 An access-API health check can recover after a failed startup. Check its current
 health rather than treating an earlier unhealthy summary as a persistent fault.
 
+### Ngrok Auth-File Startup Repair
+
+The pinned image creates `/var/lib/ngrok/auth-config.yml` from `NGROK_AUTHTOKEN`
+at startup. An older Compose configuration has a read-only root without a writable
+auth directory. Its logs report `can't create ... auth-config.yml: Read-only file system`,
+then `Error reading configuration file`. This prevents the public endpoint from starting.
+
+The repaired role keeps the root read-only and adds a private 1 MiB RAM-backed
+directory at `/var/lib/ngrok`, owned by UID/GID 1000 with mode `0700`. The image's
+`NGROK_CONFIG` setting points to our existing read-only base config. No auth file
+is persisted on the host or in a named volume. Keep your existing private token.
+
+With the operator console already running, pull and recreate only the tunnel in
+the VM backend repo:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/check-ngrok-compose --m6
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --no-deps --force-recreate --wait --wait-timeout 120 raziel-ngrok
+./scripts/compose-m6 --ngrok --profile apps ps demo-console raziel-ngrok
+./scripts/compose-m6 --ngrok --profile apps logs --no-color --tail 50 raziel-ngrok
+```
+
+No image rebuild, dependency preparation, proof rerun, agent restart, or volume
+deletion is needed. A running proof worker stays untouched. For a stopped full
+backend, use `./scripts/start-m6-demo --ngrok` after the existing preparation gates pass.
+
+Check the outgoing path from the VM agent repo without a token:
+
+```bash
+cd ~/raziel-demo-agents
+docker compose --env-file .env.agents exec -T agent-a node -e \
+"fetch('https://either-anymore-immunize.ngrok-free.dev/api/agent/v1/me',{signal:AbortSignal.timeout(10000)}).then(async r=>console.log(r.status,(await r.text()).slice(0,400))).catch(e=>{console.error(e.cause?.code??e.message);process.exitCode=1})"
+```
+
+Expected: HTTP `401` with Raziel JSON containing `NOT_AUTHORIZED`. This unsigned
+probe confirms network routing and the authentication guard, not token validity
+or proof acceptance. Then retry **Save connection** with the exact audience and
+agent-specific token. Inspect the response error code for a continuing failure.
+Agent logs do not currently print caught request errors. Startup-only logs do not
+show whether a request arrived.
+
 ## VM Private Files: Prepare SoC Credentials
 
 Working directory: any directory on the VM.

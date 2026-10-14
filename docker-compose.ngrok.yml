@@ -8,10 +8,14 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    tmpfs: ["/tmp:rw,nosuid,nodev,size=16777216,mode=1777"]
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=16777216,mode=1777"
+      - "/var/lib/ngrok:rw,noexec,nosuid,nodev,size=1048576,mode=0700,uid=1000,gid=1000"
     restart: unless-stopped
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      # The image writes auth-config.yml in tmpfs. Its default config is hidden there.
+      NGROK_CONFIG: /etc/raziel-ngrok/agent.yml
       RAZIEL_NGROK_URL: ${RAZIEL_NGROK_URL:-}
     command:
       - http
