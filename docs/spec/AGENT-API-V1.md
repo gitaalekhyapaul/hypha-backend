@@ -150,6 +150,11 @@ signature replaces the other. There is no target-rewriting shortcut.
 
 Operator endpoints live under `/api/operator/agents` and `/api/operator/access-requests`.
 They support register/list, create/list/revoke tokens, review/approve/reject, and cancel.
+Request lists sort by latest update first, then creation time and request identity.
+Ordering applies before pagination and retains the owner filter. Cursors are opaque,
+owner-scoped continuation positions, not a frozen snapshot. Refresh from the first
+page to see records updated between page reads. Pre-recency cursors are invalid
+after this deployment. Reload an open dashboard rather than reusing an old cursor.
 An approval includes the expected request generation, exact policy record ID, dataset
 revision, and a bounded owner-only grant recipe. New policy publication uses the
 existing policy-authority boundary with the migration below. Agent credentials never

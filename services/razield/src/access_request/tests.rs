@@ -439,8 +439,8 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
     let live = Live::new();
     let mut owner = live.owner();
     for n in 0..3 {
-        owner.create(intent(A, n), NOW).unwrap();
-        owner.create(intent(B, n), NOW).unwrap();
+        owner.create(intent(A, n), NOW + n as i64).unwrap();
+        owner.create(intent(B, n), NOW + n as i64).unwrap();
     }
     let first = owner
         .list(
@@ -449,10 +449,18 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
                 limit: 2,
                 cursor: None,
             },
-            NOW,
+            NOW + 3,
         )
         .unwrap();
     assert_eq!(first.requests.len(), 2);
+    assert_eq!(
+        first
+            .requests
+            .iter()
+            .map(|r| r.request_id.clone())
+            .collect::<Vec<_>>(),
+        vec![id(2), id(1)]
+    );
     assert!(
         first
             .requests
@@ -467,10 +475,11 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
                 limit: 2,
                 cursor: Some(cursor.clone()),
             },
-            NOW,
+            NOW + 3,
         )
         .unwrap();
     assert_eq!(next.requests.len(), 1);
+    assert_eq!(next.requests[0].request_id, id(0));
     assert!(next.next_cursor.is_none());
     assert_eq!(
         owner
@@ -480,7 +489,7 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
                     limit: 2,
                     cursor: Some(cursor.clone())
                 },
-                NOW
+                NOW + 3
             )
             .unwrap_err(),
         AccessError::InvalidRequest
@@ -493,7 +502,7 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
                     limit: 2,
                     cursor: Some(cursor)
                 },
-                NOW
+                NOW + 3
             )
             .unwrap_err(),
         AccessError::InvalidRequest
@@ -506,19 +515,46 @@ fn live_lists_are_bounded_and_cursors_are_owner_scoped() {
                     limit: 51,
                     cursor: None
                 },
-                NOW
+                NOW + 3
             )
             .unwrap_err(),
         AccessError::InvalidRequest
     );
     assert_eq!(
         owner
-            .list(ListAccessRequestsRequest::default(), NOW)
+            .list(ListAccessRequestsRequest::default(), NOW + 3)
             .unwrap()
             .requests
             .len(),
         6
     );
+    // Updating the oldest request promotes it across pages, not just within a page.
+    owner.reject(A, &id(0), 1, NOW + 4).unwrap();
+    let recent = owner
+        .list(
+            ListAccessRequestsRequest {
+                limit: 2,
+                ..Default::default()
+            },
+            NOW + 4,
+        )
+        .unwrap();
+    assert_eq!(recent.requests[0].agent_id, A);
+    assert_eq!(recent.requests[0].request_id, id(0));
+    assert_eq!(recent.requests[1].agent_id, B);
+    assert_eq!(recent.requests[1].request_id, id(2));
+    let following = owner
+        .list(
+            ListAccessRequestsRequest {
+                limit: 2,
+                cursor: recent.next_cursor,
+                ..Default::default()
+            },
+            NOW + 4,
+        )
+        .unwrap();
+    assert_eq!(following.requests[0].request_id, id(2));
+    assert_eq!(following.requests[0].agent_id, A);
 }
 
 #[test]

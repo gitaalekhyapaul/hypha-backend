@@ -105,7 +105,19 @@ export function AccessRequestWorkspace({
     );
   }, []);
 
-  const requests = page?.requests ?? [];
+  const requests = [...(page?.requests ?? [])].sort(
+    (a, b) =>
+      Number(
+        (b.updatedAtUnixSeconds > b.createdAtUnixSeconds
+          ? b.updatedAtUnixSeconds
+          : b.createdAtUnixSeconds) -
+          (a.updatedAtUnixSeconds > a.createdAtUnixSeconds
+            ? a.updatedAtUnixSeconds
+            : a.createdAtUnixSeconds),
+      ) ||
+      Number(b.createdAtUnixSeconds - a.createdAtUnixSeconds) ||
+      requestKey(b).localeCompare(requestKey(a)),
+  );
   const visible = pendingOnly
     ? requests.filter((item) => item.state === AccessRequestState.PENDING_REVIEW)
     : requests;
@@ -250,7 +262,11 @@ export function AccessRequestWorkspace({
                   </span>
                   <code>{item.agentId}</code>
                   <span className="access-request-row-time">
-                    {formatTime(item.createdAtUnixSeconds)}
+                    {formatTime(
+                      item.updatedAtUnixSeconds > item.createdAtUnixSeconds
+                        ? item.updatedAtUnixSeconds
+                        : item.createdAtUnixSeconds,
+                    )}
                   </span>
                 </button>
               ))

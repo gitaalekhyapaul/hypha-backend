@@ -158,17 +158,18 @@ impl AccessCoordinator {
         let _lock = self.private.lock()?;
         let mut connection = self.redis.connect()?;
         self.reconcile_locked(&mut connection, now)?;
-        let ids = self.redis.list(
+        let positions = self.redis.recent(
             &mut connection,
             input.agent_id.as_deref(),
-            after.as_deref(),
+            after.as_ref(),
             limit + 1,
         )?;
-        let has_more = ids.len() > limit;
+        let has_more = positions.len() > limit;
         let mut requests = Vec::new();
         let mut last = None;
-        for id in ids.into_iter().take(limit) {
-            last = Some(id.clone());
+        for position in positions.into_iter().take(limit) {
+            let id = position.id.clone();
+            last = Some(position);
             match self.visible(&mut connection, &id, now) {
                 Ok((record, raw)) => {
                     let record = self.expire(&mut connection, record, raw, now)?;
@@ -413,16 +414,25 @@ impl AccessCoordinator {
     }
 }
 
-fn cursor(owner: Option<&str>, id: &str) -> String {
-    let value = format!("v1|{}|{id}", owner.unwrap_or("operator"));
+fn cursor(owner: Option<&str>, position: &super::redis_store::ListPosition) -> String {
+    let value = format!(
+        "v2|{}|{}|{}|{}",
+        owner.unwrap_or("operator"),
+        position.updated,
+        position.created,
+        position.id
+    );
     value.bytes().map(|b| format!("{b:02x}")).collect()
 }
 
-fn parse_cursor(owner: Option<&str>, cursor: Option<&str>) -> Result<Option<String>, AccessError> {
+fn parse_cursor(
+    owner: Option<&str>,
+    cursor: Option<&str>,
+) -> Result<Option<super::redis_store::ListPosition>, AccessError> {
     let Some(encoded) = cursor else {
         return Ok(None);
     };
-    if encoded.len() > 256 || encoded.len() % 2 != 0 || encoded.is_empty() {
+    if encoded.len() > 384 || encoded.len() % 2 != 0 || encoded.is_empty() {
         return Err(AccessError::InvalidRequest);
     }
     let bytes = encoded
@@ -434,14 +444,33 @@ fn parse_cursor(owner: Option<&str>, cursor: Option<&str>) -> Result<Option<Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let decoded = String::from_utf8(bytes).map_err(|_| AccessError::InvalidRequest)?;
-    let scope = format!("v1|{}|", owner.unwrap_or("operator"));
-    let id = decoded
+    let scope = format!("v2|{}|", owner.unwrap_or("operator"));
+    let position = decoded
         .strip_prefix(&scope)
         .ok_or(AccessError::InvalidRequest)?;
-    if !valid_identity(id) || owner.is_some_and(|o| !id.starts_with(&format!("{o}:"))) {
+    let mut parts = position.split('|');
+    let mut timestamp = || {
+        parts
+            .next()
+            .and_then(|value| value.parse::<i64>().ok())
+            .filter(|value| (0..=253_402_300_799).contains(value))
+            .ok_or(AccessError::InvalidRequest)
+    };
+    let updated = timestamp()?;
+    let created = timestamp()?;
+    let id = parts.next().ok_or(AccessError::InvalidRequest)?;
+    if updated < created
+        || parts.next().is_some()
+        || !valid_identity(id)
+        || owner.is_some_and(|o| !id.starts_with(&format!("{o}:")))
+    {
         return Err(AccessError::InvalidRequest);
     }
-    Ok(Some(id.to_owned()))
+    Ok(Some(super::redis_store::ListPosition {
+        updated,
+        created,
+        id: id.to_owned(),
+    }))
 }
 
 #[derive(Clone)]

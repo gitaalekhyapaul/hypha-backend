@@ -380,6 +380,63 @@ Each agent generates its separate Ed25519 key on first start and retains it in i
 private volume. Private key and state files use owner-only permissions.
 No agent private key belongs in `.env.agents`.
 
+## Recent Activity Ordering
+
+Both agent task sidebars and the operator access inbox show recent activity first,
+then creation time. Unchanged agent status polls do not count as new activity.
+Existing agent state uses retained request/message timestamps, with saved insertion
+order as the last fallback. No state reset is needed. Refresh from the first inbox
+page to include requests updated between page reads. Reload dashboards after an
+upgrade to discard old pagination cursors.
+
+The recent-ordering update changes the backend access-service executable and console,
+plus the sibling agent runtime. Deploy both repositories through their normal build
+steps above. Wait for active proof jobs to finish before any stack-wide restart.
+No SDK publication, guest rebuild, or new capability is needed just to change ordering.
+
+### VM Recent-Ordering Update
+
+This updates sorting only. It does not fix or add diagnostic capture for the failed
+revision-2 proof. Keep that failed request intact and do not start another proof
+just to validate ordering.
+
+After all admitted proofs have finished or reached terminal cancellation, run in
+the VM backend repository:
+
+```bash
+(
+  set -e
+  cd ~/hypha-backend
+  git pull --ff-only origin main
+  ./scripts/compose-m6 --ngrok --profile apps stop
+  ./scripts/compose-m6 run --rm --no-deps \
+    -e CARGO_NET_OFFLINE=true -e GOPROXY=off \
+    m6-toolchain ./scripts/prepare-m6-tools
+  ./scripts/compose-m6 --ngrok --profile apps up \
+    --detach --force-recreate --wait --wait-timeout 900
+)
+```
+
+The block stops on failure. Successful preparation reports `m6_owner_tools=ready`.
+No volume deletion or guest rebuild is required.
+
+Then run in the VM agent repository:
+
+```bash
+(
+  set -e
+  cd ~/raziel-demo-agents
+  git pull --ff-only origin main
+  docker compose --env-file .env.agents build --pull=false agent-a
+  docker compose --env-file .env.agents up \
+    --detach --no-deps --force-recreate --wait agent-a agent-b
+)
+```
+
+Both agents share the rebuilt image. The unchanged channel stays running. Keep the
+existing `.env.m6`, `.env.agents`, keys, and volumes. Reload all three browser tabs.
+The sibling SDK repository and public package need no update.
+
 ## Mac: Open The Dashboards
 
 Working directory: any directory on the Mac. Keep this terminal running.

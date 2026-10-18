@@ -35,6 +35,23 @@ pub(super) struct RedisStore {
     keys: [String; 5],
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct ListPosition {
+    pub updated: i64,
+    pub created: i64,
+    pub id: String,
+}
+
+impl ListPosition {
+    fn for_record(record: &Record) -> Self {
+        Self {
+            updated: record.updated.max(record.created),
+            created: record.created,
+            id: record.identity(),
+        }
+    }
+}
+
 impl RedisStore {
     pub fn new(url: &str, prefix: &str) -> Result<Self, AccessError> {
         Ok(Self {
@@ -229,6 +246,47 @@ impl RedisStore {
             return Err(AccessError::ServiceUnavailable);
         }
         Ok(ids)
+    }
+
+    pub fn recent(
+        &self,
+        connection: &mut redis::Connection,
+        owner: Option<&str>,
+        after: Option<&ListPosition>,
+        limit: usize,
+    ) -> Result<Vec<ListPosition>, AccessError> {
+        let mut scan_after = None;
+        let mut page = Vec::new();
+        // Reuse the retained identity index without migrating queue or request state.
+        loop {
+            let ids = self.list(connection, owner, scan_after.as_deref(), 100)?;
+            if ids.is_empty() {
+                break;
+            }
+            let raw: Vec<Option<String>> = redis::cmd("HMGET")
+                .arg(&self.keys[0])
+                .arg(&ids)
+                .query(connection)
+                .map_err(unavailable)?;
+            for (id, raw) in ids.iter().zip(raw) {
+                let raw = raw.ok_or(AccessError::ServiceUnavailable)?;
+                let record = Record::decode(id, &raw)?;
+                if record.phase != Phase::Published {
+                    continue;
+                }
+                let position = ListPosition::for_record(&record);
+                if after.is_none_or(|after| position < *after) {
+                    page.push(position);
+                }
+            }
+            page.sort_unstable_by(|a, b| b.cmp(a));
+            page.truncate(limit);
+            scan_after = ids.last().cloned();
+            if ids.len() < 100 {
+                break;
+            }
+        }
+        Ok(page)
     }
 }
 
