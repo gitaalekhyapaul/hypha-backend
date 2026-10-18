@@ -339,6 +339,7 @@ pub(super) fn request(candidate_id: &str) -> PolicyActivationRequestWire {
         candidate_id: candidate_id.into(),
         approved_by: "test-operator".into(),
         operation: 0,
+        role_request: Vec::new(),
     }
 }
 

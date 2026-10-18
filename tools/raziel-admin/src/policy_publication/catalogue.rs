@@ -555,7 +555,7 @@ pub(crate) mod tests {
             self.retain_rule(id, version, epoch, false);
         }
 
-        fn retain_rule(&mut self, id: char, version: u32, epoch: u64, team: bool) {
+        pub(crate) fn retain_rule(&mut self, id: char, version: u32, epoch: u64, team: bool) {
             let identity =
                 PolicyVersionIdentity::new("a".repeat(32), id.to_string().repeat(32), version)
                     .unwrap();
@@ -563,7 +563,7 @@ pub(crate) mod tests {
             let team_type = format!("team_{}", identity.version_id());
             let source = if team {
                 format!(
-                    "definition agent {{}}\ndefinition {resource} {{ relation team_viewer: {team_type}#member\npermission query = team_viewer\n}}\ndefinition {team_type} {{ relation member: agent }}\n"
+                    "definition agent {{}}\ndefinition {resource} {{ relation team_viewer: {team_type}#member\npermission query = team_viewer\n}}\ndefinition {team_type} {{\nrelation member: agent\n}}\n"
                 )
             } else {
                 format!(

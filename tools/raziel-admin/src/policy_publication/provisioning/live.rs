@@ -57,7 +57,7 @@ fn live_provisioning_preserves_exact_revision_across_publication_and_retry() {
     );
     let mut fixture = Fixture::new();
     fixture.retain('b', 1, 1);
-    let root = fixture.config.publication_root.parent().unwrap();
+    let root = fixture.config.publication_root.parent().unwrap().to_owned();
     let binding_root = root.join("bindings");
     fs::DirBuilder::new()
         .mode(0o700)
@@ -166,6 +166,141 @@ fn live_provisioning_preserves_exact_revision_across_publication_and_retry() {
         later.accepted_composition_schema().as_bytes(),
         second.schema
     );
+    // A fresh version opts into manual roles. This path must never repair missing
+    // memberships, and a retained revision must not observe later role edits.
+    fixture.retain_rule('e', 3, 1, true);
+    let third = install(&fixture, &compiler, &['b', 'c', 'e']);
+    runtime.block_on(async {
+        SchemaClient::connect(&config.endpoint, &config.token_path)
+            .await
+            .unwrap()
+            .write(&third.schema)
+            .await
+            .unwrap();
+    });
+    let version_root = root.join("versions");
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&version_root)
+        .unwrap();
+    let publisher = crate::policy_publication::PolicyPublisher::new(
+        crate::policy_publication::PublicationConfig {
+            root: config.publication_root.clone(),
+            package_root: config.package_root.clone(),
+            version_root,
+            candidate_root: root.join("candidates"),
+            registry_root: config.registry_root.clone(),
+            compiler: config.compiler.clone(),
+            legacy_root: None,
+            token_path: config.token_path.clone(),
+            endpoint: config.endpoint.clone(),
+            trust_domain_id: config.trust_domain_id.clone(),
+        },
+        crate::policy_activation::store::PolicyActivationStore::new(
+            root.join("candidates"),
+            root.join("activation"),
+            config.registry_root.clone(),
+            root.join("authority.sock"),
+            root.join("writer.sock"),
+            &config.trust_domain_id,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    use crate::policy_publication::roles::{AgentRole, AgentRolesRequest, RoleOperation};
+    let thumbprint = crate::io::lowercase_hex(
+        &raziel_authority::validate_agent_api_key(
+            &original.owner.as_ref().unwrap().agent_public_key,
+        )
+        .unwrap(),
+    );
+    let mut roles = AgentRolesRequest {
+        format_version: 1,
+        operation: RoleOperation::List,
+        policy_version_id: "e".repeat(32),
+        approval_epoch: "1".into(),
+        dataset_id: "ledger".into(),
+        agent_key_thumbprint: thumbprint,
+        role: None,
+        team_id: None,
+    };
+    assert!(
+        publisher
+            .agent_roles_at(roles.clone(), NOW)
+            .unwrap()
+            .can_enable
+    );
+    roles.operation = RoleOperation::Enable;
+    assert!(
+        publisher
+            .agent_roles_at(roles.clone(), NOW)
+            .unwrap()
+            .managed
+    );
+    let mut managed_command = command.clone();
+    managed_command.policy_version_id = roles.policy_version_id.clone();
+    managed_command.policy_record_id = "policy-e-1".into();
+    let empty = config.prepare(&managed_command, &original, 4, NOW).unwrap();
+    assert_eq!(empty.accepted_relationship_count(), 0);
+    roles.operation = RoleOperation::Add;
+    roles.role = Some(AgentRole::TeamMember);
+    roles.team_id = Some("finance".into());
+    let added = publisher.agent_roles_at(roles.clone(), NOW).unwrap();
+    assert_eq!(added.assignments.len(), 1);
+    assert_eq!(
+        publisher
+            .agent_roles_at(roles.clone(), NOW)
+            .unwrap()
+            .assignments
+            .len(),
+        1
+    );
+    assert_eq!(
+        config
+            .prepare(&managed_command, &original, 4, NOW)
+            .unwrap()
+            .zed_token(),
+        empty.zed_token()
+    );
+    let configured = config.prepare(&managed_command, &original, 5, NOW).unwrap();
+    assert_eq!(configured.accepted_relationship_count(), 2);
+    roles.operation = RoleOperation::Remove;
+    assert!(
+        publisher
+            .agent_roles_at(roles.clone(), NOW)
+            .unwrap()
+            .assignments
+            .is_empty()
+    );
+    assert!(
+        publisher
+            .agent_roles_at(roles.clone(), NOW)
+            .unwrap()
+            .assignments
+            .is_empty()
+    );
+    let removed = config.prepare(&managed_command, &original, 6, NOW).unwrap();
+    assert_eq!(
+        removed.accepted_relationship_count(),
+        1,
+        "only the shared dataset/team link remains"
+    );
+    assert_eq!(
+        config
+            .prepare(&managed_command, &original, 5, NOW)
+            .unwrap()
+            .zed_token(),
+        configured.zed_token()
+    );
+    // A legacy nonempty version cannot switch mode and hide pre-existing grants.
+    roles.operation = RoleOperation::Enable;
+    roles.role = None;
+    roles.team_id = None;
+    roles.policy_version_id = "b".repeat(32);
+    assert!(matches!(
+        publisher.agent_roles_at(roles, NOW),
+        Err(StoreActivationError::Conflict)
+    ));
     crate::io::atomic_write(&config.publication_root.join("pending.json"), b"pending").unwrap();
     assert!(matches!(
         config.prepare(&command, &original, 3, NOW),

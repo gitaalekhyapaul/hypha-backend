@@ -12,6 +12,7 @@ import {
   approveAccessRequest,
   getAccessRequest,
 } from "../lib/portal-client/access-requests.ts";
+import { listAgentRoles } from "../lib/portal-client/agent-roles.ts";
 import { PortalRequestError } from "../lib/portal-client/browser.ts";
 import { getApprovedPolicyCatalogue } from "../lib/portal-client/policy-catalogue.ts";
 
@@ -52,6 +53,11 @@ export function AccessRequestApproval({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [roleMode, setRoleMode] = useState<{
+    readonly key: string;
+    readonly managed?: boolean;
+    readonly error?: string;
+  } | null>(null);
   const alive = useRef(false);
   const pending = useRef(false);
   const retry = useRef<ApprovalBody | null>(null);
@@ -61,6 +67,12 @@ export function AccessRequestApproval({
   const selectedPolicy = selected
     ? `${policyKey(selected)}:${selected.policyHash}:${selected.requiredGrantFields.join(",")}`
     : "";
+  const roleModeKey =
+    selectedIsCurrent && !loading && !catalogueError
+      ? JSON.stringify([request.agentId, request.datasetId, selectedPolicy, revision])
+      : "";
+  const currentMode = roleMode?.key === roleModeKey ? roleMode : null;
+  const modeReady = Boolean(roleModeKey) && currentMode?.managed !== undefined;
 
   useEffect(() => {
     setError(null);
@@ -98,6 +110,41 @@ export function AccessRequestApproval({
     return () => controller.abort();
   }, [revision, onSessionExpired]);
 
+  useEffect(() => {
+    if (!roleModeKey || !selected) return;
+    const controller = new AbortController();
+    setRoleMode({ key: roleModeKey });
+    void listAgentRoles(
+      request.agentId,
+      {
+        policyVersionId: selected.identity.versionId,
+        approvalEpoch: selected.approvalEpoch,
+        datasetId: request.datasetId,
+      },
+      controller.signal,
+    )
+      .then((roles) => {
+        if (!controller.signal.aborted) setRoleMode({ key: roleModeKey, managed: roles.managed });
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        if (cause instanceof PortalRequestError && cause.status === 401) onSessionExpired();
+        else
+          setRoleMode({
+            key: roleModeKey,
+            error: "Role management state unavailable. Refresh approved policies to retry.",
+          });
+      });
+    return () => controller.abort();
+  }, [
+    roleModeKey,
+    request.agentId,
+    request.datasetId,
+    selected?.identity.versionId,
+    selected?.approvalEpoch,
+    onSessionExpired,
+  ]);
+
   function changeGrant(next: AccessRequestGrant) {
     retry.current = null;
     setError(null);
@@ -106,7 +153,7 @@ export function AccessRequestApproval({
   }
 
   async function approve() {
-    if (pending.current || disabled || loading || catalogueError || !selected) return;
+    if (pending.current || disabled || loading || catalogueError || !selected || !modeReady) return;
     if (!policyIsCurrent(selected)) {
       setError("Selected approval is no longer current. Refresh approved policies.");
       return;
@@ -243,12 +290,23 @@ export function AccessRequestApproval({
             </select>
             {selected ? <PolicySelection policy={selected} /> : null}
           </div>
-          <PrivateGrantFields
-            id={id}
-            grant={grant}
-            requiredFields={selectedIsCurrent ? selected.requiredGrantFields : []}
-            onChange={changeGrant}
-          />
+          {roleModeKey && !modeReady && !currentMode?.error ? (
+            <p role="status">Loading role management state...</p>
+          ) : null}
+          {currentMode?.error ? (
+            <p className="form-error" role="alert">
+              {currentMode.error}
+            </p>
+          ) : null}
+          {modeReady && currentMode?.managed ? <p>Operator-managed roles</p> : null}
+          {modeReady && currentMode?.managed === false ? (
+            <PrivateGrantFields
+              id={id}
+              grant={grant}
+              requiredFields={selectedIsCurrent ? selected.requiredGrantFields : []}
+              onChange={changeGrant}
+            />
+          ) : null}
           {error ? (
             <p className="form-error" role="alert">
               {error}
@@ -263,7 +321,7 @@ export function AccessRequestApproval({
             <button
               type="submit"
               className="primary-button"
-              disabled={loading || Boolean(catalogueError) || !selectedIsCurrent}
+              disabled={loading || Boolean(catalogueError) || !selectedIsCurrent || !modeReady}
             >
               {busy ? "Approving..." : "Approve request"}
             </button>

@@ -10,6 +10,7 @@ fn catalogue_operation_rejects_activation_fields_and_unknown_discriminators() {
         candidate_id: String::new(),
         approved_by: String::new(),
         operation: PolicyOperationWire::ListCatalogue as i32,
+        role_request: Vec::new(),
     };
     for request in [
         PolicyActivationRequestWire {

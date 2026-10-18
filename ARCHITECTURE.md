@@ -2,7 +2,7 @@
 
 Status: M0 through M5 validated; M6 services and M7 agent features implemented locally
 
-Last updated: 2026-10-08
+Last updated: 2026-10-18
 
 ## Human-readable overview
 
@@ -137,6 +137,18 @@ startup pass. The operator seed creates two editable drafts with exact, missing,
 ambiguous settlement cases. Its create-only store operation preserves operator writes.
 The [agent demo runbook](docs/runbooks/M7-AGENT-DEMO.md) distinguishes this checkpoint
 from the pending real VM proof and three-dashboard recording gates.
+
+B-0068 adds operator-only role and team controls under Agents, governed by
+[ADR-0023](docs/decisions/0023-operator-managed-agent-roles.md). An installed approved
+version with no relationships can enter sticky operator-managed mode. The existing
+owner writer validates the package and live schema, then serializes bounded direct
+role and team membership edits with publication and request preparation. Managed
+issuance reads the existing graph at one exact revision and never creates missing
+memberships. Retried attempts keep their original revision. Old versions retain
+automatic provisioning. The supported editor excludes caveated and organization
+families. No graph metadata enters agent APIs, and no guest or SDK changes.
+Role edits affect fresh snapshots, not proofs already running or issued capabilities.
+This feature does not add immediate revocation or a live graph check to cached queries.
 
 The approved eight-CPU M3 profile uses the synthetic direct fixture. It produced a
 2,537-byte Plonk artifact in 929,660 milliseconds, used 45,592,842,240 bytes at peak,

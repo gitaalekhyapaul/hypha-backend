@@ -42,6 +42,7 @@ pub(super) fn send_catalogue_request(
             candidate_id: String::new(),
             approved_by: String::new(),
             operation: PolicyOperationWire::ListCatalogue as i32,
+            role_request: Vec::new(),
         },
         timeout,
     )?;
@@ -52,7 +53,7 @@ fn catalogue_response_result(
     response: PolicyActivationResponseWire,
 ) -> Result<CatalogueProjection, PolicyActivationClientError> {
     response_failure(&response)?;
-    if response.projection.is_some() {
+    if response.projection.is_some() || !response.roles.is_empty() {
         return Err(PolicyActivationClientError::Protocol);
     }
     catalogue_projection(
@@ -60,6 +61,48 @@ fn catalogue_response_result(
             .catalogue
             .ok_or(PolicyActivationClientError::Protocol)?,
     )
+}
+
+pub(super) fn send_roles_request(
+    socket_path: &Path,
+    request: super::AgentRolesRequest,
+    timeout: std::time::Duration,
+) -> Result<super::AgentRolesProjection, PolicyActivationClientError> {
+    let payload =
+        serde_json::to_vec(&request).map_err(|_| PolicyActivationClientError::InvalidRequest)?;
+    if payload.len() > 4096 {
+        return Err(PolicyActivationClientError::InvalidRequest);
+    }
+    let response = send_operation(
+        socket_path,
+        PolicyActivationRequestWire {
+            format_version: PROTOCOL_VERSION,
+            operation: PolicyOperationWire::AgentRoles as i32,
+            role_request: payload,
+            ..Default::default()
+        },
+        timeout,
+    )?;
+    response_failure(&response)?;
+    if response.projection.is_some()
+        || response.catalogue.is_some()
+        || response.roles.len() > MAX_FRAME_BYTES
+    {
+        return Err(PolicyActivationClientError::Protocol);
+    }
+    let projection: super::AgentRolesProjection = serde_json::from_slice(&response.roles)
+        .map_err(|_| PolicyActivationClientError::Protocol)?;
+    if projection.format_version != 1
+        || projection.policy_version_id != request.policy_version_id
+        || projection.approval_epoch != request.approval_epoch
+        || projection.dataset_id != request.dataset_id
+        || projection.agent_key_thumbprint != request.agent_key_thumbprint
+        || projection.assignments.len() > 256
+        || projection.available_roles.len() > 5
+    {
+        return Err(PolicyActivationClientError::Protocol);
+    }
+    Ok(projection)
 }
 
 fn send_operation(
@@ -139,7 +182,7 @@ fn response_result(
     response: PolicyActivationResponseWire,
 ) -> Result<PolicyActivationProjection, PolicyActivationClientError> {
     response_failure(&response)?;
-    if response.catalogue.is_some() {
+    if response.catalogue.is_some() || !response.roles.is_empty() {
         return Err(PolicyActivationClientError::Protocol);
     }
     let value = response
@@ -176,7 +219,9 @@ fn response_failure(
 ) -> Result<(), PolicyActivationClientError> {
     if response.format_version != PROTOCOL_VERSION
         || response.failure != PolicyActivationFailureWire::Unspecified as i32
-            && (response.projection.is_some() || response.catalogue.is_some())
+            && (response.projection.is_some()
+                || response.catalogue.is_some()
+                || !response.roles.is_empty())
     {
         return Err(PolicyActivationClientError::Protocol);
     }

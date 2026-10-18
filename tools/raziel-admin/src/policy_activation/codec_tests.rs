@@ -87,6 +87,7 @@ fn response() -> PolicyActivationResponseWire {
     PolicyActivationResponseWire {
         format_version: 1,
         failure: 0,
+        roles: Vec::new(),
         projection: None,
         catalogue: Some(PolicyCatalogueWire {
             format_version: 2,
@@ -197,6 +198,7 @@ fn frames_keep_the_byte_ceiling_and_default_activation_encoding() {
         candidate_id: "a".into(),
         approved_by: "b".into(),
         operation: 0,
+        role_request: Vec::new(),
     };
     assert_eq!(request.encode_to_vec(), [8, 1, 18, 1, b'a', 26, 1, b'b']);
     let (mut sender, mut receiver) = UnixStream::pair().unwrap();

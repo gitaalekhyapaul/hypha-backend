@@ -96,14 +96,61 @@ impl StoredRequest {
             && self.source_schema_digest == other.source_schema_digest
             && self.relationships == other.relationships
     }
+
+    pub fn matches_request(
+        &self,
+        command: &proto::ApproveAccessRequestRequest,
+        original: &proto::CreateAccessRequestRequest,
+        generation: u64,
+        package: &ApprovedPolicyPackage,
+    ) -> bool {
+        self.agent_id == command.agent_id
+            && self.request_id == command.request_id
+            && self.proposal_generation == generation
+            && self.command == command.encode_to_vec()
+            && self.original == original.encode_to_vec()
+            && self.policy_record_id == package.approval_record().record_id
+            && self.policy_hash == package.policy_hash()
+            && self.source_schema_digest == package.policy().program().source_schema_digest
+    }
+
+    pub fn from_observed(
+        command: &proto::ApproveAccessRequestRequest,
+        original: &proto::CreateAccessRequestRequest,
+        generation: u64,
+        package: &ApprovedPolicyPackage,
+        observed: &super::network::Observed,
+        composition: &Composition,
+    ) -> Result<Self, ProvisioningError> {
+        let updates = observed
+            .relationships
+            .iter()
+            .map(|r| api::RelationshipUpdate {
+                operation: api::relationship_update::Operation::Touch as i32,
+                relationship: Some(r.clone()),
+            })
+            .collect::<Vec<_>>();
+        let mut record = Self::new(
+            command,
+            original,
+            generation,
+            package,
+            &updates,
+            composition,
+        )?;
+        record.format_version = 2;
+        record.zed_token = Some(observed.token.clone());
+        record.validate()?;
+        Ok(record)
+    }
     fn validate(&self) -> Result<(), ProvisioningError> {
-        if self.format_version != 1
+        if !matches!(self.format_version, 1 | 2)
             || self.proposal_generation == 0
             || self.command.len() > 4096
             || self.original.len() > 16 * 1024
             || self.policy_hash.len() != 32
             || self.source_schema_digest.len() != 32
-            || self.relationships.is_empty()
+            || self.format_version == 1 && self.relationships.is_empty()
             || self.relationships.len() > 256
             || self.accepted_schema.is_empty()
             || self.accepted_schema.len() > 1024 * 1024

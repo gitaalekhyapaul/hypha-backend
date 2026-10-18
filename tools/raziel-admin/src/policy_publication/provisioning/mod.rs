@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod live;
-mod network;
+pub(super) mod network;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -151,6 +151,16 @@ impl ProvisioningConfig {
         if package.approval_record().record_id != command.policy_record_id {
             return Err(ProvisioningError::Conflict);
         }
+        if super::roles::is_managed(&self.publication_root, &package).map_err(owner_error)? {
+            return self.prepare_managed(
+                command,
+                original,
+                proposal_generation,
+                &package,
+                &installed,
+                &compiler,
+            );
+        }
         let grant = command.grant.as_ref().ok_or(ProvisioningError::Invalid)?;
         let relationships = build_grant(&package, original, grant).map_err(approval_error)?;
         let updates = relationships
@@ -205,6 +215,61 @@ impl ProvisioningConfig {
                 complete.zed_token = Some(token);
                 store.persist(&complete)?;
                 Ok(RequestRevision { stored: complete })
+            })
+            .await
+            .map_err(|_| ProvisioningError::Unavailable)?
+        })
+    }
+
+    fn prepare_managed(
+        &self,
+        command: &proto::ApproveAccessRequestRequest,
+        original: &proto::CreateAccessRequestRequest,
+        generation: u64,
+        package: &crate::policy_package::ApprovedPolicyPackage,
+        installed: &Installation,
+        compiler: &Compiler,
+    ) -> Result<RequestRevision, ProvisioningError> {
+        let store = RequestStore::open(&self.publication_root, command, generation)?;
+        if let Some(record) = store.read()? {
+            if record.format_version != 2
+                || record.zed_token.is_none()
+                || !record.matches_request(command, original, generation, package)
+            {
+                return Err(ProvisioningError::Conflict);
+            }
+            return Ok(RequestRevision { stored: record });
+        }
+        let types = package
+            .policy()
+            .program()
+            .definitions
+            .iter()
+            .map(|d| d.name.clone())
+            .collect::<Vec<_>>();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| ProvisioningError::Unavailable)?;
+        runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(90), async {
+                let mut client = GrantClient::connect(&self.endpoint, &self.token_path).await?;
+                installed
+                    .check_live(&mut client, compiler)
+                    .await
+                    .map_err(owner_error)?;
+                // This path is read-only. Later role edits cannot replace this exact revision.
+                let observed = client.snapshot(&types).await?;
+                let record = StoredRequest::from_observed(
+                    command,
+                    original,
+                    generation,
+                    package,
+                    &observed,
+                    installed.composition(),
+                )?;
+                store.persist(&record)?;
+                Ok(RequestRevision { stored: record })
             })
             .await
             .map_err(|_| ProvisioningError::Unavailable)?

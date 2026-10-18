@@ -28,3 +28,17 @@ fn catalogue_cli_is_explicit_and_accepts_no_activation_fields() {
         );
     }
 }
+
+#[test]
+fn roles_cli_accepts_only_its_explicit_stdin_operation() {
+    let parse = |args: &[&str]| parse_client_arguments(args.iter().map(|v| (*v).into()));
+    assert_eq!(parse(&["--agent-roles"]), Ok(ClientOperation::AgentRoles));
+    assert_eq!(
+        parse(&["--agent-roles", "--candidate-id", "x"]),
+        Err(PolicyActivationClientError::InvalidRequest)
+    );
+    assert_eq!(
+        parse(&["--agent-roles", "--list-approved"]),
+        Err(PolicyActivationClientError::InvalidRequest)
+    );
+}

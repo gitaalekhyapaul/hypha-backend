@@ -150,6 +150,12 @@ B-0067 adds
 both agent dashboards, persistent separate keys, bounded LLM tools, an authenticated
 message channel, and editable synthetic processor/bank seed drafts. Local checks and
 Docker desktop startup pass. The two-agent proof-backed VM flow remains pending.
+B-0068 adds operator-managed roles and teams under Agents for fresh, empty approved
+policy versions. Managed issuance captures existing relationships and does not create
+missing grants. Role removal affects fresh snapshots, not an already issued capability.
+Local role, provisioning, and browser checks do not replace the pending real VM
+proof demonstration. See [ADR-0023](docs/decisions/0023-operator-managed-agent-roles.md)
+and the [role assignment walkthrough](docs/runbooks/M7-AGENT-DEMO.md#operator-role-assignment-demo).
 Owner-allocated policy identities and namespaced candidate compilation
 pass local checks. The composed owner publication path passed a two-version test
 against pinned SpiceDB. The visual builder now publishes versions in the isolated,

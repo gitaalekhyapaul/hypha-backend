@@ -13,7 +13,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+pub use crate::policy_publication::roles::{AgentRolesProjection, AgentRolesRequest};
 use serde::Serialize;
+use std::io::Read;
 
 pub use crate::policy_publication::catalogue::{
     CatalogueIdentity, CataloguePolicy, CatalogueProjection,
@@ -79,6 +81,7 @@ impl PolicyActivationClient {
                 candidate_id: request.candidate_id,
                 approved_by: request.approved_by,
                 operation: wire::PolicyOperationWire::Activate as i32,
+                role_request: Vec::new(),
             },
             self.timeout,
         )
@@ -86,6 +89,16 @@ impl PolicyActivationClient {
 
     pub fn list_catalogue(&self) -> Result<CatalogueProjection, PolicyActivationClientError> {
         codec::send_catalogue_request(&self.socket_path, self.timeout)
+    }
+
+    pub fn agent_roles(
+        &self,
+        request: AgentRolesRequest,
+    ) -> Result<AgentRolesProjection, PolicyActivationClientError> {
+        request
+            .validate()
+            .map_err(|_| PolicyActivationClientError::InvalidRequest)?;
+        codec::send_roles_request(&self.socket_path, request, self.timeout)
     }
 }
 
@@ -138,6 +151,19 @@ pub fn run_client_from_env() -> Result<(), PolicyActivationClientError> {
     let output = match operation {
         ClientOperation::Activate(request) => serde_json::to_string(&client.activate(request)?),
         ClientOperation::ListCatalogue => serde_json::to_string(&client.list_catalogue()?),
+        ClientOperation::AgentRoles => {
+            let mut bytes = Vec::new();
+            std::io::stdin()
+                .take(4097)
+                .read_to_end(&mut bytes)
+                .map_err(|_| PolicyActivationClientError::InvalidRequest)?;
+            if bytes.len() > 4096 {
+                return Err(PolicyActivationClientError::InvalidRequest);
+            }
+            let request = serde_json::from_slice(&bytes)
+                .map_err(|_| PolicyActivationClientError::InvalidRequest)?;
+            serde_json::to_string(&client.agent_roles(request)?)
+        }
     }
     .map_err(|_| PolicyActivationClientError::Protocol)?;
     if output.len() > MAX_FRAME_BYTES {
@@ -151,12 +177,24 @@ pub fn run_client_from_env() -> Result<(), PolicyActivationClientError> {
 enum ClientOperation {
     Activate(PolicyActivationRequest),
     ListCatalogue,
+    AgentRoles,
 }
 
 fn parse_client_arguments(
     arguments: impl Iterator<Item = String>,
 ) -> Result<ClientOperation, PolicyActivationClientError> {
     let mut arguments = arguments.peekable();
+    if arguments
+        .peek()
+        .is_some_and(|value| value == "--agent-roles")
+    {
+        arguments.next();
+        return if arguments.next().is_none() {
+            Ok(ClientOperation::AgentRoles)
+        } else {
+            Err(PolicyActivationClientError::InvalidRequest)
+        };
+    }
     if arguments
         .peek()
         .is_some_and(|value| value == "--list-approved")

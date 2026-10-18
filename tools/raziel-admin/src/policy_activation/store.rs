@@ -490,6 +490,7 @@ mod tests {
                 candidate_id: "candidate-1".into(),
                 approved_by: "operator-test".into(),
                 operation: 0,
+                role_request: Vec::new(),
             }),
             Err(StoreActivationError::CandidateRejected)
         );

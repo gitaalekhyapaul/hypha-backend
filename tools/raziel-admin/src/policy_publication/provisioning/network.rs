@@ -10,13 +10,13 @@ use super::super::network::{SchemaApi, SchemaClient};
 use super::{ProvisioningError, owner_error};
 use crate::policy_activation::store::StoreActivationError;
 
-pub(super) struct Observed {
+pub(in crate::policy_publication) struct Observed {
     pub token: String,
     pub relationships: Vec<api::Relationship>,
 }
 
 #[tonic::async_trait]
-pub(super) trait GrantApi: SchemaApi {
+pub(in crate::policy_publication) trait GrantApi: SchemaApi {
     async fn snapshot(&mut self, types: &[String]) -> Result<Observed, ProvisioningError>;
     async fn touch(
         &mut self,
@@ -24,7 +24,7 @@ pub(super) trait GrantApi: SchemaApi {
     ) -> Result<String, ProvisioningError>;
 }
 
-pub(super) struct GrantClient {
+pub(in crate::policy_publication) struct GrantClient {
     schema: SchemaClient,
     permissions: PermissionsServiceClient<Channel>,
 }

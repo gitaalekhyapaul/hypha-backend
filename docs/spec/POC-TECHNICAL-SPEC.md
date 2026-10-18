@@ -124,6 +124,14 @@ approved public guest and checks both program-key identifiers before private inp
 Neither repair changes grant construction, proof semantics, or agent responses.
 Isolated validation passes. A fresh real capability after VM deployment remains pending.
 
+[ADR-0023](../decisions/0023-operator-managed-agent-roles.md) separates operator role
+administration from issuance for fresh opt-in versions. Existing versions keep their
+automatic grant behavior. Managed versions read the actual graph without creating
+missing roles. Add/remove controls are operator-only. Empty, configured, and removed
+membership states must reject/allow/reject fresh issuance. Existing capabilities and
+their verification cache retain the current expiry/revocation rules. No guest change,
+DENY proof, or immediate role-change revocation is claimed.
+
 [ADR-0022](../decisions/0022-fixed-domain-ngrok-demo-ingress.md) adds opt-in
 Compose-managed fixed-domain HTTPS ingress for the synthetic demo. Agent APIs and
 protected queries use that route. Operator pages remain SSH-only. The approved

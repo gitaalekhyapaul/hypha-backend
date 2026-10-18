@@ -535,6 +535,77 @@ Amounts use integer minor units. Results describe the authorized query window.
 A full 100-row page requires a narrower query before evidence publication. A model
 summary and settlement result are business output, not ZK proof of transaction truth.
 
+## Operator Role Assignment Demo
+
+ADR-0023 adds **Agents / Roles and teams**. Only the backend repository needs an upgrade. The
+public SDK and agent images stay unchanged. Use a fresh policy version so older
+automatic grants cannot mask the missing-membership case.
+
+### VM Backend Upgrade
+
+Wait for admitted proofs to finish or reach terminal cancellation. Run these in
+`~/hypha-backend`, not the agent repository. Existing settings, keys, and volumes stay:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+git fetch origin tag v1
+./scripts/compose-m6 --ngrok --profile apps stop
+./scripts/compose-m6 run --rm --no-deps \
+  -e CARGO_NET_OFFLINE=true -e GOPROXY=off \
+  m6-toolchain ./scripts/prepare-m6-tools
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --force-recreate --wait --wait-timeout 900
+```
+
+The owner tools rebuild updates both the publication service and dispatcher. There
+is no guest rebuild or new Plonk setup. Reload the operator browser after startup.
+Keep the existing Mac SSH forwards for ports 13000-13002.
+
+### Browser Flow
+
+1. Operator **Policy**: publish a new **Team membership** version. Do not start an
+   access request against it yet. The mode covers that exact version, not its family.
+2. Operator **Agents**: select Agent A. In **Roles and teams**, select that installed
+   version and dataset `processor-demo-v1`, then **Use operator-managed roles** and
+   **Confirm operator-managed roles**.
+   Only an empty approved version can switch. This choice has no automatic-mode reset.
+3. Leave assignments empty. Agent A: create a new task/access request. Operator:
+   approve that request using the managed version. The request must fail without
+   issuing a capability. Missing authorization fails before expensive Plonk work.
+4. Operator **Agents / Roles and teams**: choose **Team member**, enter
+   `finance-operations`, and add it. The owner creates the dataset/team link and
+   membership using A's registered key, not an agent-provided identity.
+5. Agent A: create a fresh task/access request. Approve it with the same version.
+   Wait for the real proof. Show the issued capability and protected dataset query.
+6. Operator **Agents / Roles and teams**: remove A's `finance-operations` membership.
+7. Agent A: create another fresh task/access request. Approve it with the same
+   version. This attempt must fail without a new capability. The earlier successful
+   capability is not revoked by this demonstration.
+
+Direct roles use the same controls. Alternative paths pass if any path remains.
+Dual control needs both selected direct roles on the same agent. For the simplest
+negative recording, use Team membership alone. Caveated and organization policies
+keep the existing approval-grant workflow and cannot enter this editor's mode.
+
+Team membership is shared by datasets linked to the same team in one policy version.
+Removing a member does not remove other members or the shared dataset/team link.
+It affects future snapshots for that team's datasets. A retained proposal continues
+using its old snapshot, so retries are not the negative control: create a new request.
+
+### Rollback
+
+The annotated `v1` tag points to backend commit
+`1a297cb4fea1f1a1a736126606b1a1409c323c12`, before these feature changes.
+For a clean checkout, stop the backend, switch to `v1` in detached mode, rebuild
+the owner tools with the same command above, and recreate the stack. Never reset
+a dirty checkout or delete volumes. Restore the feature branch with `git switch main`.
+
+The tag restores code, not edited relationship state. Keep the managed demo version
+out of new issuance on the old code: legacy binaries do not understand managed mode
+and can automatically create grants. Use the prior legacy version after rollback.
+No immediate membership revocation, new DENY proof, or completed M7 gate is implied.
+
 ## Remaining Acceptance
 
 For an existing deployment with the guest/key mismatch or the old static grant

@@ -74,6 +74,14 @@ export class AgentAuthService {
     return (await this.store.listAgents()).map(registration);
   }
 
+  async getAgent(agentId: string): Promise<AgentRegistration> {
+    assertId(agentId);
+    if (agentId.length !== 32) throw new AgentAuthError("INVALID_REQUEST");
+    const agent = await this.store.getAgent(agentId);
+    if (!agent?.active) throw new AgentAuthError("NOT_FOUND");
+    return registration(agent);
+  }
+
   async issueToken(
     agentId: string,
     input: unknown,

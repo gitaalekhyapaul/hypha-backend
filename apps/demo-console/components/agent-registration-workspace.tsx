@@ -14,6 +14,7 @@ import {
   revokeAgentToken,
 } from "../lib/portal-client/agents.ts";
 import { PortalRequestError } from "../lib/portal-client/browser.ts";
+import { AgentRoleWorkspace } from "./agent-role-workspace.tsx";
 
 interface AgentRegistrationWorkspaceProps {
   readonly csrfToken: string;
@@ -541,6 +542,7 @@ function RegisteredAgent({
           </div>
         ) : null}
       </section>
+      <AgentRoleWorkspace agent={agent} csrfToken={csrfToken} onSessionExpired={onSessionExpired} />
     </>
   );
 }

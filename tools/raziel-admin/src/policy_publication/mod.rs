@@ -6,6 +6,7 @@ mod files;
 mod installation;
 mod network;
 pub mod provisioning;
+pub mod roles;
 
 #[cfg(test)]
 mod tests;

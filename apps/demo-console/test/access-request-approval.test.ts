@@ -14,7 +14,12 @@ import type {
 } from "../lib/policy-version/catalogue-types.ts";
 import { PortalRequestError } from "../lib/portal-client/browser.ts";
 
-const mocks = vi.hoisted(() => ({ catalogue: vi.fn(), approve: vi.fn(), get: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  catalogue: vi.fn(),
+  roles: vi.fn(),
+  approve: vi.fn(),
+  get: vi.fn(),
+}));
 
 // Drive the component's hooks and event handlers without a browser or DOM dependency.
 const hooks = vi.hoisted(() => {
@@ -81,6 +86,9 @@ vi.mock("react", async (original) => ({
 vi.mock("../lib/portal-client/policy-catalogue.ts", () => ({
   getApprovedPolicyCatalogue: mocks.catalogue,
 }));
+vi.mock("../lib/portal-client/agent-roles.ts", () => ({
+  listAgentRoles: mocks.roles,
+}));
 vi.mock("../lib/portal-client/access-requests.ts", () => ({
   approveAccessRequest: mocks.approve,
   getAccessRequest: mocks.get,
@@ -119,6 +127,7 @@ beforeEach(() => {
     request: create(AccessRequestSchema, {
       agentId: "d".repeat(32),
       requestId: "request",
+      datasetId: "processor-demo-v1",
       generation: 1n,
     }),
     csrfToken: "csrf",
@@ -128,6 +137,7 @@ beforeEach(() => {
     onSessionExpired: vi.fn(),
   };
   mocks.approve.mockResolvedValue(props.request);
+  mocks.roles.mockResolvedValue({ managed: false });
 });
 
 function render() {
@@ -157,8 +167,10 @@ function change(element: Element, value: string | boolean) {
   (element.props.onChange as (event: unknown) => void)({ target: { value, checked: value } });
   render();
 }
-function select(entry: ApprovedPolicyCatalogueEntry) {
+async function select(entry: ApprovedPolicyCatalogueEntry) {
   change(find("select"), `${entry.identity.versionId}:${entry.approvalEpoch}:${entry.recordId}`);
+  await settle();
+  render();
 }
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 async function mount(policies: readonly ApprovedPolicyCatalogueEntry[]) {
@@ -193,7 +205,7 @@ describe("policy-aware private grant form", () => {
     const entry = policy(fields);
     await mount([entry]);
     expect(inputs()).toEqual([]);
-    select(entry);
+    await select(entry);
     expect(inputs()).toEqual(
       fields.map((field) => (field === "approvedAmount" ? "amount" : field)),
     );
@@ -203,7 +215,7 @@ describe("policy-aware private grant form", () => {
   it("submits the unchanged full default payload for a policy needing no fields", async () => {
     const entry = policy([]);
     await mount([entry]);
-    select(entry);
+    await select(entry);
     await submit();
     expect(mocks.approve).toHaveBeenCalledWith(
       props.request.agentId,
@@ -232,22 +244,22 @@ describe("policy-aware private grant form", () => {
     const team = policy(["teamId"]);
     const direct = policy([], "c");
     await mount([team, direct]);
-    select(team);
+    await select(team);
     change(find("input", "teamId"), "");
     mocks.approve.mockRejectedValueOnce(new PortalRequestError("INVALID_REQUEST", 400));
     await submit();
     expect(elements().some((element) => element.props.role === "alert")).toBe(true);
-    select(direct);
+    await select(direct);
     expect(inputs()).toEqual([]);
     expect(elements().some((element) => element.props.role === "alert")).toBe(false);
-    select(team);
+    await select(team);
     expect(find("input", "teamId").props.value).toBe("finance-operations");
   });
 
   it("retains the exact uncertain retry through same-policy refresh and generation updates", async () => {
     const team = policy(["teamId"]);
     await mount([team]);
-    select(team);
+    await select(team);
     change(find("input", "teamId"), "private-team");
     mocks.approve.mockRejectedValueOnce(new Error("uncertain response"));
     await submit();
@@ -258,6 +270,8 @@ describe("policy-aware private grant form", () => {
     );
     if (!refresh) throw new Error("Missing catalogue refresh");
     (refresh.props.onClick as () => void)();
+    render();
+    await settle();
     render();
     await settle();
     render();
@@ -278,15 +292,15 @@ describe("policy-aware private grant form", () => {
     ]);
     const direct = policy([], "c");
     await mount([all, direct]);
-    select(all);
+    await select(all);
     change(find("input", "teamId"), "old-team");
     change(find("input", "organizationId"), "old-org");
     change(find("input", "amount"), "123");
     change(find("input", "isApproved"), false);
     change(find("input", "isSuspended"), true);
     change(find("input", "isOverride"), true);
-    select(direct);
-    select(all);
+    await select(direct);
+    await select(all);
     expect(find("input", "teamId").props.value).toBe("finance-operations");
     expect(find("input", "organizationId").props.value).toBe("nus-fintech-lab");
     expect(find("input", "amount").props.value).toBe("50000");
@@ -299,12 +313,12 @@ describe("policy-aware private grant form", () => {
     const team = policy(["teamId"]);
     const direct = policy([], "c");
     await mount([team, direct]);
-    select(team);
+    await select(team);
     mocks.approve.mockRejectedValueOnce(new PortalRequestError("CONFLICT", 409));
     mocks.get.mockResolvedValueOnce(props.request);
     await submit();
     expect(elements().some((element) => element.props.className === "form-notice")).toBe(true);
-    select(direct);
+    await select(direct);
     expect(elements().some((element) => element.props.className === "form-notice")).toBe(false);
   });
 
@@ -312,11 +326,11 @@ describe("policy-aware private grant form", () => {
     const team = policy(["teamId"]);
     const direct = policy([], "c");
     await mount([team, direct]);
-    select(team);
+    await select(team);
     change(find("input", "teamId"), "private-team");
     mocks.approve.mockRejectedValueOnce(new Error("uncertain response"));
     await submit();
-    select(direct);
+    await select(direct);
     await submit();
     expect(mocks.approve.mock.calls[1]?.[2]).toMatchObject({
       policyRecordId: direct.recordId,
@@ -327,7 +341,7 @@ describe("policy-aware private grant form", () => {
   it("preserves an uncertain retry through a temporary catalogue outage", async () => {
     const team = policy(["teamId"]);
     await mount([team]);
-    select(team);
+    await select(team);
     change(find("input", "teamId"), "private-team");
     mocks.approve.mockRejectedValueOnce(new Error("uncertain response"));
     await submit();
@@ -342,6 +356,8 @@ describe("policy-aware private grant form", () => {
       render();
       await settle();
       render();
+      await settle();
+      render();
     }
     expect(find("input", "teamId").props.value).toBe("private-team");
     await submit();
@@ -351,7 +367,7 @@ describe("policy-aware private grant form", () => {
   it("hides stale controls and clears messages after the selected approval disappears", async () => {
     const team = policy(["teamId"]);
     await mount([team]);
-    select(team);
+    await select(team);
     mocks.approve.mockRejectedValueOnce(new Error("uncertain response"));
     await submit();
     mocks.catalogue.mockResolvedValue({ formatVersion: 1, policies: [] });

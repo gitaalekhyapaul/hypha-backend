@@ -10,6 +10,8 @@ pub(crate) struct PolicyActivationRequestWire {
     pub approved_by: String,
     #[prost(enumeration = "PolicyOperationWire", tag = "4")]
     pub operation: i32,
+    #[prost(bytes = "vec", tag = "5")]
+    pub role_request: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
@@ -17,6 +19,7 @@ pub(crate) struct PolicyActivationRequestWire {
 pub(crate) enum PolicyOperationWire {
     Activate = 0,
     ListCatalogue = 1,
+    AgentRoles = 2,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -51,6 +54,8 @@ pub(super) struct PolicyActivationResponseWire {
     pub projection: Option<PolicyActivationProjectionWire>,
     #[prost(message, optional, tag = "4")]
     pub catalogue: Option<PolicyCatalogueWire>,
+    #[prost(bytes = "vec", tag = "5")]
+    pub roles: Vec<u8>,
 }
 
 #[derive(Clone, PartialEq, Message)]

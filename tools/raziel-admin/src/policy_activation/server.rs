@@ -23,6 +23,18 @@ enum ActivationRole {
 }
 
 impl ActivationRole {
+    fn agent_roles(&self, bytes: &[u8]) -> Result<Vec<u8>, StoreActivationError> {
+        let Self::Composed(publisher) = self else {
+            return Err(StoreActivationError::InvalidRequest);
+        };
+        if bytes.len() > 4096 {
+            return Err(StoreActivationError::InvalidRequest);
+        }
+        let request =
+            serde_json::from_slice(bytes).map_err(|_| StoreActivationError::InvalidRequest)?;
+        let result = publisher.agent_roles(request)?;
+        serde_json::to_vec(&result).map_err(|_| StoreActivationError::Unavailable)
+    }
     fn catalogue(&self) -> Result<super::wire::PolicyCatalogueWire, StoreActivationError> {
         let Self::Composed(publisher) = self else {
             return Err(StoreActivationError::InvalidRequest);
@@ -123,6 +135,23 @@ fn handle_connection(
         Ok(request) => request,
         Err(_) => return failure(PolicyActivationFailureWire::InvalidRequest),
     };
+    if request.operation == PolicyOperationWire::AgentRoles as i32 {
+        if request.format_version != PROTOCOL_VERSION
+            || !request.candidate_id.is_empty()
+            || !request.approved_by.is_empty()
+            || request.role_request.is_empty()
+        {
+            return failure(PolicyActivationFailureWire::InvalidRequest);
+        }
+        return match store.agent_roles(&request.role_request) {
+            Ok(roles) => PolicyActivationResponseWire {
+                format_version: PROTOCOL_VERSION,
+                roles,
+                ..Default::default()
+            },
+            Err(error) => store_failure(error),
+        };
+    }
     dispatch_request(
         request,
         |request| store.activate(request),
@@ -137,7 +166,7 @@ fn dispatch_request(
     ) -> Result<super::store::StoredActivationProjection, StoreActivationError>,
     catalogue: impl FnOnce() -> Result<super::wire::PolicyCatalogueWire, StoreActivationError>,
 ) -> PolicyActivationResponseWire {
-    if request.format_version != PROTOCOL_VERSION {
+    if request.format_version != PROTOCOL_VERSION || !request.role_request.is_empty() {
         return failure(PolicyActivationFailureWire::InvalidRequest);
     }
     match PolicyOperationWire::try_from(request.operation) {
@@ -151,11 +180,15 @@ fn dispatch_request(
                     failure: PolicyActivationFailureWire::Unspecified as i32,
                     projection: None,
                     catalogue: Some(catalogue),
+                    roles: Vec::new(),
                 },
                 Err(error) => store_failure(error),
             };
         }
         Ok(PolicyOperationWire::Activate) => {}
+        Ok(PolicyOperationWire::AgentRoles) => {
+            return failure(PolicyActivationFailureWire::InvalidRequest);
+        }
         Err(_) => return failure(PolicyActivationFailureWire::InvalidRequest),
     }
     match activate(request) {
@@ -174,6 +207,7 @@ fn dispatch_request(
                 registry_generation: projection.registry_generation,
             }),
             catalogue: None,
+            roles: Vec::new(),
         },
         Err(error) => store_failure(error),
     }
@@ -194,6 +228,7 @@ fn failure(code: PolicyActivationFailureWire) -> PolicyActivationResponseWire {
         failure: code as i32,
         projection: None,
         catalogue: None,
+        roles: Vec::new(),
     }
 }
 
