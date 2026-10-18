@@ -36,6 +36,16 @@ const agents = ["one", "two"].map((id) => ({
   keyThumbprint: publicKey,
   createdAtUnixSeconds: String(now - 3600),
 }));
+const datasets = ["processor-demo-v1", "bank-demo-v1"].map((datasetId) => ({
+  formatVersion: 1,
+  datasetId,
+  revision: 1,
+  status: "FINALIZED",
+  source: { classification: "SYNTHETIC", sourceId: "ui-fixture", sourceLabel: "UI fixture" },
+  rows: [],
+  createdAt: new Date(now * 1000).toISOString(),
+  updatedAt: new Date(now * 1000).toISOString(),
+}));
 const managed = new Set();
 const assignments = new Map();
 const events = [];
@@ -44,9 +54,11 @@ let expired = false;
 let failNextMutation = false;
 let loseNextMutation = false;
 let failRead = false;
+let failDatasetRead = false;
+let emptyDatasets = false;
 let delayMutation = false;
 let releaseMutation;
-const output = join(tmpdir(), "raziel-b0068-ui");
+const output = join(tmpdir(), "raziel-b0070-ui");
 page.on("pageerror", (error) => pageErrors.push(error.message));
 
 function state(agentId, scope) {
@@ -79,7 +91,10 @@ await page.route("**/api/**", async (route) => {
       csrfToken: "current-csrf",
       expiresAtUnixSeconds: now + 3600,
     });
-  if (path === "/api/datasets") return respond({ datasets: [] });
+  if (path === "/api/datasets")
+    return failDatasetRead
+      ? respond({ error: "DATASET_UNAVAILABLE" }, 503)
+      : respond({ classification: "SYNTHETIC", datasets: emptyDatasets ? [] : datasets });
   if (path === "/api/policies/versions/approved") return respond({ formatVersion: 1, policies });
   if (path === "/api/operator/agents") return respond({ agents });
   if (path.endsWith("/tokens")) return respond({ tokens: [] });
@@ -146,6 +161,64 @@ try {
     await editor.getByLabel("Dataset ID", { exact: true }).inputValue(),
     "processor-demo-v1",
   );
+  const cloneId = "processor-demo-recording-copy";
+  datasets.push({
+    ...datasets[0],
+    datasetId: cloneId,
+    revision: 2,
+    status: "DRAFT",
+    derivedFromDatasetId: "processor-demo-v1",
+  });
+  await editor.getByRole("button", { name: "Refresh datasets", exact: true }).click();
+  await editor
+    .getByRole("option", { name: `${cloneId} / revision 2 / Draft`, exact: true })
+    .waitFor({ state: "attached" });
+  assert.equal(
+    await editor.getByLabel("Dataset ID", { exact: true }).inputValue(),
+    "processor-demo-v1",
+  );
+  await editor.getByLabel("Dataset ID", { exact: true }).selectOption(cloneId);
+  assert.equal(
+    await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).count(),
+    0,
+  );
+  await editor.getByRole("button", { name: "View roles", exact: true }).click();
+  await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).waitFor();
+  assert.equal(events.at(-1).datasetId, cloneId);
+
+  failDatasetRead = true;
+  await editor.getByRole("button", { name: "Refresh datasets", exact: true }).click();
+  await editor
+    .getByText("Datasets unavailable. Refresh datasets to retry.", { exact: true })
+    .waitFor();
+  assert.equal(await editor.getByLabel("Dataset ID", { exact: true }).isDisabled(), true);
+  assert.equal(
+    await editor.getByRole("button", { name: "View roles", exact: true }).isDisabled(),
+    true,
+  );
+  assert.equal(
+    await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).count(),
+    0,
+  );
+  failDatasetRead = false;
+  await editor.getByRole("button", { name: "Refresh datasets", exact: true }).click();
+  await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).waitFor();
+  assert.equal(await editor.getByLabel("Dataset ID", { exact: true }).inputValue(), cloneId);
+
+  emptyDatasets = true;
+  await editor.getByRole("button", { name: "Refresh datasets", exact: true }).click();
+  await editor.getByText("No saved datasets.", { exact: true }).waitFor();
+  assert.equal(
+    await editor.getByRole("button", { name: "View roles", exact: true }).isDisabled(),
+    true,
+  );
+  assert.equal(
+    await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).count(),
+    0,
+  );
+  emptyDatasets = false;
+  await editor.getByRole("button", { name: "Refresh datasets", exact: true }).click();
+  await editor.getByRole("button", { name: "Use operator-managed roles", exact: true }).waitFor();
   assert.equal(
     await editor.getByRole("button", { name: "Add role", exact: true }).isDisabled(),
     true,
@@ -229,7 +302,7 @@ try {
   await editor.getByRole("button", { name: "Refresh roles", exact: true }).click();
   await editor.getByRole("button", { name: "Remove Viewer", exact: true }).waitFor();
 
-  await editor.getByLabel("Dataset ID", { exact: true }).fill("bank-demo-v1");
+  await editor.getByLabel("Dataset ID", { exact: true }).selectOption("bank-demo-v1");
   assert.equal(await editor.getByRole("button", { name: "Remove Viewer", exact: true }).count(), 0);
   await editor.getByRole("button", { name: "View roles", exact: true }).click();
   await editor.getByText("No role assignments for this dataset.", { exact: true }).waitFor();
@@ -283,7 +356,7 @@ try {
   await page.getByLabel("Operator password", { exact: true }).waitFor();
   assert.deepEqual(pageErrors, []);
   process.stdout.write(
-    `PASS: exact catalogue selection, managed activation, response-derived roles, add/remove, row errors and busy state, uncertain write refresh, dataset/agent switching, legacy/unsupported modes, session expiry, desktop/mobile layout. Screenshots: ${output}\n`,
+    `PASS: saved dataset catalogue, clone revision/status, refresh and selection retention, failed/empty dataset reads, exact catalogue selection, managed activation, response-derived roles, add/remove, row errors and busy state, uncertain write refresh, dataset/agent switching, legacy/unsupported modes, session expiry, desktop/mobile layout. Screenshots: ${output}\n`,
   );
 } finally {
   await browser.close();

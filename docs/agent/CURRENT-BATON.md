@@ -1,13 +1,13 @@
 # Current Engineering Baton
 
-- Baton ID: B-0069
+- Baton ID: B-0071
 - State: READY
 - Milestone: M7, VM role demonstration and two-agent acceptance
 - Owner: unassigned
 - Started UTC: not started
-- Last updated UTC: 2026-10-18T08:28:00Z
+- Last updated UTC: 2026-10-18T09:05:00Z
 - Branch: `main`
-- Worktree: scoped B-0068 checkpoint; no known unrelated source changes.
+- Worktree: scoped B-0070 UI checkpoint; no known unrelated source changes.
 - Rollback: remote annotated `v1` at `1a297cb4fea1f1a1a736126606b1a1409c323c12`.
 
 ## Objective
@@ -68,6 +68,11 @@ role revocation, real-data acceptance, second scenarios, or deleting/resetting v
 
 ## Work Completed
 
+- [B-0070 saved-dataset selector](history/B-0070-role-editor-saved-datasets.md):
+  the role dropdown reads saved datasets and clones, shows revision/status, and refreshes.
+  Browser regression, full console suite, TypeScript, and scoped Biome pass.
+- B-0069 was deferred for the maintainer-approved selector correction, not completed.
+
 - [B-0068 implementation evidence](history/B-0068-operator-managed-agent-roles.md):
   operator editor/API/IPC, managed graph capture, immutable retries, local tests.
 - [Preserved previous state](history/2026-10-18-pre-operator-roles-checkpoint.md):
@@ -91,7 +96,8 @@ role revocation, real-data acceptance, second scenarios, or deleting/resetting v
 | B-0068 access-service library | PASS, 34 tests, 17 ignored | Local downstream regressions | 2026-10-18 |
 | B-0068 console | PASS, 673 tests, 18 skipped | Full console suite, typecheck, scoped Biome | 2026-10-18 |
 | B-0068 browser flows | PASS | Controlled HTTP fixtures, not a real proof | 2026-10-18 |
-| B-0069 VM role and full two-agent demonstration | SKIP | Await maintainer pull and live run | 2026-10-18 |
+| B-0070 saved-dataset selector | PASS | Clone/refresh/error/empty browser checks; 673 console tests, 18 skipped | 2026-10-18 |
+| B-0071 VM role and full two-agent demonstration | SKIP | Await maintainer pull and live run | 2026-10-18 |
 
 ## Risks And Private-Data Notes
 
@@ -109,6 +115,8 @@ M7 gate or production readiness.
 
 Have the maintainer pull backend `main` and follow
 [Operator Role Assignment Demo](../runbooks/M7-AGENT-DEMO.md#operator-role-assignment-demo).
-Rebuild owner tools and recreate the stopped backend roles only after active
-proofs finish or reach terminal cancellation. Start with a new Team membership
-version. Do not reset volumes or rebuild the approved guest for this feature.
+An already deployed B-0068 stack needs only the documented console recreation for
+B-0070. Earlier deployments need the full owner-tools upgrade after active proofs
+finish or reach terminal cancellation. Start the negative/positive role controls
+with a fresh managed policy version and fresh requests. Do not reset volumes or
+rebuild the approved guest for these features.

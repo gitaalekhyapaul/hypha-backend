@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import type { SyntheticDataset } from "../lib/dataset-client/types.ts";
 import type { ApprovedPolicyCatalogueEntry } from "../lib/policy-version/catalogue-types.ts";
 import {
   type AgentRole,
@@ -13,7 +14,7 @@ import {
   updateAgentRoles,
 } from "../lib/portal-client/agent-roles.ts";
 import type { AgentRegistration } from "../lib/portal-client/agents.ts";
-import { PortalRequestError } from "../lib/portal-client/browser.ts";
+import { listDatasets, PortalRequestError } from "../lib/portal-client/browser.ts";
 import { getApprovedPolicyCatalogue } from "../lib/portal-client/policy-catalogue.ts";
 
 interface AgentRoleWorkspaceProps {
@@ -26,8 +27,12 @@ export function AgentRoleWorkspace(props: AgentRoleWorkspaceProps) {
   const id = useId();
   const [policies, setPolicies] = useState<readonly ApprovedPolicyCatalogueEntry[]>([]);
   const [selection, setSelection] = useState("");
-  const [datasetInput, setDatasetInput] = useState("processor-demo-v1");
-  const [datasetId, setDatasetId] = useState("processor-demo-v1");
+  const [datasets, setDatasets] = useState<readonly SyntheticDataset[]>([]);
+  const [datasetInput, setDatasetInput] = useState("");
+  const [datasetId, setDatasetId] = useState("");
+  const [datasetsLoading, setDatasetsLoading] = useState(true);
+  const [datasetsError, setDatasetsError] = useState<string | null>(null);
+  const [datasetsRevision, setDatasetsRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -62,6 +67,40 @@ export function AgentRoleWorkspace(props: AgentRoleWorkspaceProps) {
     return () => controller.abort();
   }, [props.onSessionExpired, revision]);
 
+  useEffect(() => {
+    let active = true;
+    setDatasetsLoading(true);
+    setDatasetsError(null);
+    void listDatasets()
+      .then((result) => {
+        if (!active) return;
+        setDatasets(result.datasets);
+        setDatasetInput((current) =>
+          result.datasets.some((dataset) => dataset.datasetId === current)
+            ? current
+            : (result.datasets[0]?.datasetId ?? ""),
+        );
+        setDatasetId((current) =>
+          result.datasets.some((dataset) => dataset.datasetId === current)
+            ? current
+            : current
+              ? ""
+              : (result.datasets[0]?.datasetId ?? ""),
+        );
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        if (cause instanceof PortalRequestError && cause.status === 401) props.onSessionExpired();
+        else setDatasetsError("Datasets unavailable. Refresh datasets to retry.");
+      })
+      .finally(() => {
+        if (active) setDatasetsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [props.onSessionExpired, datasetsRevision]);
+
   return (
     <section className="agent-registration-tokens" aria-labelledby={`${id}-heading`}>
       <div className="section-heading-row">
@@ -93,7 +132,8 @@ export function AgentRoleWorkspace(props: AgentRoleWorkspaceProps) {
             className="agent-registration-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (isAgentRoleId(datasetInput)) setDatasetId(datasetInput);
+              if (datasets.some((dataset) => dataset.datasetId === datasetInput))
+                setDatasetId(datasetInput);
             }}
           >
             <label className="policy-field" htmlFor={`${id}-policy`}>
@@ -113,39 +153,71 @@ export function AgentRoleWorkspace(props: AgentRoleWorkspaceProps) {
               </select>
             </label>
             <div className="agent-registration-token-form">
-              <label className="field-group" htmlFor={`${id}-dataset`}>
+              <label
+                className="policy-field"
+                htmlFor={`${id}-dataset`}
+                style={{ flex: "1 1 320px", minWidth: 0 }}
+              >
                 <span>Dataset ID</span>
-                <input
+                <select
                   id={`${id}-dataset`}
+                  aria-label="Dataset ID"
                   value={datasetInput}
-                  maxLength={128}
+                  title={datasetInput}
+                  style={{ minWidth: 0 }}
                   required
-                  autoComplete="off"
-                  spellCheck={false}
-                  disabled={busy}
-                  list={`${id}-datasets`}
+                  disabled={
+                    busy || datasetsLoading || datasetsError !== null || datasets.length === 0
+                  }
                   onChange={(event) => setDatasetInput(event.target.value)}
-                />
-                <datalist id={`${id}-datasets`}>
-                  <option value="processor-demo-v1" />
-                  <option value="bank-demo-v1" />
-                </datalist>
+                >
+                  <option value="" disabled>
+                    {datasetsLoading ? "Loading datasets..." : "Select a dataset"}
+                  </option>
+                  {datasets.map((dataset) => (
+                    <option key={dataset.datasetId} value={dataset.datasetId}>
+                      {dataset.datasetId} / revision {dataset.revision} /{" "}
+                      {dataset.status === "FINALIZED" ? "Finalized" : "Draft"}
+                    </option>
+                  ))}
+                </select>
               </label>
               <button
                 type="submit"
                 className="secondary-button"
-                disabled={busy || !isAgentRoleId(datasetInput)}
+                disabled={
+                  busy ||
+                  datasetsLoading ||
+                  datasetsError !== null ||
+                  !datasets.some((dataset) => dataset.datasetId === datasetInput)
+                }
               >
                 View roles
               </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy || datasetsLoading}
+                onClick={() => setDatasetsRevision((current) => current + 1)}
+              >
+                {datasetsLoading ? "Refreshing datasets..." : "Refresh datasets"}
+              </button>
             </div>
-            {!isAgentRoleId(datasetInput) ? (
+            {datasetsLoading ? <p role="status">Loading saved datasets...</p> : null}
+            {datasetsError ? (
               <p className="form-error" role="alert">
-                Enter a dataset ID using letters, numbers, periods, underscores, colons, or hyphens.
+                {datasetsError}
               </p>
             ) : null}
+            {!datasetsLoading && !datasetsError && datasets.length === 0 ? (
+              <p className="empty-state">No saved datasets.</p>
+            ) : null}
           </form>
-          {selected && datasetInput === datasetId ? (
+          {selected &&
+          !datasetsLoading &&
+          !datasetsError &&
+          datasets.some((dataset) => dataset.datasetId === datasetId) &&
+          datasetInput === datasetId ? (
             <RoleEditor
               key={`${props.agent.agentId}:${selection}:${datasetId}:${revision}`}
               {...props}

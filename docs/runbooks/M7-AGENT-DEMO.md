@@ -593,6 +593,24 @@ Removing a member does not remove other members or the shared dataset/team link.
 It affects future snapshots for that team's datasets. A retained proposal continues
 using its old snapshot, so retries are not the negative control: create a new request.
 
+The Dataset ID dropdown reads the saved dataset catalogue, including cloned datasets.
+Each option shows its exact ID, revision, and Draft or Finalized status. Use
+**Refresh datasets** after creating a clone, then select it and choose **View roles**.
+Finalize a draft on the Dataset page before requesting its protected data.
+
+For this dataset-selector correction on an already running B-0068 deployment,
+only the console needs recreation. Run in the VM backend repository:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --no-deps --force-recreate --wait --wait-timeout 120 demo-console
+```
+
+Reload the operator browser. This does not stop a proof job or rebuild owner tools,
+the guest, or agent images. Earlier deployments still need the full upgrade above.
+
 ### Rollback
 
 The annotated `v1` tag points to backend commit
