@@ -3,6 +3,7 @@ import {
   type ApprovedPolicyCatalogue,
   InvalidPolicyCatalogueError,
   parseApprovedPolicyCatalogue,
+  recentApprovedPolicies,
 } from "../lib/policy-version/catalogue-types.ts";
 import { getApprovedPolicyCatalogue } from "../lib/portal-client/policy-catalogue.ts";
 
@@ -24,6 +25,31 @@ const entry = {
 const catalogue: ApprovedPolicyCatalogue = { formatVersion: 1, policies: [entry] };
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("approved policy catalogue display order", () => {
+  it("sorts by recent validity start rather than API order, version number, or expiry", () => {
+    const older = { ...entry, validFromUnixSeconds: "1790400000", policyVersion: "9" };
+    const newest = { ...entry, validFromUnixSeconds: "1790600000", policyVersion: "1" };
+    const input = [older, newest, entry];
+    expect(recentApprovedPolicies(input)).toEqual([newest, entry, older]);
+    expect(input).toEqual([older, newest, entry]);
+  });
+
+  it("breaks equal-time ties by version, exact approval epoch, then Version ID", () => {
+    const epoch = { ...entry, approvalEpoch: "18446744073709551614" };
+    const higherEpoch = { ...epoch, approvalEpoch: "18446744073709551615" };
+    const laterVersion = { ...entry, identity: { ...entry.identity, version: 3 } };
+    const a = { ...entry, identity: { ...entry.identity, versionId: "a".repeat(32) } };
+    const c = { ...entry, identity: { ...entry.identity, versionId: "c".repeat(32) } };
+    expect(recentApprovedPolicies([c, epoch, laterVersion, higherEpoch, a])).toEqual([
+      laterVersion,
+      higherEpoch,
+      epoch,
+      a,
+      c,
+    ]);
+  });
+});
 
 describe("approved policy catalogue contract", () => {
   it("projects an exact safe catalogue without retaining input references", () => {

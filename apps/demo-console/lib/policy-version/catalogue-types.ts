@@ -30,6 +30,20 @@ export interface ApprovedPolicyCatalogue {
   readonly policies: readonly ApprovedPolicyCatalogueEntry[];
 }
 
+export function recentApprovedPolicies(
+  policies: readonly ApprovedPolicyCatalogueEntry[],
+): ApprovedPolicyCatalogueEntry[] {
+  return [...policies].sort((a, b) => {
+    const epoch = BigInt(b.approvalEpoch) - BigInt(a.approvalEpoch);
+    return (
+      Number(b.validFromUnixSeconds) - Number(a.validFromUnixSeconds) ||
+      b.identity.version - a.identity.version ||
+      (epoch > 0n ? 1 : epoch < 0n ? -1 : 0) ||
+      a.identity.versionId.localeCompare(b.identity.versionId)
+    );
+  });
+}
+
 export class InvalidPolicyCatalogueError extends Error {
   constructor() {
     super("Invalid approved policy catalogue");

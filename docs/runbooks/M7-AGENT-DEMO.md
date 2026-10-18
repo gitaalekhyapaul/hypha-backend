@@ -437,6 +437,27 @@ Both agents share the rebuilt image. The unchanged channel stays running. Keep t
 existing `.env.m6`, `.env.agents`, keys, and volumes. Reload all three browser tabs.
 The sibling SDK repository and public package need no update.
 
+### VM Policy-Table Update
+
+The policy table shows the full Version ID used by Agents / Roles and teams,
+separate Family ID, version number, approval epoch, and validity dates. Rows sort
+by valid-from time, newest first. Ties use version, approval epoch, then Version ID.
+Expand Approval details for the policy record ID, full policy hash, and resource type.
+Valid-from is not relabeled as creation or publication time.
+
+This later update changes only the console. For an already running M6 stack, run
+in the VM backend repository:
+
+```bash
+cd ~/hypha-backend
+git pull --ff-only origin main
+./scripts/compose-m6 --ngrok --profile apps up \
+  --detach --no-deps --force-recreate --wait --wait-timeout 120 demo-console
+```
+
+Reload the operator browser. No owner-tool build, agent update, proof restart,
+guest rebuild, SDK release, or volume change is needed for this table correction.
+
 ## Mac: Open The Dashboards
 
 Working directory: any directory on the Mac. Keep this terminal running.

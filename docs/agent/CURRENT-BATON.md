@@ -1,13 +1,13 @@
 # Current Engineering Baton
 
-- Baton ID: B-0073
+- Baton ID: B-0075
 - State: READY
 - Milestone: M7, isolate the failed revision-2 Agent B proof
 - Owner: unassigned
 - Started UTC: not started
-- Last updated UTC: 2026-10-18T12:15:03Z
+- Last updated UTC: 2026-10-18T12:39:00Z
 - Branch: `main`
-- Worktree: B-0072 backend and demo-agent checkpoints published to `origin/main`. SDK untouched.
+- Worktree: B-0074 console checkpoint published to backend `origin/main`. Agents and SDK untouched.
 - Rollback: Existing remote `v1` remains at `1a297cb4fea1f1a1a736126606b1a1409c323c12`.
 
 ## Objective
@@ -34,7 +34,8 @@ Role removal affects fresh snapshots, not existing capabilities.
 
 ## File Scope
 
-No diagnostic implementation claimed yet. Diagnostic changes require a bounded scope
+The unstarted B-0073 diagnostic objective was deferred for B-0074 and now resumes as
+this READY baton. No diagnostic implementation claimed yet. Diagnostic changes require a bounded scope
 and a logging/privacy review before editing. B-0072 release scope and checks remain
 in [its archive](history/B-0072-recent-task-and-request-ordering.md).
 
@@ -61,6 +62,10 @@ unconfirmed. SSH ControlMaster and Docker worked during the read-only investigat
 
 ## Work Completed
 
+[B-0074 policy table](history/B-0074-policy-table-identity-and-order.md) adds recent-first
+order, full Version ID/Family ID, and expandable approval details. Local checks pass.
+The maintainer must pull and recreate only demo-console. No VM deployment was run.
+
 See [B-0072 ordering](history/B-0072-recent-task-and-request-ordering.md) and
 [revision-2 VM diagnosis](../reports/2026-10-18-agent-b-revision-2-failure.md).
 Public guest-key, resource profile, setup checksums, policy/snapshot binding,
@@ -75,6 +80,7 @@ test, and capture one controlled VM attempt only after maintainer approval.
 
 | Check | Result | Scope | Timestamp UTC |
 | --- | --- | --- | --- |
+| B-0074 policy table | PASS, 675 tests, 18 skips; TypeScript, Biome, desktop fixture | Console only | 2026-10-18 |
 | B-0072 implementation checks | PASS | Native agent, real Redis, console, typechecks, formats, fixture browser | 2026-10-18 |
 | VM failure, revision 2 | FAIL, generic SERVICE_UNAVAILABLE | 10,847 ms processing interval, exact internal cause unknown | 2026-10-18 |
 | VM public runtime checks | PASS | No OOM, 8 CPU, no swap, approved guest, setup checksums, public registry metadata | 2026-10-18 |

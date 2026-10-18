@@ -15,6 +15,22 @@ page.on("pageerror", (error) => errors.push(error.message));
 const now = Math.floor(Date.now() / 1000);
 const stamp = (seconds) => ({ seconds: String(seconds), nanos: 0 });
 const familyId = "a".repeat(32);
+const installed = [600, 120, 300].map((age, index) => {
+  const versionId = ["d", "e", "f"][index].repeat(32);
+  return {
+    identity: { familyId, versionId, version: index + 1 },
+    recordId: `installed-record-${index + 1}`,
+    policyHash: String(index + 1).repeat(64),
+    policyName: `family:${familyId}:v${index + 1}`,
+    policyVersion: String(index + 1),
+    resourceType: `dataset_${versionId}`,
+    permission: "query",
+    approvalEpoch: "1",
+    validFromUnixSeconds: String(now - age),
+    validUntilUnixSeconds: String(now + 86400),
+    requiredGrantFields: [],
+  };
+});
 const requests = [];
 const publications = [];
 let candidate;
@@ -33,6 +49,8 @@ await page.route("**/api/**", async (route) => {
       expiresAtUnixSeconds: now + 3600,
     });
   if (path === "/api/datasets") return respond({ datasets: [] });
+  if (path === "/api/policies/versions/approved")
+    return respond({ formatVersion: 1, policies: installed });
   assert.ok(path.startsWith("/api/policies/versions"), `Unexpected API: ${path}`);
   if (expired) return route.fulfill({ status: 401, body: "expired" });
   if (request.method() === "POST")
@@ -103,8 +121,35 @@ await page.route("**/api/**", async (route) => {
 
 try {
   await page.goto(process.env.RAZIEL_UI_URL ?? "http://127.0.0.1:3215");
-  await page.getByRole("button", { name: "Policy builder", exact: true }).click();
+  await page.getByRole("button", { name: "Policy", exact: true }).click();
   await page.getByText("Versioned policies", { exact: true }).waitFor();
+  const table = page.getByRole("table", { name: "Installed approved policy versions" });
+  await table.waitFor();
+  assert.deepEqual(await table.locator("tbody tr td:first-child code").allTextContents(), [
+    "e".repeat(32),
+    "f".repeat(32),
+    "d".repeat(32),
+  ]);
+  assert.equal(
+    await table.getByRole("columnheader", { name: "Version ID", exact: true }).count(),
+    1,
+  );
+  assert.equal(
+    await table.getByRole("columnheader", { name: "Family ID", exact: true }).count(),
+    1,
+  );
+  const latest = table.locator("tbody tr").first();
+  await latest.getByText("Approval details", { exact: true }).click();
+  await latest.getByText("installed-record-2", { exact: true }).waitFor();
+  await latest.getByText("2".repeat(64), { exact: true }).waitFor();
+  await latest.getByText("Approval details", { exact: true }).click();
+  await page.getByRole("button", { name: "Refresh approved policies", exact: true }).click();
+  await table.waitFor();
+  assert.equal(
+    await table.locator("tbody tr td:first-child code").first().textContent(),
+    "e".repeat(32),
+  );
+  await page.screenshot({ path: join(tmpdir(), "raziel-b0074-policy-table.png"), fullPage: true });
   assert.equal(await page.getByLabel("Policy version", { exact: true }).count(), 0);
   assert.equal(await page.getByLabel("Approval epoch", { exact: true }).count(), 0);
   assert.equal(await page.getByLabel("Resource type", { exact: true }).count(), 0);

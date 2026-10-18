@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import type { ApprovedPolicyCatalogueEntry } from "../lib/policy-version/catalogue-types.ts";
+import {
+  type ApprovedPolicyCatalogueEntry,
+  recentApprovedPolicies,
+} from "../lib/policy-version/catalogue-types.ts";
 import { PortalRequestError } from "../lib/portal-client/browser.ts";
 import { getApprovedPolicyCatalogue } from "../lib/portal-client/policy-catalogue.ts";
 
@@ -31,7 +34,7 @@ export function PolicyCatalogue({
     setPolicies([]);
     void getApprovedPolicyCatalogue(controller.signal)
       .then((catalogue) => {
-        if (!controller.signal.aborted) setPolicies(catalogue.policies);
+        if (!controller.signal.aborted) setPolicies(recentApprovedPolicies(catalogue.policies));
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -76,14 +79,18 @@ export function PolicyCatalogue({
       ) : policies.length === 0 ? (
         <p className="empty-state">No installed approved policy versions.</p>
       ) : (
-        <div className="agent-registration-table-wrap" style={{ maxHeight: 260 }}>
+        <div className="agent-registration-table-wrap" style={{ maxHeight: 360 }}>
           <table className="agent-registration-token-table">
             <caption className="sr-only">Installed approved policy versions</caption>
             <thead>
               <tr>
-                <th scope="col">Family</th>
+                <th scope="col">Version ID</th>
+                <th scope="col">Family ID</th>
                 <th scope="col">Version</th>
                 <th scope="col">Approval epoch</th>
+                <th scope="col" aria-sort="descending">
+                  Valid from (UTC) <span aria-hidden="true">&#8595;</span>
+                </th>
                 <th scope="col">Valid until (UTC)</th>
                 <th scope="col">Draft family</th>
               </tr>
@@ -95,22 +102,21 @@ export function PolicyCatalogue({
                   <tr key={entry.identity.versionId}>
                     <td>
                       <code style={{ width: "auto", maxWidth: 260 }}>
+                        {entry.identity.versionId}
+                      </code>
+                    </td>
+                    <td>
+                      <code style={{ width: "auto", maxWidth: 260 }}>
                         {entry.identity.familyId}
                       </code>
                     </td>
-                    <td>{entry.policyVersion}</td>
+                    <td>v{entry.policyVersion}</td>
                     <td>{entry.approvalEpoch}</td>
                     <td>
-                      <time
-                        dateTime={new Date(
-                          Number(entry.validUntilUnixSeconds) * 1_000,
-                        ).toISOString()}
-                      >
-                        {new Date(Number(entry.validUntilUnixSeconds) * 1_000)
-                          .toISOString()
-                          .replace("T", " ")
-                          .slice(0, 19)}
-                      </time>
+                      <PolicyTime seconds={entry.validFromUnixSeconds} />
+                    </td>
+                    <td>
+                      <PolicyTime seconds={entry.validUntilUnixSeconds} />
                     </td>
                     <td>
                       <button
@@ -124,6 +130,23 @@ export function PolicyCatalogue({
                       >
                         {selected ? "Selected" : "Use family"}
                       </button>
+                      <details style={{ marginTop: 8 }}>
+                        <summary>Approval details</summary>
+                        <dl>
+                          <dt>Policy record ID</dt>
+                          <dd style={{ marginLeft: 0 }}>
+                            <code>{entry.recordId}</code>
+                          </dd>
+                          <dt>Policy hash</dt>
+                          <dd style={{ marginLeft: 0 }}>
+                            <code>{entry.policyHash}</code>
+                          </dd>
+                          <dt>Resource type</dt>
+                          <dd style={{ marginLeft: 0 }}>
+                            <code>{entry.resourceType}</code>
+                          </dd>
+                        </dl>
+                      </details>
                     </td>
                   </tr>
                 );
@@ -133,5 +156,14 @@ export function PolicyCatalogue({
         </div>
       )}
     </section>
+  );
+}
+
+function PolicyTime({ seconds }: { readonly seconds: string }) {
+  const iso = new Date(Number(seconds) * 1_000).toISOString();
+  return (
+    <time dateTime={iso} style={{ whiteSpace: "nowrap" }}>
+      {iso.replace("T", " ").slice(0, 19)}
+    </time>
   );
 }
