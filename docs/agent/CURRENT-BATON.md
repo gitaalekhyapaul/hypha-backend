@@ -1,13 +1,13 @@
 # Current Engineering Baton
 
-- Baton ID: B-0075
+- Baton ID: B-0077
 - State: READY
 - Milestone: M7, isolate the failed revision-2 Agent B proof
 - Owner: unassigned
 - Started UTC: not started
-- Last updated UTC: 2026-10-18T12:39:00Z
+- Last updated UTC: 2026-10-19T16:00:45Z
 - Branch: `main`
-- Worktree: B-0074 console checkpoint published to backend `origin/main`. Agents and SDK untouched.
+- Worktree: Backend application remains at `257c7b2`. B-0076 skill and baton documentation are uncommitted. Agents and SDK untouched.
 - Rollback: Existing remote `v1` remains at `1a297cb4fea1f1a1a736126606b1a1409c323c12`.
 
 ## Objective
@@ -34,8 +34,8 @@ Role removal affects fresh snapshots, not existing capabilities.
 
 ## File Scope
 
-The unstarted B-0073 diagnostic objective was deferred for B-0074 and now resumes as
-this READY baton. No diagnostic implementation claimed yet. Diagnostic changes require a bounded scope
+The unstarted diagnostic objective continued through B-0075, was deferred for the
+requested B-0076 skill authoring, and now remains available in this READY baton. No diagnostic implementation claimed yet. Diagnostic changes require a bounded scope
 and a logging/privacy review before editing. B-0072 release scope and checks remain
 in [its archive](history/B-0072-recent-task-and-request-ordering.md).
 
@@ -45,6 +45,9 @@ Changing dataset revision again without evidence, queue-state redesign, guest ch
 new SDK releases, raw private logging, deleting volumes, or claiming M7 complete.
 
 ## Decisions
+
+- B-0076 created and installed the portable baton-protocol skill. No app work resumed.
+- The [B-0075 deferral](history/2026-10-19-b0075-diagnostic-deferred.md) preserves the prior objective.
 
 - B-0072 ordering is implemented and locally validated, not deployed.
 - Agent checkpoint is `cf96231`; the containing backend commit is its matching checkpoint.
@@ -61,6 +64,11 @@ The exact closed child/supervisor failure class was not retained. Root cause rem
 unconfirmed. SSH ControlMaster and Docker worked during the read-only investigation.
 
 ## Work Completed
+
+[B-0076 skill authoring](history/B-0076-portable-baton-protocol-skill.md) is complete
+with static checks and an independent isolated setup exercise. The source and current
+baton changes are not committed or pushed. The skill is a reusable starter, not a
+migration of this repository's current protocol. No VM operation was performed.
 
 [B-0074 policy table](history/B-0074-policy-table-identity-and-order.md) adds recent-first
 order, full Version ID/Family ID, and expandable approval details. Local checks pass.

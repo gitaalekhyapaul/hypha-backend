@@ -1,0 +1,4 @@
+interface:
+  display_name: "Baton Protocol"
+  short_description: "Project batons, shared ownership, and approval loops"
+  default_prompt: "Use $baton-protocol to set up or continue this project's baton framework, preserving existing rules, approvals, and contributor work."
