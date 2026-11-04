@@ -1,104 +1,77 @@
 # Current Engineering Baton
 
-- Baton ID: B-0079
-- State: ACTIVE
-- Milestone: Review and release the selected console identity
-- Owner: Codex release coordinator
-- Started UTC: 2026-11-04T12:39:39Z
-- Last updated UTC: 2026-11-04T12:39:39Z
+- Baton ID: B-0080
+- State: READY
+- Milestone: Record the branded reconciliation demonstration
+- Owner: unassigned
+- Started UTC: not started
+- Last updated UTC: 2026-11-04T12:45:40Z
 - Branch: `main`
-- Observed worktree: backend and demo-agents contain the explained B-0078 branding changes. SDK remains clean.
-- Rollback: Existing remote `v1` is unchanged. No release commit or deployment occurred.
+- Prior checkpoint: [B-0079 console release](history/B-0079-console-brand-release.md).
+- Rollback: Existing `v1` tags were not moved.
 
 ## Objective
 
-Publish the reviewed console branding and Beamer presentation. Fast-forward the
-VM checkouts and refresh the operator, Agent A, and Agent B consoles only.
+Record a three-minute walkthrough on the released Chamber Lantern consoles.
+The Beamer presentation reserves the final slide for the new recording.
 
 ## Acceptance Criteria
 
-- [x] User authorized scoped commits, pushes, and VM refresh on 4 November.
-- [x] Beamer presentation builds independently of the report and ends in a demo placeholder.
-- [ ] Publish scoped backend, demo-agents, and report commits.
-- [ ] Fast-forward the VM checkouts without overwriting local work.
-- [ ] Rebuild or recreate only the three console services and verify served brand assets.
+- [ ] Confirm the three forwarded dashboards open for the recording.
+- [ ] Capture the operator's scoped approval, both agents' protected reads,
+  and the returned settlement evidence using labelled synthetic data.
+- [ ] Check the recording for secrets and identifying browser details.
+- [ ] Replace the Beamer placeholder only after the new recording is supplied.
 
 ## Architecture Constraints
 
-All proof, privacy, signature, registry and SDK invariants remain unchanged.
-Branding does not establish a fresh live proof or close historical acceptance gates.
-Do not change backend behavior to resolve a visual review item.
+Keep all proof, privacy, registry, signature, and SDK invariants unchanged.
+The release health checks do not establish a fresh proof or protected query.
 
 ## File Scope
 
-The release includes B-0078 operator branding, sibling demo-agent branding,
-focused tests, and baton records. The revised editable Beamer source lives in
-`raziel-final-report/presentation/`. The report text and SDK are unchanged.
+The deployed UI is complete. The editable deck and recording checklist are
+under `raziel-final-report/presentation/`. No application edit is claimed.
 
 ## Out Of Scope
 
-SDK publication, new proof submissions, data resets, and restarts of proof workers,
-Redis, databases, verifier, channel, or tunnel services. B-0077 remains deferred.
+New proof submissions, resets, service restarts, SDK publication, and work
+on deferred B-0077 diagnostics without a separate request.
 
 ## Decisions Inherited
 
-- Chamber Lantern `Capstone/brand/final/design.md` is authoritative.
-- Every specialist in B-0078 used GPT-6.1 Sol with xHigh reasoning.
-- The final report and SDK repository were not edited.
-- Obsidian requires a 20-minute demo-inclusive talk and five minutes of Q&A.
-- The Beamer revision contains 16 slides. Allow 17 minutes for the talk and
-  three for the updated recording. The final slide is a placeholder.
-- The existing `v1` tags are not moved. Use fast-forward updates and retain
-  VM secrets and state. If a checkout diverged, report the exact blocker.
-- B-0077 remains deferred in `history/B-0077-deferred-for-brand-rollout.md`.
-  It was not completed through this branding task.
-- B-0078 evidence and the complete file map are archived in
-  `history/B-0078-chamber-lantern-branding-and-presentation.md`.
+- Chamber Lantern is the selected brand. The operator and both agents serve
+  the released assets.
+- The evaluator format is 17 minutes of slides, three minutes of recording,
+  and five minutes of separate Q&A.
+- The user will re-record the demo. Do not embed the historical footage.
 
 ## Open Questions And Blockers
 
-The SSH ControlMaster is active. VM preflight, build, and smoke results are pending.
-No VM mutation is authorized outside the scoped console release.
+The new recording has not been made. No UI implementation task remains in
+the approved branding scope.
 
 ## Work Completed
 
-B-0078 implemented operator and shared Agent A/B visual branding, named public
-asset delivery, local typography and focused tests. The evaluator package includes
-editable slides, a PDF review copy, source-linked notes, a rehearsal/demo run sheet
-and renders. Parent review covered app diffs and all 24 slide renders.
+Published and deployed the operator and agent branding. Published the Beamer
+source to the final-report repository. The original report and SDK are unchanged.
 
 ## Validation Plan
 
-For requested edits, repeat the narrow affected checks. Before any commit, review
-the complete diff, run `git diff --check`, and check the staged files for secrets.
-Deployment checks require a separate, explicit live scope.
+Use the existing SSH forwards and check the branded dashboards before capture.
+Review the new recording before adding it to the presentation.
 
 ## Validation Evidence
 
-| Check | Result | Scope | Timestamp UTC |
-| --- | --- | --- | --- |
-| Operator tests | PASS, 212 tests | Seven focused files | 2026-11-03 |
-| Agent tests | PASS, 18 tests | Shared A/B application | 2026-11-03 |
-| Type/lint/format | PASS | Applicable existing frontend checks | 2026-11-03 |
-| Production build | PASS | Operator, pinned image, no network | 2026-11-03 |
-| Desktop browser checks | PASS | 1600px/1280px, zero page errors or broken images | 2026-11-03 |
-| Presentation validation | PASS | 24 slides, 24 notes, native tables/chart, re-import | 2026-11-03 |
-| Presentation/PDF review | PASS | 1200-second main schedule, all slide renders, 24 PDF pages | 2026-11-03 |
-| Diff checks | PASS | Backend and demo-agents, SDK clean | 2026-11-03 |
+See the B-0079 release receipt for Git, build, HTTP, asset, and service checks.
 
 ## Risks And Private-Data Notes
 
-The console screenshots under `support/branding-validation/` are synthetic
-interface fixtures, not fresh experiment evidence. The presentation uses dated,
-unchanged report screenshots for the recorded synthetic demonstration. Local
-fonts are self-hosted in applications. The PDF preserves presentation typography.
-PowerPoint editing needs the selected fonts, as described in the package README.
-
-The local operator visual preview is `http://127.0.0.1:3310`, container
-`raziel-brand-console-b0078`. It is not a provisioned live stack. Temporary agent
-fixture servers have been stopped. Existing services and the VM were untouched.
+The operator recovered from a prior JavaScript heap-limit exit through normal
+recreation. The deployment did not change its runtime limits. Keep private
+data, secrets, and witness material out of the recording.
 
 ## Exact Next Action
 
-Publish the scoped commits. Then fast-forward the VM and verify the three
-branded consoles without changing proof infrastructure or state.
+Open the three refreshed dashboards through the user's existing port forwards
+and follow the Beamer recording checklist. Wait for the user's new recording.
