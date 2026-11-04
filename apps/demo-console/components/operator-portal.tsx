@@ -132,10 +132,14 @@ export function OperatorPortal({
   if (state === "checking") {
     return (
       <main className="session-loading" aria-live="polite">
-        <span className="brand-mark" aria-hidden="true">
-          R
-        </span>
-        <p>Opening workspace...</p>
+        <img
+          className="brand-lockup"
+          src="/brand/logos/logo-primary-light.svg"
+          alt="Raziel"
+          width={187}
+          height={64}
+        />
+        <p>Opening operator console...</p>
       </main>
     );
   }
@@ -148,9 +152,13 @@ export function OperatorPortal({
     <div className="portal-shell">
       <aside className="portal-sidebar">
         <header className="sidebar-brand">
-          <span className="brand-mark" aria-hidden="true">
-            R
-          </span>
+          <img
+            className="brand-mark"
+            src="/brand/logos/logo-symbol-dark.svg"
+            alt=""
+            width={32}
+            height={32}
+          />
           <div>
             <strong>Raziel</strong>
             <span>Operator console</span>
@@ -172,6 +180,7 @@ export function OperatorPortal({
                   type="button"
                   className="nav-item"
                   data-active={item.id === activeView}
+                  aria-current={item.id === activeView ? "page" : undefined}
                   disabled={!available}
                   onClick={() => {
                     if (available && isActiveView(item.id)) {
@@ -188,7 +197,7 @@ export function OperatorPortal({
         <footer className="sidebar-footer">
           <span className="environment-dot" aria-hidden="true" />
           <div>
-            <strong>Local development</strong>
+            <strong>Operator workspace</strong>
             <span>Synthetic data</span>
           </div>
         </footer>
@@ -198,7 +207,7 @@ export function OperatorPortal({
         <header className="portal-topbar">
           <div>
             <span className="scenario-name">Payment reconciliation</span>
-            <span className="scenario-version">{policyWorkflow === "versioned" ? "M6" : "M5"}</span>
+            <span className="scenario-version">Synthetic workspace</span>
           </div>
           <div className="operator-menu">
             <span>{session.operatorId}</span>

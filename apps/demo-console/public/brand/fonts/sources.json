@@ -1,0 +1,23 @@
+[
+  {
+    "family": "Manrope",
+    "file": "manrope.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf",
+    "license": "manrope-OFL.txt",
+    "googleFonts": "https://fonts.google.com/specimen/Manrope"
+  },
+  {
+    "family": "Public Sans",
+    "file": "publicsans.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/publicsans/PublicSans%5Bwght%5D.ttf",
+    "license": "publicsans-OFL.txt",
+    "googleFonts": "https://fonts.google.com/specimen/Public+Sans"
+  },
+  {
+    "family": "IBM Plex Mono",
+    "file": "ibmplexmono.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+    "license": "ibmplexmono-OFL.txt",
+    "googleFonts": "https://fonts.google.com/specimen/IBM+Plex+Mono"
+  }
+]

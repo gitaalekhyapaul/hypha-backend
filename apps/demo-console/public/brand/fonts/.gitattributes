@@ -1,0 +1,2 @@
+# Preserve the upstream licence notices byte-for-byte.
+*-OFL.txt -text whitespace=cr-at-eol,-blank-at-eol

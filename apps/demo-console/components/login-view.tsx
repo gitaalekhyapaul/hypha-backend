@@ -19,11 +19,15 @@ export function LoginView({ busy, error, onLogin }: LoginViewProps) {
   return (
     <main className="login-shell">
       <header className="login-brand">
-        <span className="brand-mark" aria-hidden="true">
-          R
-        </span>
+        <img
+          className="brand-lockup"
+          src="/brand/logos/logo-primary-light.svg"
+          alt="Raziel"
+          width={187}
+          height={64}
+        />
         <div>
-          <strong>Raziel</strong>
+          <strong>Operator console</strong>
           <span>Proof-carrying authorization</span>
         </div>
       </header>
@@ -38,8 +42,8 @@ export function LoginView({ busy, error, onLogin }: LoginViewProps) {
               <dd>Payment reconciliation</dd>
             </div>
             <div>
-              <dt>Environment</dt>
-              <dd>Local development</dd>
+              <dt>Workspace</dt>
+              <dd>Operator console</dd>
             </div>
             <div>
               <dt>Session</dt>
@@ -72,7 +76,7 @@ export function LoginView({ busy, error, onLogin }: LoginViewProps) {
       </section>
 
       <footer className="login-footer">
-        <span>Raziel M5</span>
+        <span>Proof-carrying authorization</span>
         <span>Owner boundary</span>
       </footer>
     </main>

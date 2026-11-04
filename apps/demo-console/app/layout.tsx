@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Raziel Console",
-  description: "Operational console for the Raziel proof of concept",
+  title: "Raziel | Operator console",
+  description: "Operator console for proof-carrying authorization and payment reconciliation.",
+  applicationName: "Raziel",
 };
 
 interface RootLayoutProps {
